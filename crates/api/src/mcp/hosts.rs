@@ -8,11 +8,13 @@
 //! the receiving side are in [`super::peer`].
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use model::peer::{Error, Host, HostState, Request};
 use provider::service::agent_mcp::GUEST_SHARE_LABEL;
 use serde_json::{Value, json};
+use tokio::time::Instant;
 use uuid::Uuid;
 
 use crate::Shared;
@@ -25,6 +27,8 @@ use super::{CALL_TIMEOUT, admitted, caller_record, own_credential, peer, tool_re
 /// link, which knows whether the request was sent, answers before this API gives up.
 const PEER_CALL_TIMEOUT: Duration = Duration::from_secs(55);
 const _: () = assert!(PEER_CALL_TIMEOUT.as_secs() < CALL_TIMEOUT.as_secs());
+/// Least time worth sending a call with; with less left the call is refused before it is sent.
+const MIN_PEER_CALL_TIME: Duration = Duration::from_secs(1);
 
 /// Text of a call that was sent but whose reply never arrived.
 const OUTCOME_UNKNOWN: &str = "The call may have run on the other host. Check with agent_list or \
@@ -157,11 +161,13 @@ pub(super) fn destination(state: &Shared, arguments: &mut Value) -> Option<Strin
 }
 
 /// Run `tool` with `arguments` on Host `host` for this Host's `caller` Agent, under this API's
-/// call budget and time limit.
+/// call budget and time limit, all within `PEER_CALL_TIMEOUT` from now.
 ///
 /// # Returns
 /// The other Host's result with `structuredContent.hostId` added, or a failed tool result
-/// naming `host` with the code of the failure.
+/// naming `host` with the code of the failure. A call this API gives up on once its request was
+/// handed to the Hub link, because the server drains or the call limit passes, ends as
+/// `outcome_unknown` like any other call whose reply is lost.
 ///
 /// # Errors
 /// Returns the refusals of a local call this API cannot run now, an unknown caller Agent as a
@@ -173,20 +179,52 @@ pub(super) async fn route(
     caller: Option<String>,
     host: String,
 ) -> Result<Value, (i32, &'static str)> {
+    let routed = Arc::new(Routed {
+        host,
+        deadline: Instant::now() + PEER_CALL_TIMEOUT,
+        sent: AtomicBool::new(false),
+    });
+    let abandoned = routed.clone();
     let task_state = state.clone();
-    let call = async move { forward(&task_state, tool, arguments, caller.as_deref(), &host).await };
-    admitted(state, None, call).await
+    let call =
+        async move { forward(&task_state, tool, arguments, caller.as_deref(), &routed).await };
+    admitted(state, None, call, move |code| abandoned.abandoned(code)).await
 }
 
-/// Check the caller and the target Host, then send the call once; a call that was sent is never
-/// sent again, whatever happens to its reply.
+/// One call bound for another Host.
+#[derive(Debug)]
+struct Routed {
+    /// The Host as the caller named it.
+    host: String,
+    /// When the reply must have arrived: `PEER_CALL_TIMEOUT` after the call was routed, which is
+    /// before `CALL_TIMEOUT` runs out, since that starts only once the call is admitted.
+    deadline: Instant,
+    /// Whether the request was handed to the Hub link; from then on it may have run.
+    sent: AtomicBool,
+}
+
+impl Routed {
+    /// The result of this call when this API gives up on it with `code`: unknown once its
+    /// request was handed over, since it may have run on the other Host, otherwise `code`.
+    fn abandoned(&self, code: model::ErrorCode) -> Value {
+        if self.sent.load(Ordering::Acquire) {
+            refused(&self.host, &Error::OutcomeUnknown)
+        } else {
+            tool_result(Err(code.into()))
+        }
+    }
+}
+
+/// Check the caller and the target Host, then send the call once with what remains of its time;
+/// a call that was sent is never sent again, whatever happens to its reply.
 async fn forward(
     state: &Shared,
     tool: &Tool,
     arguments: Value,
     caller: Option<&str>,
-    host: &str,
+    routed: &Routed,
 ) -> Result<Value, (i32, &'static str)> {
+    let host = routed.host.as_str();
     let context = match caller_record(state, caller).await {
         Ok(context) => context,
         Err(error) => return Ok(tool_result(Err(error.into()))),
@@ -204,18 +242,22 @@ async fn forward(
     if let Some(blocked) = Blocked::of(&target) {
         return Ok(refused(host, &blocked.error()));
     }
+    // The checks above may have used most of the time, a slow uncached Host list above all.
+    let remaining = routed.deadline.saturating_duration_since(Instant::now());
+    if remaining < MIN_PEER_CALL_TIME {
+        return Ok(refused(host, &Error::Unavailable));
+    }
     let request = Request {
         tool: tool.name.clone(),
         arguments,
         caller: caller.map(str::to_owned),
     };
+    routed.sent.store(true, Ordering::Release);
     Ok(
-        match state
-            .peers
-            .call(target.node_id, request, PEER_CALL_TIMEOUT)
-            .await
-        {
-            Ok(result) => tagged(result, host),
+        match state.peers.call(target.node_id, request, remaining).await {
+            Ok(result) => {
+                tagged(result, host).unwrap_or_else(|| refused(host, &Error::OutcomeUnknown))
+            }
             Err(error) => refused(host, &error),
         },
     )
@@ -224,7 +266,8 @@ async fn forward(
 /// Whether the caller Agent `agent` must stay on this Host. A sandboxed worktree confines what
 /// its Agents write to this Host, which a call to another Host would escape, and a guest's
 /// Agents never get this Host's MCP. Best effort: `X-Ait-Agent-Id` is not a permission boundary
-/// (ADR-215). A Workspace that cannot be read, or is archived, counts as sandboxed.
+/// (ADR-215). A Workspace `workspace.get` does not describe counts as sandboxed: one that cannot
+/// be read, and one that is archived or missing, for which it answers without a `workspace`.
 async fn confined(state: &Shared, agent: &Value) -> bool {
     if agent["labels"].get(GUEST_SHARE_LABEL).is_some() {
         return true;
@@ -268,18 +311,21 @@ async fn resolve(state: &Shared, host: &str) -> Result<Host, Error> {
         .ok_or(Error::UnknownHost)
 }
 
-/// Add `hostId` to the `structuredContent` of the other Host's `result`, leaving the rest as it
-/// was sent.
-fn tagged(mut result: Value, host: &str) -> Value {
-    if let Some(result) = result.as_object_mut()
-        && let Some(structured) = result
-            .entry("structuredContent")
-            .or_insert_with(|| json!({}))
-            .as_object_mut()
-    {
-        structured.insert(HOST_ARGUMENT.to_owned(), json!(host));
-    }
+/// Add `hostId` to the `structuredContent` of the other Host's `result`, creating it when the
+/// result has none, and leaving the rest as it was sent.
+///
+/// # Returns
+/// `None` for a reply that is not a tool result (not an object, or with a `structuredContent`
+/// that is not one). The Hub link already refuses such replies as malformed; should one still
+/// arrive, the call ran but its answer cannot be read, so the caller learns its outcome is unknown.
+fn tagged(mut result: Value, host: &str) -> Option<Value> {
     result
+        .as_object_mut()?
+        .entry("structuredContent")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()?
+        .insert(HOST_ARGUMENT.to_owned(), json!(host));
+    Some(result)
 }
 
 /// The failed tool result of a call to `host` that ended with `error`.
@@ -308,3 +354,6 @@ fn failed(host: &str, code: &str, error: &str) -> Value {
         "isError":true,
     })
 }
+
+#[cfg(test)]
+mod tests;

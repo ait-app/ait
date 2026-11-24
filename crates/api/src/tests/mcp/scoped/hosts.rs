@@ -8,7 +8,7 @@ use model::peer::{Error, Host, HostState, Peers, Request};
 use provider::service::agent_mcp::GUEST_SHARE_LABEL;
 use uuid::Uuid;
 
-use super::support::{rejected, structured};
+use super::support::{codex_modes, rejected, structured};
 use super::*;
 
 /// This daemon's `serverId` in these tests.
@@ -280,17 +280,23 @@ async fn a_remote_call_is_forwarded_without_host_id_and_tagged_on_return() {
     let mut tagged = remote;
     tagged["structuredContent"]["hostId"] = json!(host);
     assert_eq!(response["result"], tagged, "{response}");
+    let calls = account.calls();
+    let [(node, request, timeout)] = calls.as_slice() else {
+        panic!("one call expected: {calls:?}");
+    };
+    assert_eq!(*node, target.node_id);
     assert_eq!(
-        account.calls(),
-        [(
-            target.node_id,
-            Request {
-                tool: "agent_get".to_owned(),
-                arguments: json!({"agentId":"x"}),
-                caller: Some(caller),
-            },
-            Duration::from_secs(55),
-        )]
+        *request,
+        Request {
+            tool: "agent_get".to_owned(),
+            arguments: json!({"agentId":"x"}),
+            caller: Some(caller),
+        }
+    );
+    // What remains of the 55 s the routed call started with (exact in `mcp::hosts::tests`).
+    assert!(
+        (Duration::from_secs(1)..=Duration::from_secs(55)).contains(timeout),
+        "{timeout:?}"
     );
 
     // A retired name is forwarded under its current name, and the Host id is a UUID in any case;
@@ -448,6 +454,29 @@ async fn failures_name_the_host_and_never_replay() {
     scoped.stop().await;
 }
 
+/// An Agent of the `other` Workspace once it is archived, which `workspace.get` no longer
+/// describes; such a caller counts as sandboxed.
+async fn agent_of_an_archived_workspace(scoped: &Scoped) -> String {
+    let agent = scoped
+        .agent_in(&scoped.other, &scoped.other_cwd, json!({}), None)
+        .await;
+    let archived = scoped
+        .call(
+            TOKEN,
+            None,
+            "workspace_archive",
+            json!({"workspaceId":scoped.other}),
+        )
+        .await;
+    assert_eq!(archived["result"]["isError"], false, "{archived}");
+    let described = scoped
+        .rpc("workspace.get.request", json!({"workspaceId":scoped.other}))
+        .await;
+    assert_eq!(described["state"], "archived", "{described}");
+    assert!(described["workspace"].is_null(), "{described}");
+    agent
+}
+
 #[tokio::test]
 async fn scoped_sandboxed_and_guest_callers_cannot_route() {
     let target = available();
@@ -523,7 +552,8 @@ async fn scoped_sandboxed_and_guest_callers_cannot_route() {
     let guest = scoped
         .agent(json!({GUEST_SHARE_LABEL:Uuid::new_v4().to_string()}))
         .await;
-    for caller in [sandboxed, guest] {
+    let unplaced = agent_of_an_archived_workspace(&scoped).await;
+    for caller in [sandboxed, guest, unplaced] {
         let response = scoped
             .call(
                 TOKEN,
@@ -536,6 +566,68 @@ async fn scoped_sandboxed_and_guest_callers_cannot_route() {
         assert_eq!(result["isError"], true, "{response}");
         assert_eq!(result["structuredContent"]["code"], "caller_not_allowed");
         assert_eq!(result["structuredContent"]["hostId"], host);
+    }
+    assert!(account.calls().is_empty());
+    scoped.stop().await;
+}
+
+#[tokio::test]
+async fn bot_scoped_agents_and_ticket_workers_cannot_route() {
+    let target = available();
+    let account = Account::new(Ok(vec![this_host(), target.clone()]));
+    let scoped = start(&account).await;
+    scoped.setup(codex_modes(&["auto"])).await;
+    let host = target.server_id.to_string();
+    let bot = scoped.bot_credential_in(scoped.conversation().await);
+    let created = scoped
+        .call(
+            &bot,
+            None,
+            "agent_create",
+            json!({"provider":"codex/offline-model","title":"Fix login","initialPrompt":"work"}),
+        )
+        .await;
+    let worker_agent = structured(&created)["agent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let worker = scoped.session_credential(&worker_agent).await;
+
+    let tools = descriptors(&scoped, &worker).await;
+    assert!(tools.contains_key("ticket_report"), "{tools:?}");
+    assert!(!tools.contains_key("host_list"), "{tools:?}");
+    for (name, tool) in &tools {
+        assert!(
+            tool["inputSchema"]["properties"].get("hostId").is_none(),
+            "{name}"
+        );
+    }
+    rejected(
+        &scoped
+            .call(&worker, None, "agent_list", json!({"hostId":host}))
+            .await,
+        MISMATCH,
+    );
+    rejected(
+        &scoped.call(&worker, None, "host_list", json!({})).await,
+        "Unknown or unavailable tool",
+    );
+
+    // Host credentials acting for a Bot-scoped Agent, a ticket worker or a subtree Agent, are
+    // refused as they are for local calls.
+    let subtree = scoped.subtree_agent().await;
+    for caller in [worker_agent, subtree] {
+        rejected(
+            &scoped
+                .call(
+                    TOKEN,
+                    Some(&caller),
+                    "agent_get",
+                    json!({"agentId":"x","hostId":host}),
+                )
+                .await,
+            "Bot-scoped agents must use their own credential",
+        );
     }
     assert!(account.calls().is_empty());
     scoped.stop().await;

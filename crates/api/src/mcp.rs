@@ -359,22 +359,28 @@ async fn run(
         )
         .await
     };
-    admitted(state, detach, invocation).await
+    admitted(state, detach, invocation, |code| {
+        tool_result(Err(code.into()))
+    })
+    .await
 }
 
 /// Run `work`, one call of this API, under one of its call permits, refusing rather than
 /// waiting when none is free, and give up after `CALL_TIMEOUT`; with `detach`, as `bounded`
-/// describes.
+/// describes. A call given up on, because the server drains (`ServerDraining`) or its time ran
+/// out (`ResourceExhausted`), ends with the result `abandoned` gives for that code.
 /// # Errors
 /// Returns `UNAVAILABLE` when the call budget is exhausted or the server drains, `-32603` when the
 /// execution task failed, and the errors of `work`.
-async fn admitted<F>(
+async fn admitted<F, A>(
     state: Arc<Shared>,
     detach: Option<Duration>,
     work: F,
+    abandoned: A,
 ) -> Result<Value, (i32, &'static str)>
 where
     F: Future<Output = Result<Value, (i32, &'static str)>> + Send + 'static,
+    A: FnOnce(model::ErrorCode) -> Value + Send + 'static,
 {
     let permit = state
         .connections
@@ -393,9 +399,9 @@ where
     state.tasks.spawn(async move {
         let tracker = task_state.tasks.clone();
         let result = tokio::select! {
-            () = task_state.cancellation.cancelled() => Ok(tool_result(Err(model::ErrorCode::ServerDraining.into()))),
+            () = task_state.cancellation.cancelled() => Ok(abandoned(model::ErrorCode::ServerDraining)),
             result = bounded(&tracker, work, permit, detach, CALL_TIMEOUT) => {
-                result.unwrap_or_else(|| Ok(tool_result(Err(model::ErrorCode::ResourceExhausted.into()))))
+                result.unwrap_or_else(|| Ok(abandoned(model::ErrorCode::ResourceExhausted)))
             }
         };
         let _ = sender.send(result);

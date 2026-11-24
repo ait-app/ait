@@ -109,7 +109,8 @@ impl Tool {
         }
         let mut schema = self.input_schema.clone();
         if let Some(properties) = schema["properties"].as_object_mut() {
-            // A Bot session never gets here: it sees its schema as written.
+            // Bot sessions returned above (`withheld` and `routable` are both false for them),
+            // so every caller here is one the Bot-only arguments are withheld from.
             for (_, argument) in BOT_ARGUMENTS.iter().filter(|(tool, _)| *tool == self.name) {
                 properties.remove(*argument);
             }
