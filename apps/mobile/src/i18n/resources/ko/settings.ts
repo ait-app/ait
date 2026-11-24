@@ -458,6 +458,11 @@ export const settings = {
         hint: "에이전트가 워크트리, 에이전트, 일정을 관리할 수 있습니다",
         accessibilityLabel: "Ait 도구 주입",
       },
+      acceptPeers: {
+        title: "다른 호스트의 에이전트가 이 호스트를 사용하도록 허용",
+        hint: "켜면 이 계정의 모든 호스트에 있는 에이전트가 이 호스트에서 에이전트를 만들고 제어할 수 있습니다. 해당 호스트를 모두 신뢰하는 경우에만 켜세요.",
+        accessibilityLabel: "다른 호스트의 에이전트가 이 호스트를 사용하도록 허용",
+      },
       systemPrompt: {
         title: "시스템 프롬프트",
         hint: "모든 에이전트에 시스템 프롬프트를 추가합니다",

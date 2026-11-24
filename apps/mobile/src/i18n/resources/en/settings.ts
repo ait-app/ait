@@ -490,6 +490,11 @@ export const settings = {
         hint: "Agents will be able to manage worktrees, agents and schedules",
         accessibilityLabel: "Inject Ait tools",
       },
+      acceptPeers: {
+        title: "Let agents on your other hosts use this host",
+        hint: "When on, agents on any host of this account can create and control agents here. Turn it on only if you trust all of those hosts.",
+        accessibilityLabel: "Let agents on your other hosts use this host",
+      },
       systemPrompt: {
         title: "System prompt",
         hint: "Adds a system prompt to all agents",

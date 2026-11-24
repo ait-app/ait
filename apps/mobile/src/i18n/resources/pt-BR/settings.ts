@@ -462,6 +462,11 @@ export const settings = {
         hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
         accessibilityLabel: "Injetar ferramentas do Ait",
       },
+      acceptPeers: {
+        title: "Permitir que agentes dos seus outros hosts usem este host",
+        hint: "Quando ativado, agentes em qualquer host desta conta podem criar e controlar agentes aqui. Ative somente se confiar em todos esses hosts.",
+        accessibilityLabel: "Permitir que agentes dos seus outros hosts usem este host",
+      },
       systemPrompt: {
         title: "Prompt do sistema",
         hint: "Adiciona um prompt do sistema a todos os agentes",
