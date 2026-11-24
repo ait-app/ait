@@ -105,7 +105,7 @@ impl Outlet<'_> {
 struct Inlet<'a> {
     id: Uuid,
     output: &'a mpsc::Sender<(Uuid, Output)>,
-    delivered: Option<credit::Incoming>,
+    incoming: Option<credit::Incoming>,
 }
 
 impl Inlet<'_> {
@@ -116,9 +116,9 @@ impl Inlet<'_> {
     /// Returns `closed` once the link dropped the session.
     async fn delivered(&mut self, length: usize) -> Result<(), &'static str> {
         let Some(credit) = self
-            .delivered
+            .incoming
             .as_mut()
-            .and_then(|delivered| delivered.delivered(length))
+            .and_then(|incoming| incoming.delivered(length))
         else {
             return Ok(());
         };
@@ -141,7 +141,7 @@ impl Session {
         let inlet = Inlet {
             id: self.id,
             output: &self.output,
-            delivered: outlet.credit.is_some().then(credit::Incoming::default),
+            incoming: outlet.credit.is_some().then(credit::Incoming::default),
         };
         (&mut self.inbound, outlet, inlet)
     }
@@ -221,9 +221,9 @@ async fn bridge(session: &mut Session, hello: Bytes) -> Result<(), &'static str>
 /// Serve calls from the sibling Host that opened a peer session. Each request
 /// runs in its own task and is answered when it completes, so replies may
 /// leave out of order. At most [`MAX_PEER_CALLS`] calls run or wait to be
-/// answered at once; a request beyond that is neither read nor credited until
-/// one is answered, so the opener's window and the session queue bound the
-/// rest. The session ends when the center closes it, without cancelling calls
+/// answered at once; a request beyond that is read and decoded but neither run
+/// nor credited until one is answered, so the opener's window and the session
+/// queue bound the rest. The session ends when the center closes it, without cancelling calls
 /// that already run, or after answering a call this Host no longer accepts.
 ///
 /// # Arguments
