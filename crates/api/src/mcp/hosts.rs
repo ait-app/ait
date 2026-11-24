@@ -21,6 +21,7 @@ use crate::Shared;
 use crate::connection::rpc;
 
 use super::catalog::{HOST_ARGUMENT, Tool};
+use super::scope::Scope;
 use super::{CALL_TIMEOUT, admitted, caller_record, own_credential, peer, tool_result};
 
 /// How long a call to another Host waits for its reply: less than `CALL_TIMEOUT`, so the Hub
@@ -33,6 +34,16 @@ const MIN_PEER_CALL_TIME: Duration = Duration::from_secs(1);
 /// Text of a call that was sent but whose reply never arrived.
 const OUTCOME_UNKNOWN: &str = "The call may have run on the other host. Check with agent_list or \
     agent_get before retrying.";
+/// Text of a call refused, unsent, while too many calls to other Hosts are open.
+const CAPACITY: &str = "Too many calls to other hosts are open right now; this one was not \
+    sent. Retry later.";
+/// Text of a request too large to send; it never left this Host.
+const REQUEST_TOO_LARGE: &str = "The request exceeds the 1 MiB message limit and was not sent. \
+    Retrying unchanged fails the same way: send less.";
+/// Text of a call that ran on the other Host but whose reply was too large to return.
+const REPLY_TOO_LARGE: &str = "The call ran on the other host, but its reply exceeds the 1 MiB \
+    message limit. Do not repeat a call that changes something; ask for less (for example a \
+    lower `limit`).";
 /// Text of a refused caller Agent.
 const CALLER_NOT_ALLOWED: &str = "Agents in a sandboxed worktree and Agents a guest created \
     cannot call other hosts.";
@@ -148,10 +159,20 @@ const fn state_name(state: HostState) -> &'static str {
     }
 }
 
-/// Take `hostId` out of `arguments` and return the Host it names, unless that is this Host: a
-/// call naming this Host, or none, runs here as if it never had one. Ids are compared as UUIDs,
-/// so any spelling of this Host's id names it.
-pub(super) fn destination(state: &Shared, arguments: &mut Value) -> Option<String> {
+/// For a host caller's call of a tool marked for peers, take `hostId` out of `arguments` and
+/// return the Host it names, unless that is this Host: a call naming this Host, or none, runs
+/// here as if it never had one. Ids are compared as UUIDs, so any spelling of this Host's id
+/// names it. Any other call is never routed and keeps its arguments, so a `hostId` its closed
+/// schema does not offer is refused by validation, not stripped.
+pub(super) fn destination(
+    state: &Shared,
+    scope: Option<&Scope>,
+    tool: &Tool,
+    arguments: &mut Value,
+) -> Option<String> {
+    if !tool.routable(scope) {
+        return None;
+    }
     let Value::String(host) = arguments.as_object_mut()?.remove(HOST_ARGUMENT)? else {
         return None;
     };
@@ -252,6 +273,9 @@ async fn forward(
         arguments,
         caller: caller.map(str::to_owned),
     };
+    // Marked sent before the Hub link has it: a drain while the session opens then reports
+    // `outcome_unknown` for a call that never left. That is the safe direction, since the
+    // opposite order could report "not sent" for a call that ran; keep it.
     routed.sent.store(true, Ordering::Release);
     Ok(
         match state.peers.call(target.node_id, request, remaining).await {
@@ -342,7 +366,9 @@ fn refused(host: &str, error: &Error) -> Value {
         Error::Offline => failed(host, "host_offline", &error.to_string()),
         Error::NotAccepting => failed(host, "host_not_accepting", &error.to_string()),
         Error::Unsupported => failed(host, "host_unsupported", &error.to_string()),
-        Error::Capacity | Error::TooLarge => failed(host, "capacity", &error.to_string()),
+        Error::Capacity => failed(host, "capacity", CAPACITY),
+        Error::RequestTooLarge => failed(host, "capacity", REQUEST_TOO_LARGE),
+        Error::ReplyTooLarge => failed(host, "capacity", REPLY_TOO_LARGE),
     }
 }
 

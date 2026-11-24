@@ -6,8 +6,11 @@ use serde_json::{Value, json};
 use tokio::sync::Notify;
 use uuid::Uuid;
 
-use super::{MIN_PEER_CALL_TIME, OUTCOME_UNKNOWN, PEER_CALL_TIMEOUT, route, tagged};
+use bot::mcp::{Caller, CallerKind, Grant};
+
+use super::{MIN_PEER_CALL_TIME, OUTCOME_UNKNOWN, PEER_CALL_TIMEOUT, destination, route, tagged};
 use crate::mcp::catalog;
+use crate::mcp::scope::Scope;
 
 /// One sibling Host behind a fake Hub link, which records the time limit of every call.
 #[derive(Debug)]
@@ -195,4 +198,49 @@ async fn a_reply_is_tagged_unless_it_is_not_a_tool_result() {
         let result = routed(api(&link), link.clone()).await;
         failed(&result, &link, "outcome_unknown");
     }
+}
+
+#[tokio::test]
+async fn only_host_callers_of_marked_tools_are_routed() {
+    let link = link(Some(Duration::ZERO), Some(answer()));
+    let api = api(&link);
+    let host = link.target.server_id.to_string();
+    let named = || json!({"agentId":"x","hostId":host});
+    let (marked, _) = catalog::resolve("agent_get").unwrap();
+    let (unmarked, _) = catalog::resolve("agent_update").unwrap();
+    let subtree = Scope {
+        caller: Caller {
+            root: "wks_root".to_owned(),
+            kind: CallerKind::Subtree {
+                agent_id: "child".to_owned(),
+                ticket: None,
+            },
+        },
+        grant: Grant {
+            permissions: domain::bot::permissions::BotPermissions::default(),
+            workspaces: std::collections::BTreeSet::new(),
+        },
+    };
+
+    // A scoped caller's call stays here with its `hostId`, for the closed schema to refuse.
+    let mut arguments = named();
+    assert_eq!(
+        destination(&api.shared, Some(&subtree), marked, &mut arguments),
+        None
+    );
+    assert_eq!(arguments, named());
+    // So does a host caller's call of a tool not marked for peers.
+    let mut arguments = named();
+    assert_eq!(
+        destination(&api.shared, None, unmarked, &mut arguments),
+        None
+    );
+    assert_eq!(arguments, named());
+    // A host caller's call of a marked tool goes to the Host it names, without `hostId`.
+    let mut arguments = named();
+    assert_eq!(
+        destination(&api.shared, None, marked, &mut arguments),
+        Some(host.clone())
+    );
+    assert_eq!(arguments, json!({"agentId":"x"}));
 }

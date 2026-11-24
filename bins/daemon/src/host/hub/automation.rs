@@ -16,8 +16,6 @@ use tokio_util::sync::CancellationToken;
 
 use super::COALESCE;
 use super::publisher::{self, Attempt, Publication};
-#[cfg(test)]
-use {model::hub::LinkState, publisher::Sent, std::time::Duration, uuid::Uuid};
 
 const PUBLICATION: Publication = Publication {
     name: "Automation",
@@ -50,17 +48,6 @@ pub(super) async fn run(
     cancel: CancellationToken,
 ) {
     publisher::run(&PUBLICATION, center, bots, |bots| publication(bots), cancel).await;
-}
-
-/// Publish `current` if the center supports automation and has not seen it on this link.
-#[cfg(test)]
-async fn publish(
-    center: &dyn Center,
-    link: &LinkState,
-    current: Value,
-    sent: &mut Sent,
-) -> Attempt {
-    publisher::publish(&PUBLICATION, center, link, current, sent).await
 }
 
 #[cfg(test)]

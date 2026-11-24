@@ -327,7 +327,7 @@ impl Opener {
         let id = existing.map_or(1, |(_, id, _)| id);
         let body = encode_request(id, request);
         if body.len() > wire::MAX_PAYLOAD {
-            let _ = reply.send(Err(Error::TooLarge));
+            let _ = reply.send(Err(Error::RequestTooLarge));
             return Ok(());
         }
         let (found, stage) = match existing {
@@ -606,7 +606,7 @@ impl Opened {
 
     /// Hand the link every held request the session admits: none before the
     /// target accepts, then in call order within the target's window. A request
-    /// larger than the whole window fails as too large.
+    /// larger than the whole window fails unsent as `Error::RequestTooLarge`.
     fn send(
         &mut self,
         s: Uuid,
@@ -619,7 +619,7 @@ impl Opened {
             let length = held.body.len() as u64;
             if let Some(window) = &self.window {
                 if length > window.size {
-                    let _ = held.reply.send(Err(Error::TooLarge));
+                    let _ = held.reply.send(Err(Error::RequestTooLarge));
                     continue;
                 }
                 if window.sent + length > window.credit.saturating_add(window.size) {
@@ -674,10 +674,12 @@ impl Window {
     }
 }
 
-/// Why a session closed before its requests were sent, from its close code.
+/// Why a session closed before its requests were sent, from its close code. A target that went
+/// away (`peer_gone`) is offline like one never found; a replaced session and any other code
+/// leave the Hub as the cause.
 fn refusal(code: Option<&str>) -> Error {
     match code {
-        Some("unknown_target") => Error::Offline,
+        Some("unknown_target" | "peer_gone") => Error::Offline,
         Some("unsupported") => Error::Unsupported,
         Some("peer_disabled") => Error::NotAccepting,
         Some("capacity") => Error::Capacity,

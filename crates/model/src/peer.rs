@@ -84,12 +84,17 @@ pub enum Error {
     /// The target Host's version cannot receive calls from other Hosts.
     #[error("host does not support calls from other hosts")]
     Unsupported,
-    /// Too many calls to other Hosts are open.
+    /// Too many calls to other Hosts are open; the call was not sent and may succeed later.
     #[error("too many calls to other hosts")]
     Capacity,
-    /// The request or its reply exceeds the size limit.
-    #[error("call too large")]
-    TooLarge,
+    /// The request exceeds the message size limit or the target's window, so it was not sent;
+    /// it fails the same way every time.
+    #[error("request too large")]
+    RequestTooLarge,
+    /// The target ran the call, but its reply exceeds the message size limit and was replaced
+    /// with an error.
+    #[error("reply too large")]
+    ReplyTooLarge,
     /// The request was sent but no reply arrived; it may or may not have run.
     #[error("call outcome unknown")]
     OutcomeUnknown,
@@ -127,10 +132,12 @@ pub trait Peers: fmt::Debug + Send + Sync {
     /// The `result` object the target Host replied with.
     ///
     /// # Errors
-    /// Returns the reason the call did not reach the target,
-    /// `Error::OutcomeUnknown` when it was sent but no reply arrived, and the
-    /// target's refusal (`Error::NotAccepting`, `Error::TooLarge` or
-    /// `Error::Rejected`) when it replied with an error. When `timeout` passes
+    /// Returns the reason the call did not reach the target, among them
+    /// `Error::RequestTooLarge` for a request over the message size limit or
+    /// the target's window; `Error::OutcomeUnknown` when it was sent but no
+    /// reply arrived; and the target's answer (`Error::NotAccepting`,
+    /// `Error::ReplyTooLarge` for a call that ran but whose reply was too
+    /// large, or `Error::Rejected`) when it replied with an error. When `timeout` passes
     /// the error is `Error::Offline` if the target had not accepted the call's
     /// session and `Error::OutcomeUnknown` if the request was sent. A call
     /// still waiting for its turn to be sent ends as `Error::Unavailable` when

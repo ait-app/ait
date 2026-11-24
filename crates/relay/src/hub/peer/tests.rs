@@ -144,7 +144,7 @@ fn reply_errors_map_to_call_errors() {
     );
     assert_eq!(
         decode_reply(&error(TOO_LARGE)),
-        Ok((4, Err(Error::TooLarge)))
+        Ok((4, Err(Error::ReplyTooLarge)))
     );
     assert_eq!(
         decode_reply(&error(-32_602)),

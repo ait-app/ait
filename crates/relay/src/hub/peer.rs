@@ -227,7 +227,8 @@ pub(super) fn encode_request(id: u64, request: Request) -> Bytes {
 /// # Returns
 /// The id of the request it answers, and the `result` object or the error the
 /// reply carries: [`NOT_ACCEPTING`] is `Error::NotAccepting`, [`TOO_LARGE`] is
-/// `Error::TooLarge`, and any other code is the call's own `Error::Rejected`.
+/// `Error::ReplyTooLarge` (the call ran), and any other code is the call's own
+/// `Error::Rejected`.
 ///
 /// # Errors
 /// Returns [`Malformed`] for text that is not a reply.
@@ -242,7 +243,7 @@ pub(super) fn decode_reply(text: &[u8]) -> Result<(u64, Result<Value, Error>), M
         } => Err(Error::NotAccepting),
         Outcome::Error {
             code: TOO_LARGE, ..
-        } => Err(Error::TooLarge),
+        } => Err(Error::ReplyTooLarge),
         Outcome::Error { code, message } => Err(Error::Rejected { code, message }),
     };
     Ok((reply.id, outcome))

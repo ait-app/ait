@@ -377,3 +377,65 @@ async fn a_call_that_waits_out_a_link_outage_is_unavailable() {
         assert_eq!(call.await.expect("call"), Err(error), "online: {online}");
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_request_over_the_payload_limit_is_refused_without_an_open() {
+    let mut harness = harness();
+    let oversized = request(
+        "agent_prompt",
+        json!({"text":"x".repeat(wire::MAX_PAYLOAD)}),
+    );
+    let call = harness.call(Uuid::new_v4(), oversized, Duration::from_secs(60));
+    harness.take().await;
+
+    assert_eq!(call.await.expect("call"), Err(Error::RequestTooLarge));
+    assert!(harness.written().is_empty());
+    assert!(harness.opener.sessions.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_request_larger_than_the_window_is_refused_unsent() {
+    let mut harness = harness();
+    let node = Uuid::new_v4();
+    let (s, _first) = harness
+        .sending(node, request("agent_list", json!({})), Some(65_536))
+        .await;
+    let over_window = request("agent_prompt", json!({"text":"x".repeat(70_000)}));
+    let call = harness.call(node, over_window, Duration::from_secs(60));
+    harness.take().await;
+
+    assert_eq!(call.await.expect("call"), Err(Error::RequestTooLarge));
+    assert_eq!(harness.sent(), Vec::<u64>::new());
+    assert_eq!(harness.opener.sessions[&s].sent.len(), 1, "only the first");
+}
+
+#[test]
+fn a_close_before_sending_maps_to_why_the_call_did_not_run() {
+    for (code, error) in [
+        (Some("unknown_target"), Error::Offline),
+        (Some("peer_gone"), Error::Offline),
+        (Some("unsupported"), Error::Unsupported),
+        (Some("peer_disabled"), Error::NotAccepting),
+        (Some("capacity"), Error::Capacity),
+        (Some("replaced"), Error::Unavailable),
+        (Some("something_new"), Error::Unavailable),
+        (None, Error::Unavailable),
+    ] {
+        assert_eq!(refusal(code), error, "{code:?}");
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_target_gone_before_its_request_was_sent_is_offline() {
+    let mut harness = harness();
+    let call = harness.call(
+        Uuid::new_v4(),
+        request("agent_list", json!({})),
+        Duration::from_secs(60),
+    );
+    harness.take().await;
+    let s = harness.opened();
+
+    assert!(harness.opener.closed(s, Some("peer_gone")));
+    assert_eq!(call.await.expect("call"), Err(Error::Offline));
+}

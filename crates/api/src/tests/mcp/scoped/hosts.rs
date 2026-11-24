@@ -16,6 +16,16 @@ const LOCAL: &str = "6f1c2a4e-8b3d-4c5e-9a7f-1b2c3d4e5f60";
 /// The text of a call whose reply was lost.
 const OUTCOME_UNKNOWN: &str = "The call may have run on the other host. Check with agent_list \
     or agent_get before retrying.";
+/// The text of a call refused while too many calls to other hosts are open.
+const CAPACITY: &str = "Too many calls to other hosts are open right now; this one was not \
+    sent. Retry later.";
+/// The text of a request too large to send.
+const REQUEST_TOO_LARGE: &str = "The request exceeds the 1 MiB message limit and was not sent. \
+    Retrying unchanged fails the same way: send less.";
+/// The text of a call that ran but whose reply was too large to return.
+const REPLY_TOO_LARGE: &str = "The call ran on the other host, but its reply exceeds the 1 MiB \
+    message limit. Do not repeat a call that changes something; ask for less (for example a \
+    lower `limit`).";
 /// The refusal of arguments outside the caller's schema.
 const MISMATCH: &str = "Arguments do not match the tool input schema";
 
@@ -381,14 +391,16 @@ async fn failures_name_the_host_and_never_replay() {
 
     // Every other way a sent call fails names the host and its reason.
     let mut sent = calls.len();
-    for (error, code) in [
-        (Error::Unavailable, "hub_unavailable"),
-        (Error::UnknownHost, "host_unknown"),
-        (Error::Offline, "host_offline"),
-        (Error::NotAccepting, "host_not_accepting"),
-        (Error::Unsupported, "host_unsupported"),
-        (Error::Capacity, "capacity"),
-        (Error::TooLarge, "capacity"),
+    // The capacity cases each say whether the call ran and what to do; the rest name the error.
+    for (error, code, text) in [
+        (Error::Unavailable, "hub_unavailable", None),
+        (Error::UnknownHost, "host_unknown", None),
+        (Error::Offline, "host_offline", None),
+        (Error::NotAccepting, "host_not_accepting", None),
+        (Error::Unsupported, "host_unsupported", None),
+        (Error::Capacity, "capacity", Some(CAPACITY)),
+        (Error::RequestTooLarge, "capacity", Some(REQUEST_TOO_LARGE)),
+        (Error::ReplyTooLarge, "capacity", Some(REPLY_TOO_LARGE)),
     ] {
         account.reply(Err(error.clone()));
         let response = scoped
@@ -399,7 +411,7 @@ async fn failures_name_the_host_and_never_replay() {
                 json!({"agentId":"x","hostId":host}),
             )
             .await;
-        failed(&response, &host, code, &error.to_string());
+        failed(&response, &host, code, text.unwrap_or(&error.to_string()));
         sent += 1;
         assert_eq!(account.calls().len(), sent, "{error:?}");
     }

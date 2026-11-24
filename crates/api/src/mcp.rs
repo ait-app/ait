@@ -324,8 +324,9 @@ async fn call(
     {
         return Ok(tool_result(Err(error.into())));
     }
-    // Only host callers' schemas offer `hostId`; naming this Host is the same as naming none.
-    if let Some(host) = hosts::destination(&state, &mut arguments) {
+    // Only host callers' calls of tools marked for peers are routed, the only schemas that offer
+    // `hostId`; naming this Host is the same as naming none.
+    if let Some(host) = hosts::destination(&state, scope.as_ref(), tool, &mut arguments) {
         return hosts::route(state, tool, arguments, caller, host).await;
     }
     run(state, tool, arguments, scope, caller).await

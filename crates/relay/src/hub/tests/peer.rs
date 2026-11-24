@@ -650,7 +650,7 @@ async fn error_replies_map_to_their_errors() {
     let node = Uuid::new_v4();
     let errors = [
         (-32_001, PeerError::NotAccepting),
-        (-32_000, PeerError::TooLarge),
+        (-32_000, PeerError::ReplyTooLarge),
         (
             -32_602,
             PeerError::Rejected {

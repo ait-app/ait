@@ -97,13 +97,19 @@ impl Tool {
         })
     }
 
+    /// Whether `scope`'s caller may run this tool on another Host: only host callers, and only
+    /// for tools marked for peers.
+    pub(super) const fn routable(&self, scope: Option<&Scope>) -> bool {
+        scope.is_none() && self.peer
+    }
+
     /// The input schema `scope`'s caller sees and is validated against: without arguments
     /// reserved for Bot sessions unless the caller is one, and, for host callers of a tool
     /// marked for peers, with the optional `hostId` that runs it on another Host.
     pub(super) fn schema(&self, scope: Option<&Scope>) -> Cow<'_, Value> {
         let bot = scope.is_some_and(|scope| scope.caller.kind.holder() == Holder::Bot);
         let withheld = !bot && BOT_ARGUMENTS.iter().any(|(tool, _)| *tool == self.name);
-        let routable = scope.is_none() && self.peer;
+        let routable = self.routable(scope);
         if !withheld && !routable {
             return Cow::Borrowed(&self.input_schema);
         }
