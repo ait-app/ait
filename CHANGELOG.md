@@ -1,6 +1,6 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.26 - 2026-11-24
 
 - The Git control at the top right of a workspace is one button that is always pressable. It
   commits, rebases, pulls, pushes, merges the PR, opens the PR, creates the PR or resets a delivered
@@ -18,7 +18,29 @@
   the checkout unchanged if it hits conflicts. It refuses a branch whose rebase would duplicate
   commits that are already published, such as one that was rebased onto its base branch after it was
   pushed, and a branch that is pushed to a different remote branch. It replaces "Pull and push" and
-  needs a host that supports it; on an older host the button shows the state and opens the panel.
+  needs a host that supports it; on an older host the button shows the state and opens the panel
+  ([#833](https://github.com/ait-app/ait/pull/833)).
+
+- The feature menu in the composer collects the session feature switches and the operations they
+  allow, and names the built-in features in all nine languages with the command beside the name. The
+  native Goal state of a Codex or OMP session appears as a capsule next to the change count with the
+  operations that session allows, such as editing, pausing, resuming and clearing it. A token budget
+  is shown only when the host reports one
+  ([#832](https://github.com/ait-app/ait/pull/832)).
+
+- When you are signed in, the account entry sits first in the sidebar footer and fills the row, so
+  the host and new-project icons move to the right
+  ([#831](https://github.com/ait-app/ait/pull/831)).
+
+- A message sent to a MiniMax Code agent right after a turn was cancelled is delivered instead of
+  refused. The prompt is resubmitted while the runtime still reports the previous turn as active,
+  and a session state update that arrives late no longer counts as the prompt being accepted
+  ([#830](https://github.com/ait-app/ait/pull/830)).
+
+- A long chat that contains rows without a height no longer crashes the message list. The
+  synchronous row measurement is limited to eight passes per frame and the remaining work
+  continues on the next frame
+  ([#834](https://github.com/ait-app/ait/pull/834)).
 
 ## 0.2.25 - 2026-11-23
 
