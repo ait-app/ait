@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { GitAction, GitActions } from "@/git/policy";
+import type { GitControl, GitControlAction, GitControlPrimary } from "@/git/control";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import {
   buildWorkspaceCommandCenterContributions,
   type WorkspaceCommandCenterSource,
 } from "./workspace-contributions";
 
-function gitAction(id: GitAction["id"], label: string): GitAction {
+function gitAction(id: GitControlAction["id"], label: string): GitControlAction {
   return {
     id,
     label,
@@ -14,27 +14,44 @@ function gitAction(id: GitAction["id"], label: string): GitAction {
     successLabel: `${label} complete`,
     disabled: false,
     status: "idle",
-    startsGroup: false,
     handler: () => undefined,
   };
 }
 
-function source(gitActions: GitActions): {
+function actionPrimary(action: GitControlAction): GitControlPrimary {
+  return { kind: "action", action, label: action.label, incoming: null, outgoing: null };
+}
+
+function gitControl(
+  primary: GitControlPrimary | null,
+  actions: GitControlAction[] = [],
+): GitControl {
+  return {
+    primary,
+    sections: actions.length > 0 ? [{ id: "sync", label: "Sync", actions }] : [],
+    mergeMethod: null,
+    summary: null,
+  };
+}
+
+const NO_GIT = gitControl(null);
+
+function source(control: GitControl = NO_GIT): {
   value: WorkspaceCommandCenterSource;
-  runGitActions: GitAction[];
+  runGitActions: GitControlAction[];
   dispatched: KeyboardActionDefinition[];
   copiedPaths: number;
   copiedBranchNames: number;
   archives: number;
   toggledLabels: Array<{ name: string; assigned: boolean }>;
 } {
-  const runGitActions: GitAction[] = [];
+  const runGitActions: GitControlAction[] = [];
   const dispatched: KeyboardActionDefinition[] = [];
   const toggledLabels: Array<{ name: string; assigned: boolean }> = [];
   const counters = { copiedPaths: 0, copiedBranchNames: 0, archives: 0 };
   return {
     value: {
-      gitActions,
+      gitControl: control,
       labels: {
         section: "Workspace actions",
         newAgent: "New agent",
@@ -126,12 +143,9 @@ function source(gitActions: GitActions): {
 }
 
 describe("workspace command center contributions", () => {
-  it("makes only the policy-selected primary Git action default-visible and runs it", () => {
+  it("makes only the main-button Git action default-visible and runs it", () => {
     const primary = gitAction("commit", "Commit");
-    const fixture = source({
-      primary,
-      secondary: [gitAction("push", "Push")],
-    });
+    const fixture = source(gitControl(actionPrimary(primary), [gitAction("push", "Push")]));
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
     const gitContributions = contributions.filter((item) => item.id.startsWith("git:"));
@@ -142,23 +156,37 @@ describe("workspace command center contributions", () => {
     expect(fixture.runGitActions).toEqual([primary]);
   });
 
-  it("does not duplicate a primary action retained in the secondary policy list", () => {
+  it("does not duplicate a main-button action that a panel section also holds", () => {
     const primary = gitAction("pull", "Pull");
-    const fixture = source({
-      primary,
-      secondary: [primary, gitAction("push", "Push")],
-    });
+    const fixture = source(
+      gitControl(actionPrimary(primary), [primary, gitAction("push", "Push")]),
+    );
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
     expect(contributions.filter((item) => item.id === "git:pull")).toHaveLength(1);
   });
 
+  it("lists no default Git entry for a state on the main button, and every panel action on query", () => {
+    const fixture = source(
+      gitControl({ kind: "state", state: "diverged", label: "Diverged", tone: "warning" }, [
+        gitAction("pull", "Pull"),
+        gitAction("push", "Push"),
+      ]),
+    );
+
+    const gitContributions = buildWorkspaceCommandCenterContributions(fixture.value).filter(
+      (item) => item.id.startsWith("git:"),
+    );
+
+    expect(gitContributions.map(({ id, visibility }) => ({ id, visibility }))).toEqual([
+      { id: "git:pull", visibility: "query" },
+      { id: "git:push", visibility: "query" },
+    ]);
+  });
+
   it("orders New agent before Git and keeps terminal, browser, and splits search-only", () => {
-    const fixture = source({
-      primary: gitAction("commit", "Commit"),
-      secondary: [],
-    });
+    const fixture = source(gitControl(actionPrimary(gitAction("commit", "Commit"))));
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -186,7 +214,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("omits browser and split actions when their existing capabilities are unavailable", () => {
-    const fixture = source({ primary: null, secondary: [] });
+    const fixture = source();
     fixture.value.capabilities = {
       canSplitPanes: false,
       canOpenBrowserTabs: false,
@@ -209,7 +237,7 @@ describe("workspace command center contributions", () => {
   it.each([null, "file"] as const)(
     "dispatches tab and pane commands with active tab %s",
     (kind) => {
-      const fixture = source({ primary: null, secondary: [] });
+      const fixture = source();
       fixture.value.activeTabKind = kind;
       fixture.value.activeTabIndex = kind === "file" ? 0 : -1;
       fixture.value.activeTabCount = kind === "file" ? 1 : 0;
@@ -240,7 +268,7 @@ describe("workspace command center contributions", () => {
   );
 
   it("keeps workspace creation commands available outside Git", () => {
-    const fixture = source({ primary: null, secondary: [] });
+    const fixture = source();
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -253,7 +281,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("dispatches rename to the workspace scope", () => {
-    const fixture = source({ primary: null, secondary: [] });
+    const fixture = source();
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
     const rename = contributions.find((item) => item.id === "workspace:rename");
@@ -264,7 +292,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("copies the workspace path without going through the dispatcher", () => {
-    const fixture = source({ primary: null, secondary: [] });
+    const fixture = source();
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
     contributions.find((item) => item.id === "workspace:copy-path")?.run();
@@ -274,14 +302,14 @@ describe("workspace command center contributions", () => {
   });
 
   it("omits Copy branch name when the workspace has no branch, and copies when it does", () => {
-    const withoutBranch = source({ primary: null, secondary: [] });
+    const withoutBranch = source();
     expect(
       buildWorkspaceCommandCenterContributions(withoutBranch.value).some(
         (item) => item.id === "workspace:copy-branch-name",
       ),
     ).toBe(false);
 
-    const withBranch = source({ primary: null, secondary: [] });
+    const withBranch = source();
     withBranch.value.currentBranch = "feature/login";
     const contribution = buildWorkspaceCommandCenterContributions(withBranch.value).find(
       (item) => item.id === "workspace:copy-branch-name",
@@ -293,7 +321,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("flips the pin label on pinned state and omits the entry when the host cannot pin", () => {
-    const unpinned = source({ primary: null, secondary: [] });
+    const unpinned = source();
     unpinned.value.capabilities.canPin = true;
     const pinContribution = buildWorkspaceCommandCenterContributions(unpinned.value).find(
       (item) => item.id === "workspace:pin",
@@ -303,7 +331,7 @@ describe("workspace command center contributions", () => {
     pinContribution?.run();
     expect(unpinned.dispatched).toEqual([{ id: "workspace.pin", scope: "sidebar" }]);
 
-    const pinned = source({ primary: null, secondary: [] });
+    const pinned = source();
     pinned.value.capabilities.canPin = true;
     pinned.value.isPinned = true;
     expect(
@@ -312,7 +340,7 @@ describe("workspace command center contributions", () => {
       )?.presentation,
     ).toMatchObject({ title: "Unpin" });
 
-    const unsupported = source({ primary: null, secondary: [] });
+    const unsupported = source();
     expect(
       buildWorkspaceCommandCenterContributions(unsupported.value).some(
         (item) => item.id === "workspace:pin",
@@ -321,14 +349,14 @@ describe("workspace command center contributions", () => {
   });
 
   it("archives the workspace on query, with its shortcut, only while it can be archived", () => {
-    const unavailable = source({ primary: null, secondary: [] });
+    const unavailable = source();
     expect(
       buildWorkspaceCommandCenterContributions(unavailable.value).some(
         (item) => item.id === "workspace:archive",
       ),
     ).toBe(false);
 
-    const available = source({ primary: null, secondary: [] });
+    const available = source();
     available.value.capabilities.canArchive = true;
     available.value.shortcuts.archiveWorkspace = [["mod", "shift", "Backspace"]];
     const contribution = buildWorkspaceCommandCenterContributions(available.value).find(
@@ -346,14 +374,14 @@ describe("workspace command center contributions", () => {
   });
 
   it("lists Show setup only when the workspace has setup to show", () => {
-    const withoutSetup = source({ primary: null, secondary: [] });
+    const withoutSetup = source();
     expect(
       buildWorkspaceCommandCenterContributions(withoutSetup.value).some(
         (item) => item.id === "workspace:show-setup",
       ),
     ).toBe(false);
 
-    const withSetup = source({ primary: null, secondary: [] });
+    const withSetup = source();
     withSetup.value.capabilities.canShowSetup = true;
     buildWorkspaceCommandCenterContributions(withSetup.value)
       .find((item) => item.id === "workspace:show-setup")
@@ -366,7 +394,7 @@ describe("workspace command center contributions", () => {
   // behind `enabled: isRouteFocused && ...`, so they must be built here rather than in the global
   // root set, where they would silently no-op off a workspace route.
   it("builds the Explorer sidebar and focus toggles in the workspace set", () => {
-    const fixture = source({ primary: null, secondary: [] });
+    const fixture = source();
     fixture.value.capabilities.canSplitPanes = false;
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -386,7 +414,7 @@ describe("workspace command center contributions", () => {
   // panes are available, so the standalone entry must step aside there — otherwise the palette
   // lists "Toggle focus mode" twice for the one `workspace.focus.toggle` action.
   it("omits the standalone focus toggle when the pane set already covers it", () => {
-    const fixture = source({ primary: null, secondary: [] });
+    const fixture = source();
     fixture.value.capabilities.canSplitPanes = true;
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -399,7 +427,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("omits the labels group when the catalog hasn't loaded", () => {
-    const fixture = source({ primary: null, secondary: [] });
+    const fixture = source();
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -407,7 +435,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("lists a choice per catalog label, ticked when assigned, and toggles the opposite state on run", () => {
-    const fixture = source({ primary: null, secondary: [] });
+    const fixture = source();
     fixture.value.labelCatalog = [
       { name: "bug", assigned: true },
       { name: "urgent", assigned: false },

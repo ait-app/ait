@@ -375,6 +375,7 @@ fn mutation_defaults_and_inline_errors_match_paseo() {
             json!({"cwd":"/repo","workspaceId":"workspace-1","initialBranch":"feature"}),
         ),
         ("checkout.pull.request", json!({"cwd":"/repo"})),
+        ("checkout.rebase.request", json!({"cwd":"/repo"})),
         ("checkout.push.request", json!({"cwd":"/repo"})),
         (
             "checkout.discard_changes.request",
@@ -681,6 +682,10 @@ impl CheckoutRuntime for FakeCheckout {
     }
 
     fn pull(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
+        fail(cwd)
+    }
+
+    fn rebase(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
         fail(cwd)
     }
 

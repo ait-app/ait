@@ -57,7 +57,7 @@ import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
-import type { GitActions } from "@/git/policy";
+import type { GitControl } from "@/git/control";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { useGitActions } from "@/git/use-actions";
 import { buildForgeSignInCommand, getForgePresentation, type Forge } from "@/git/forge";
@@ -437,7 +437,7 @@ interface ChangesPullRequestLinkModel extends Pick<PrHint, "forge" | "number" | 
 interface ChangesRepositoryToolbarModel {
   branchName: string | null;
   cwd: string;
-  gitActions: GitActions | null;
+  gitControl: GitControl | null;
   pullRequest: ChangesPullRequestLinkModel | null;
   serverId: string;
   workspaceId?: string | null;
@@ -465,7 +465,7 @@ interface BuildChangesHeaderModelInput {
   compact: boolean;
   cwd: string;
   diffMode: "uncommitted" | "base";
-  gitActions: GitActions;
+  gitControl: GitControl;
   mode: ChangesToolbarMode;
   onOpenPullRequest: () => void;
   onSelectBase: () => void;
@@ -484,7 +484,7 @@ function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
     repository: {
       branchName: input.branchName,
       cwd: input.cwd,
-      gitActions: input.compact ? input.gitActions : null,
+      gitControl: input.compact ? input.gitControl : null,
       pullRequest: input.pullRequest
         ? { ...input.pullRequest, onOpen: input.onOpenPullRequest }
         : null,
@@ -605,7 +605,7 @@ function ChangesRepositoryToolbar({
       compact={compact}
       sidebarSurface={sidebarSurface}
       testID="changes-repository-header"
-      trailing={model.gitActions ? "framed" : "glyph"}
+      trailing={model.gitControl ? "framed" : "glyph"}
     >
       <ChangesToolbarLeading>
         <BranchSwitcher
@@ -624,7 +624,7 @@ function ChangesRepositoryToolbar({
             <ChangesPullRequestExternalLink compact={compact} model={model.pullRequest} />
           </>
         ) : null}
-        {model.gitActions ? <GitActionsSplitButton gitActions={model.gitActions} menuOnly /> : null}
+        {model.gitControl ? <GitActionsSplitButton control={model.gitControl} menuOnly /> : null}
       </ChangesToolbarTrailing>
     </ChangesToolbarRow>
   );
@@ -1711,7 +1711,7 @@ export function ChangesSurface({
   );
   const diffErrorMessage = diffPayloadError?.message ?? null;
   const prErrorMessage = computePrErrorMessage(githubFeaturesEnabled, prPayloadError);
-  const { gitActions, branchLabel, baseRefLabel } = useGitActions({ serverId, cwd });
+  const { gitControl, branchLabel, baseRefLabel } = useGitActions({ serverId, cwd });
   const committedDiffDescription = useMemo(
     () => computeCommittedDiffDescription(branchLabel, baseRefLabel),
     [baseRefLabel, branchLabel],
@@ -1838,7 +1838,7 @@ export function ChangesSurface({
         compact: isMobile,
         cwd,
         diffMode,
-        gitActions,
+        gitControl,
         mode: toolbarMode,
         onOpenPullRequest: handleOpenPullRequest,
         onSelectBase: handleSelectBase,
@@ -1853,7 +1853,7 @@ export function ChangesSurface({
       currentBranchName,
       cwd,
       diffMode,
-      gitActions,
+      gitControl,
       handleOpenPullRequest,
       handleSelectBase,
       handleSelectUncommitted,

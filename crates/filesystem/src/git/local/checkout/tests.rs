@@ -10,6 +10,7 @@ mod naming;
 mod parser;
 mod paseo;
 
+mod rebase;
 mod remote_base;
 mod reset_workspace;
 mod upstream;

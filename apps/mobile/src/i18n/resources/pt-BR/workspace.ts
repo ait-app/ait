@@ -360,18 +360,7 @@ export const workspace = {
         pending: "Fazendo push...",
         success: "Push concluído",
       },
-      pullAndPush: {
-        label: "Pull e push",
-        pending: "Fazendo pull e push...",
-        success: "Pull e push concluídos",
-      },
       viewPr: "Ver PR",
-      branchStatus: {
-        behind: "Branch atrás do remoto",
-        diverged: "Branch divergente",
-        conflicts: "Resolva os conflitos",
-        unknown: "Status do Git indisponível",
-      },
       createPr: {
         label: "Criar PR",
         pending: "Criando PR...",
@@ -381,11 +370,14 @@ export const workspace = {
         success_mr: "MR criada",
       },
       mergeBranch: {
-        label: "Fazer merge localmente",
+        labelInto: "Fazer merge em {{base}}",
         pending: "Fazendo merge...",
         success: "Mergeada",
       },
       resetWorkspace: {
+        description: "Descartar tudo e voltar ao {{base}} mais recente",
+        deliveredConfirmMessage:
+          "Seu trabalho foi mergeado. Redefinir este workspace para o {{base}} mais recente?",
         label: "Redefinir workspace",
         pending: "Redefinindo...",
         success: "Workspace redefinido",
@@ -413,62 +405,83 @@ export const workspace = {
         enableRebase: "Merge automático",
         enabled: "Merge automático ativado",
         enabling: "Ativando merge automático...",
+        disable: "Desativar merge automático",
         disabling: "Desativando merge automático...",
         disabled: "Merge automático desativado",
       },
-      unavailable: {
-        resetNoInitialBranch: "Não é possível redefinir: branch inicial desconhecida",
-        resetNoRemote: "Não é possível redefinir: origin não configurado",
-        viewPrNoForge:
-          "Ver {{noun}} não está disponível agora porque o {{brand}} não está conectado",
-        pullNoRemote:
-          "Pull não está disponível aqui porque esta branch ainda não está conectada a um remoto",
-        pullDirty:
-          "Pull não está disponível enquanto há alterações locais. Faça commit ou stash primeiro",
-        pullUpToDate: "Pull não está disponível porque esta branch já está atualizada",
-        pushNoRemote:
-          "Push não está disponível aqui porque esta branch ainda não está conectada a um remoto",
-        pushBehind:
-          "Push ainda não está disponível porque há alterações mais recentes para trazer primeiro",
-        pushNothing: "Push não está disponível porque não há nada novo para enviar",
-        pullAndPushNoRemote:
-          "Pull e push não estão disponíveis aqui porque esta branch ainda não está conectada a um remoto",
-        pullAndPushDirty:
-          "Pull e push não estão disponíveis enquanto há alterações locais. Faça commit ou stash primeiro",
-        pullAndPushNoIncoming:
-          "Pull e push não estão disponíveis porque não há alterações de entrada para puxar primeiro",
-        pullAndPushInSync:
-          "Pull e push não estão disponíveis porque esta branch já está sincronizada",
-        pullAndPushNothingToPush:
-          "Pull e push não estão disponíveis porque não há nada novo para enviar depois do pull",
-        createPrNoForge:
-          "Criar {{noun}} não está disponível agora porque o {{brand}} não está conectado",
-        createPrNoCommits:
-          "Criar PR não está disponível porque esta branch ainda não tem commits novos",
-        mergeNoBase: "Merge não está disponível porque não foi possível determinar a branch base",
-        mergeDirty:
-          "Merge não está disponível enquanto há alterações locais. Faça commit ou stash primeiro",
-        mergeNothing:
-          "Merge não está disponível porque esta branch ainda não tem nada novo para merge",
-        mergePrNoForge:
-          "Merge da {{noun}} não está disponível agora porque o {{brand}} não está conectado",
-        mergePrMissing: "Merge da PR não está disponível porque ainda não há uma pull request",
-        mergePrDraft: "Merge da PR não está disponível porque a pull request ainda é um rascunho",
-        mergePrMerged: "Merge da PR não está disponível porque a pull request já foi mergeada",
-        mergePrClosed: "Merge da PR não está disponível porque a pull request está fechada",
-        mergePrConflicts: "Merge da PR não está disponível porque a pull request tem conflitos",
-        mergePrQueue:
-          "Merge da PR não está disponível aqui porque este repositório usa uma merge queue",
-        mergePrNotReady:
-          "Merge da {{noun}} não está disponível até o {{brand}} informar que a {{noun}} está pronta para merge",
-        autoMergeCannotDisable:
-          "O merge automático está ativado, mas esta conta não pode desativá-lo",
+      rebase: {
+        label: "Fazer rebase",
+        pending: "Fazendo rebase...",
+        success: "Rebase concluído",
+        remote: "Fazer rebase no remoto",
+      },
+      state: {
+        conflicts: "Conflitos",
+        diverged: "Divergente",
+        behind: "Atrás do remoto",
+        unknown: "Git",
+        upToDate: "Atualizado",
+        idle: "Git",
+      },
+      sections: {
+        changes: "Alterações",
+        sync: "Sincronização",
+        pullRequest: "Solicitação de pull",
+        pullRequest_mr: "Solicitação de merge",
+        local: "Localmente",
+      },
+      mergeMethod: {
+        label: "Método de merge",
+        squash: "Combinar (squash)",
+        merge: "Commit de merge",
+        rebase: "Fazer rebase",
+      },
+      detail: {
+        incoming: "A receber: {{count}}",
+        outgoing: "A enviar: {{count}}",
+      },
+      summary: {
+        branchInto: "{{branch}} → {{base}}",
+        ahead: "{{count}} à frente",
+        behind: "{{count}} atrás",
+        clean: "Limpo",
+        dirty: "Alterações não commitadas",
+        notPushed: "Ainda sem push",
+        pullRequest: "{{noun}} {{number}}",
+      },
+      reason: {
+        resetNoInitialBranch: "Branch inicial desconhecida",
+        resetNoRemote: "origin não está configurado",
+        viewPrNoForge: "{{brand}} não está conectado",
+        pullNoRemote: "Sem conexão com um remoto",
+        pullDirty: "Faça commit das alterações antes",
+        pullUpToDate: "Já está atualizado",
+        pushNoRemote: "Sem conexão com um remoto",
+        pushBehind: "Traga as novas alterações antes",
+        pushRebaseFirst: "Faça rebase no remoto antes",
+        pushNothing: "Nada para enviar",
+        createPrNoForge: "{{brand}} não está conectado",
+        createPrNoCommits: "Ainda não há commits novos",
+        mergeNoBase: "Branch base desconhecida",
+        mergeDirty: "Faça commit das alterações antes",
+        mergeNothing: "Nada novo para fazer merge",
+        mergePrNoForge: "{{brand}} não está conectado",
+        mergePrDraft: "Ainda é um rascunho",
+        mergePrConflicts: "{{noun}} com conflitos",
+        mergePrQueue: "O repositório usa fila de merge",
+        mergePrNotReady: "{{noun}} ainda não pode ser mergeada",
+        mergePrAutoMerge: "Merge automático já está ativo",
+        autoMergeCannotDisable: "Sem permissão para desativar o merge automático",
+        rebaseDirty: "Faça commit das alterações antes",
+        rebaseNoRemote: "Sem branch remota para o rebase",
+        rebaseNothing: "Nada novo no remoto",
+        rebaseOtherTarget: "O upstream é outra branch",
       },
       toasts: {
+        failedRebase: "Falha ao fazer rebase",
         failedCommit: "Falha ao fazer commit",
         failedPull: "Falha ao fazer pull",
         failedPush: "Falha ao fazer push",
-        failedPullAndPush: "Falha ao fazer pull e push",
         failedCreatePr: "Falha ao criar PR",
         failedMergePr: "Falha ao fazer merge da PR",
         failedEnableAutoMerge: "Falha ao ativar merge automático",

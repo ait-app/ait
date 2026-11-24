@@ -1,4 +1,4 @@
-import type { GitAction, GitActions } from "@/git/policy";
+import { listGitControlActions, type GitControl, type GitControlAction } from "@/git/control";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type {
   WorkspacePanelPlacement,
@@ -88,7 +88,7 @@ export interface WorkspaceCommandCenterIcons {
   showSetup?: CommandCenterIcon;
   archive?: CommandCenterIcon;
   toggleFocusMode?: CommandCenterIcon;
-  git?(action: GitAction): CommandCenterIcon | undefined;
+  git?(action: GitControlAction): CommandCenterIcon | undefined;
 }
 
 export interface WorkspaceCommandCenterShortcuts {
@@ -107,7 +107,7 @@ export interface WorkspaceCommandCenterShortcuts {
 }
 
 export interface WorkspaceCommandCenterSource {
-  gitActions: GitActions;
+  gitControl: GitControl;
   labels: WorkspaceCommandCenterLabels;
   icons: WorkspaceCommandCenterIcons;
   shortcuts: WorkspaceCommandCenterShortcuts;
@@ -134,7 +134,7 @@ export interface WorkspaceCommandCenterSource {
    */
   labelCatalog: readonly WorkspaceCommandCenterLabelChoice[] | null;
   dispatch(action: KeyboardActionDefinition): void;
-  runGitAction(action: GitAction): void;
+  runGitAction(action: GitControlAction): void;
   copyPath(): void;
   copyBranchName(): void;
   archiveWorkspace(): void;
@@ -143,7 +143,7 @@ export interface WorkspaceCommandCenterSource {
 
 function buildGitContribution(
   source: WorkspaceCommandCenterSource,
-  action: GitAction,
+  action: GitControlAction,
   rank: number,
   visibility: "always" | "query",
 ): CommandCenterContribution {
@@ -162,6 +162,10 @@ function buildGitContribution(
       icon: source.icons.git?.(action),
     },
   };
+}
+
+function runnableGitPrimary(control: GitControl): GitControlAction | null {
+  return control.primary?.kind === "action" ? control.primary.action : null;
 }
 
 function buildWorkspaceAction(input: {
@@ -554,7 +558,8 @@ function buildCreationContributions(
       visibility: "always",
     }),
   ];
-  const primary = source.gitActions.primary;
+  // A state on the main button only opens the panel, so it has nothing to run here.
+  const primary = runnableGitPrimary(source.gitControl);
   if (primary) contributions.push(buildGitContribution(source, primary, 1, "always"));
   contributions.push(
     buildQueryAction(source, {
@@ -592,8 +597,8 @@ export function buildWorkspaceCommandCenterContributions(
     ...(source.capabilities.canSplitPanes ? buildPaneContributions(source) : []),
   ];
 
-  const primary = source.gitActions.primary;
-  for (const [index, action] of source.gitActions.secondary.entries()) {
+  const primary = runnableGitPrimary(source.gitControl);
+  for (const [index, action] of listGitControlActions(source.gitControl).entries()) {
     if (action.id === primary?.id) continue;
     contributions.push(buildGitContribution(source, action, 100 + index, "query"));
   }

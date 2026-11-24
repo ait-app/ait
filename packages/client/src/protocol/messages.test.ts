@@ -398,6 +398,17 @@ describe("Ait host capabilities", () => {
       ).toBe(supported);
     }
   });
+  it("enables rebase only when the host implements the method", () => {
+    for (const supported of [false, true]) {
+      const info = serverInfo(
+        { server_id: "ait" },
+        new Set(supported ? ["checkout.rebase.request"] : []),
+      );
+      expect(
+        parseServerInfoStatusPayload(object(object(info).payload))?.features?.checkoutRebase,
+      ).toBe(supported);
+    }
+  });
   it("enables GitLab panels only when the server advertises its installed adapter", () => {
     const methods = new Set([
       "checkout.pr.status.request",

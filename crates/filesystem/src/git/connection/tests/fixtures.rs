@@ -242,6 +242,10 @@ impl CheckoutRuntime for GatedCheckout {
         unreachable!("these observation tests only read diffs")
     }
 
+    fn rebase(&self, _cwd: &str) -> Result<(), CheckoutRuntimeError> {
+        unreachable!("these observation tests only read diffs")
+    }
+
     fn push(&self, _cwd: &str) -> Result<(), CheckoutRuntimeError> {
         unreachable!("these observation tests only read diffs")
     }

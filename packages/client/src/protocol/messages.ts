@@ -127,6 +127,7 @@ export function serverInfo(
       has("workspace.setup.subscribe.request") && has("workspace.setup.summary.request"),
     workspaceTerminals: has("terminal.list.request"),
     checkoutForgeSetAutoMerge: has("checkout.forge.set_auto_merge.request"),
+    checkoutRebase: has("checkout.rebase.request"),
     // Keep the legacy GitHub flags populated for clients that still select the
     // GitHub-specific RPCs while the forge-neutral aliases roll out.
     checkoutGithubSetAutoMerge: has("checkout.github.set_auto_merge.request"),

@@ -36,7 +36,7 @@ test.describe("Workspace header", () => {
       expect(separatorBox!.x + separatorBox!.width).toBeLessThanOrEqual(titleBox!.x);
 
       // Archive is a workspace action, so the Git menu on the right no longer offers it.
-      await page.getByTestId("changes-actions-menu-trigger").click();
+      await page.getByTestId("changes-primary-cta-caret").click();
       await expect(page.getByTestId("changes-primary-cta-menu")).toBeVisible();
       await expect(page.getByTestId("workspace-archive-action")).toHaveCount(0);
       await page.keyboard.press("Escape");

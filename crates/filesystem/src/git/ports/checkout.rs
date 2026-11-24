@@ -429,6 +429,20 @@ pub trait CheckoutRuntime: std::fmt::Debug + Send + Sync {
     /// Returns categorized remote, conflict, Git, timeout, or output failures.
     fn pull(&self, cwd: &str) -> Result<(), CheckoutRuntimeError>;
 
+    /// Fetch the current branch's same-named branch on the preferred remote (`origin`, otherwise
+    /// the first remote) and rebase onto it, keeping merges. Nothing is pushed.
+    ///
+    /// # Arguments
+    /// * `cwd` - Directory of the checkout to rebase.
+    ///
+    /// # Errors
+    /// Refuses, without changing the checkout, a detached HEAD, a checkout without a remote,
+    /// tracked changes, an operation already in progress, a push destination other than that
+    /// remote branch, or a remote without that branch. A rebase that stops is aborted and
+    /// reported; one that replaced a commit a remote-tracking ref contains is undone and
+    /// refused. Other remote, Git, timeout, or output failures pass through.
+    fn rebase(&self, cwd: &str) -> Result<(), CheckoutRuntimeError>;
+
     /// Push the current branch.
     ///
     /// # Errors

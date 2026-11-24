@@ -837,6 +837,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "checkout.pull.response",
   },
+  "checkout.rebase.request": {
+    method: "checkout.rebase.request",
+    kind: "request",
+    channel: 2,
+    response: "checkout.rebase.response",
+  },
   "checkout.push.request": {
     method: "checkout.push.request",
     kind: "request",

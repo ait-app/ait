@@ -1,84 +1,67 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { useCallback, useMemo } from "react";
+import { Fragment, useCallback, useMemo, useState, type ReactElement } from "react";
 import { View, Text, Pressable, type PressableStateCallbackType } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { ChevronDown, GitBranch } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuHint,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  type MenuPageDefinition,
 } from "@/components/ui/dropdown-menu";
+import { mutedIconColorMapping, statusWarningIconColorMapping } from "@/components/ui/icon-color";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
-import type { GitAction, GitActions } from "@/git/policy";
+import type {
+  GitControl,
+  GitControlAction,
+  GitControlMergeMethod,
+  GitControlPrimary,
+  GitControlSection,
+  GitControlSummary,
+} from "@/git/control";
+import type { CheckoutPrMergeMethod } from "@ait/protocol/messages";
 import { useGitActionRunner } from "@/git/use-actions";
+import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { buttonControlHeight, HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
 
+const MERGE_METHOD_PAGE_ID = "git-merge-method";
+const PANEL_MIN_WIDTH = 260;
+
+const ThemedGitBranch = withUnistyles(GitBranch);
+
 interface GitActionsSplitButtonProps {
-  gitActions: GitActions;
+  control: GitControl;
+  /** Only the panel, behind a menu trigger (the Changes panel's Git menu). */
   menuOnly?: boolean;
 }
 
-interface GitActionMenuItemProps {
-  action: GitAction;
-  onSelect: (action: GitAction) => void;
-  needsSeparator?: boolean;
-  showSeparator?: boolean;
-  closeOnSelect?: boolean;
-}
-
-function GitActionMenuItem({
-  action,
-  onSelect,
-  needsSeparator,
-  showSeparator,
-  closeOnSelect,
-}: GitActionMenuItemProps) {
-  const handleSelect = useCallback(() => onSelect(action), [onSelect, action]);
-  return (
-    <View>
-      {needsSeparator && showSeparator ? <DropdownMenuSeparator /> : null}
-      <DropdownMenuItem
-        testID={`changes-menu-${action.id}`}
-        leading={action.icon}
-        disabled={action.disabled}
-        muted={Boolean(action.unavailableMessage)}
-        status={action.status}
-        pendingLabel={action.pendingLabel}
-        successLabel={action.successLabel}
-        closeOnSelect={closeOnSelect}
-        onSelect={handleSelect}
-      >
-        {action.label}
-      </DropdownMenuItem>
-    </View>
-  );
-}
-
-export function GitActionsSplitButton({
-  gitActions,
-  menuOnly = false,
-}: GitActionsSplitButtonProps) {
+/**
+ * The workspace Git control: a main button that runs the next step, or names the state and opens
+ * the panel, plus a caret that opens the panel with the status summary and grouped actions.
+ */
+export function GitActionsSplitButton({ control, menuOnly = false }: GitActionsSplitButtonProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const runGitAction = useGitActionRunner();
-
-  const getActionDisplayLabel = useCallback((action: GitAction): string => {
-    if (action.status === "pending") return action.pendingLabel;
-    if (action.status === "success") return action.successLabel;
-    return action.label;
-  }, []);
+  const [open, setOpen] = useState(false);
+  const pages = useMergeMethodPages(control.mergeMethod);
+  const { primary } = control;
 
   const handlePrimaryPress = useCallback(() => {
-    if (!gitActions.primary) {
+    if (primary?.kind === "action") {
+      runGitAction(primary.action);
       return;
     }
-    runGitAction(gitActions.primary);
-  }, [gitActions.primary, runGitAction]);
+    setOpen(true);
+  }, [primary, runGitAction]);
 
-  const primaryDisabled = gitActions.primary?.disabled;
+  const primaryDisabled = primary?.kind === "action" && primary.action.disabled;
   const primaryPressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.splitButtonPrimary,
@@ -90,66 +73,41 @@ export function GitActionsSplitButton({
   );
 
   const caretTriggerStyle = useCallback(
-    ({ hovered, pressed, open }: { hovered: boolean; pressed: boolean; open: boolean }) => [
+    ({ hovered, pressed, open: isOpen }: { hovered: boolean; pressed: boolean; open: boolean }) => [
       styles.splitButtonCaret,
-      (hovered || pressed || open) &&
+      (hovered || pressed || isOpen) &&
         inlineUnistylesStyle({ backgroundColor: theme.colors.surface2 }),
     ],
     [theme.colors.surface2],
   );
 
   const menuOnlyTriggerStyle = useCallback(
-    ({ hovered, pressed, open }: { hovered: boolean; pressed: boolean; open: boolean }) => [
+    ({ hovered, pressed, open: isOpen }: { hovered: boolean; pressed: boolean; open: boolean }) => [
       styles.menuOnlyTrigger,
-      (hovered || pressed || open) &&
+      (hovered || pressed || isOpen) &&
         inlineUnistylesStyle({ backgroundColor: theme.colors.surface2 }),
     ],
     [theme.colors.surface2],
   );
 
-  const menuOnlyActions = useMemo(
-    () => [...(gitActions.primary ? [gitActions.primary] : []), ...gitActions.secondary],
-    [gitActions.primary, gitActions.secondary],
+  if (!primary) {
+    return null;
+  }
+
+  const panel = (
+    <DropdownMenuContent
+      align="end"
+      minWidth={PANEL_MIN_WIDTH}
+      pages={pages}
+      testID="changes-primary-cta-menu"
+    >
+      <GitControlPanel control={control} onRun={runGitAction} />
+    </DropdownMenuContent>
   );
 
-  // Direct PR/MR merge actions remain available in the menu with their
-  // method-specific variants. Surface the first allowed method beside the
-  // normal PR CTA as a quick action so GitHub and GitLab expose the same
-  // visible merge affordance.
-  const quickMergeAction = useMemo(
-    () =>
-      gitActions.secondary.find(
-        (action) =>
-          action.id === "merge-pr-squash" ||
-          action.id === "merge-pr-merge" ||
-          action.id === "merge-pr-rebase",
-      ) ?? null,
-    [gitActions.secondary],
-  );
-
-  const quickMergeButtonStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.quickMergeButton,
-      (Boolean(hovered) || pressed) &&
-        inlineUnistylesStyle({ backgroundColor: theme.colors.surface2 }),
-      quickMergeAction?.disabled && styles.splitButtonPrimaryDisabled,
-    ],
-    [quickMergeAction?.disabled, theme.colors.surface2],
-  );
-
-  const handleQuickMergePress = useCallback(() => {
-    if (quickMergeAction) {
-      runGitAction(quickMergeAction);
-    }
-  }, [quickMergeAction, runGitAction]);
-
-  if (menuOnly || !gitActions.primary) {
-    if (menuOnlyActions.length === 0) {
-      return null;
-    }
-
+  if (menuOnly) {
     return (
-      <DropdownMenu>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
           testID="changes-actions-menu-trigger"
           style={menuOnlyTriggerStyle}
@@ -159,119 +117,257 @@ export function GitActionsSplitButton({
           <GitBranch size={16} color={theme.colors.foregroundMuted} />
           <ChevronDown size={12} color={theme.colors.foregroundExtraMuted} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" testID="changes-primary-cta-menu">
-          {menuOnlyActions.map((action, index) => (
-            <GitActionMenuItem
-              key={action.id}
-              action={action}
-              onSelect={runGitAction}
-              needsSeparator={action.startsGroup}
-              showSeparator={index > 0}
-              closeOnSelect={
-                action.status === "idle" &&
-                action.id === "pr" &&
-                action.label === action.pendingLabel &&
-                action.label === action.successLabel
-              }
-            />
-          ))}
-        </DropdownMenuContent>
+        {panel}
       </DropdownMenu>
     );
   }
 
   return (
-    <View style={styles.row}>
-      {gitActions.primary ? (
-        <View style={styles.splitButton}>
-          <Pressable
-            testID="changes-primary-cta"
-            style={primaryPressableStyle}
-            onPress={handlePrimaryPress}
-            disabled={gitActions.primary.disabled}
-            accessibilityRole="button"
-            accessibilityLabel={gitActions.primary.label}
-          >
-            {gitActions.primary.status === "pending" ? (
-              <LoadingSpinner
-                size="small"
-                color={theme.colors.foreground}
-                style={styles.splitButtonSpinnerOnly}
-              />
-            ) : (
-              <View style={styles.splitButtonContent}>
-                {gitActions.primary.icon}
-                <Text style={styles.splitButtonText}>
-                  {getActionDisplayLabel(gitActions.primary)}
-                </Text>
-              </View>
-            )}
-          </Pressable>
-          {gitActions.secondary.length > 0 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                testID="changes-primary-cta-caret"
-                style={caretTriggerStyle}
-                accessibilityRole="button"
-                accessibilityLabel={t("workspace.git.actions.moreOptions")}
-              >
-                <ChevronDown size={16} color={theme.colors.foregroundExtraMuted} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" testID="changes-primary-cta-menu">
-                {gitActions.secondary.map((action, index) => (
-                  <GitActionMenuItem
-                    key={action.id}
-                    action={action}
-                    onSelect={runGitAction}
-                    needsSeparator={action.startsGroup}
-                    showSeparator={index > 0}
-                    closeOnSelect={
-                      action.status === "idle" &&
-                      action.id === "pr" &&
-                      action.label === action.pendingLabel &&
-                      action.label === action.successLabel
-                    }
-                  />
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </View>
-      ) : null}
-      {quickMergeAction ? (
-        <Pressable
-          testID="changes-merge-pr-cta"
-          style={quickMergeButtonStyle}
-          onPress={handleQuickMergePress}
-          disabled={quickMergeAction.disabled}
+    <View style={styles.splitButton}>
+      <Pressable
+        testID="changes-primary-cta"
+        style={primaryPressableStyle}
+        onPress={handlePrimaryPress}
+        disabled={primaryDisabled}
+        accessibilityRole="button"
+        accessibilityLabel={primary.label}
+      >
+        <PrimaryContent primary={primary} />
+      </Pressable>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger
+          testID="changes-primary-cta-caret"
+          style={caretTriggerStyle}
           accessibilityRole="button"
-          accessibilityLabel={quickMergeAction.label}
+          accessibilityLabel={t("workspace.git.actions.moreOptions")}
         >
-          {quickMergeAction.status === "pending" ? (
-            <LoadingSpinner
-              size="small"
-              color={theme.colors.foreground}
-              style={styles.splitButtonSpinnerOnly}
-            />
-          ) : (
-            <View style={styles.splitButtonContent}>
-              {quickMergeAction.icon}
-              <Text style={styles.splitButtonText}>{getActionDisplayLabel(quickMergeAction)}</Text>
-            </View>
-          )}
-        </Pressable>
-      ) : null}
+          <ChevronDown size={16} color={theme.colors.foregroundExtraMuted} />
+        </DropdownMenuTrigger>
+        {panel}
+      </DropdownMenu>
     </View>
   );
 }
 
+function PrimaryContent({ primary }: { primary: GitControlPrimary }): ReactElement {
+  const { theme } = useUnistyles();
+  if (primary.kind === "state") {
+    const warning = primary.tone === "warning";
+    return (
+      <View style={styles.splitButtonContent}>
+        <ThemedGitBranch
+          size={16}
+          uniProps={warning ? statusWarningIconColorMapping : mutedIconColorMapping}
+        />
+        <Text
+          style={warning ? styles.splitButtonTextWarning : styles.splitButtonText}
+          numberOfLines={1}
+        >
+          {primary.label}
+        </Text>
+      </View>
+    );
+  }
+  const { action } = primary;
+  if (action.status === "pending") {
+    return (
+      <LoadingSpinner
+        size="small"
+        color={theme.colors.foreground}
+        style={styles.splitButtonSpinnerOnly}
+      />
+    );
+  }
+  return (
+    <View style={styles.splitButtonContent}>
+      {action.icon}
+      <Text style={styles.splitButtonText} numberOfLines={1}>
+        {action.status === "success" ? action.successLabel : primary.label}
+      </Text>
+      {primary.incoming ? <Text style={styles.count}>{`↓${primary.incoming}`}</Text> : null}
+      {primary.outgoing ? <Text style={styles.count}>{`↑${primary.outgoing}`}</Text> : null}
+    </View>
+  );
+}
+
+function GitControlPanel({
+  control,
+  onRun,
+}: {
+  control: GitControl;
+  onRun: (action: GitControlAction) => void;
+}): ReactElement {
+  return (
+    <>
+      {control.summary ? <GitControlSummaryRows summary={control.summary} /> : null}
+      {control.sections.map((section, index) => (
+        <Fragment key={section.id}>
+          {control.summary || index > 0 ? <DropdownMenuSeparator /> : null}
+          <GitControlSectionRows
+            section={section}
+            mergeMethod={section.id === "pull-request" ? control.mergeMethod : null}
+            onRun={onRun}
+          />
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+function GitControlSummaryRows({ summary }: { summary: GitControlSummary }): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <>
+      <DropdownMenuHint testID="changes-git-summary-branch">
+        {summary.base
+          ? t("workspace.git.actions.summary.branchInto", {
+              branch: summary.branch,
+              base: summary.base,
+            })
+          : summary.branch}
+      </DropdownMenuHint>
+      {summary.facts.length > 0 ? (
+        <DropdownMenuHint testID="changes-git-summary-facts">
+          {summary.facts.join(" · ")}
+        </DropdownMenuHint>
+      ) : null}
+    </>
+  );
+}
+
+function GitControlSectionRows({
+  section,
+  mergeMethod,
+  onRun,
+}: {
+  section: GitControlSection;
+  mergeMethod: GitControlMergeMethod | null;
+  onRun: (action: GitControlAction) => void;
+}): ReactElement {
+  return (
+    <>
+      {section.label ? <DropdownMenuLabel>{section.label}</DropdownMenuLabel> : null}
+      {section.actions.map((action) => (
+        <GitControlMenuItem key={action.id} action={action} onSelect={onRun} />
+      ))}
+      {mergeMethod ? <MergeMethodTrigger mergeMethod={mergeMethod} /> : null}
+    </>
+  );
+}
+
+function GitControlMenuItem({
+  action,
+  onSelect,
+}: {
+  action: GitControlAction;
+  onSelect: (action: GitControlAction) => void;
+}): ReactElement {
+  const handleSelect = useCallback(() => onSelect(action), [onSelect, action]);
+  const trailing = useMemo(
+    () => (action.detail ? <Text style={styles.detail}>{action.detail}</Text> : null),
+    [action.detail],
+  );
+  return (
+    <DropdownMenuItem
+      testID={`changes-menu-${action.id}`}
+      leading={action.icon}
+      trailing={trailing}
+      description={action.unavailableReason ?? action.description}
+      disabled={action.disabled || action.unavailableReason !== undefined}
+      destructive={action.destructive}
+      status={action.status}
+      pendingLabel={action.pendingLabel}
+      successLabel={action.successLabel}
+      closeOnSelect={closesOnSelect(action)}
+      onSelect={handleSelect}
+    >
+      {action.label}
+    </DropdownMenuItem>
+  );
+}
+
+/** Rows with progress labels stay open to show them; View PR has none and just leaves. */
+function closesOnSelect(action: GitControlAction): boolean {
+  return (
+    action.status === "idle" &&
+    action.label === action.pendingLabel &&
+    action.label === action.successLabel
+  );
+}
+
+function MergeMethodTrigger({ mergeMethod }: { mergeMethod: GitControlMergeMethod }) {
+  const selected = mergeMethod.options.find((option) => option.method === mergeMethod.selected);
+  return (
+    <DropdownMenuSubTrigger
+      id={MERGE_METHOD_PAGE_ID}
+      value={selected?.label}
+      leading={GIT_ACTION_ICONS.mergeMethod}
+      testID="changes-merge-method-trigger"
+    >
+      {mergeMethod.label}
+    </DropdownMenuSubTrigger>
+  );
+}
+
+function useMergeMethodPages(
+  mergeMethod: GitControlMergeMethod | null,
+): readonly MenuPageDefinition[] | undefined {
+  return useMemo(
+    () =>
+      mergeMethod
+        ? [
+            {
+              id: MERGE_METHOD_PAGE_ID,
+              title: mergeMethod.label,
+              content: <MergeMethodPage mergeMethod={mergeMethod} />,
+            },
+          ]
+        : undefined,
+    [mergeMethod],
+  );
+}
+
+function MergeMethodPage({ mergeMethod }: { mergeMethod: GitControlMergeMethod }): ReactElement {
+  return (
+    <>
+      {mergeMethod.options.map((option) => (
+        <MergeMethodOption
+          key={option.method}
+          method={option.method}
+          label={option.label}
+          selected={option.method === mergeMethod.selected}
+          onSelect={mergeMethod.onSelect}
+        />
+      ))}
+    </>
+  );
+}
+
+function MergeMethodOption({
+  method,
+  label,
+  selected,
+  onSelect,
+}: {
+  method: CheckoutPrMergeMethod;
+  label: string;
+  selected: boolean;
+  onSelect: (method: CheckoutPrMergeMethod) => void;
+}): ReactElement {
+  const handleSelect = useCallback(() => onSelect(method), [method, onSelect]);
+  return (
+    <DropdownMenuItem
+      testID={`changes-merge-method-${method}`}
+      selected={selected}
+      showSelectedCheck
+      onSelect={handleSelect}
+    >
+      {label}
+    </DropdownMenuItem>
+  );
+}
+
 const styles = StyleSheet.create((theme) => ({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    flexShrink: 0,
-  },
   splitButton: {
     height: {
       xs: buttonControlHeight.xs,
@@ -279,6 +375,8 @@ const styles = StyleSheet.create((theme) => ({
     },
     flexDirection: "row",
     alignItems: "stretch",
+    flexShrink: 1,
+    minWidth: 0,
     borderRadius: theme.borderRadius.md,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
@@ -290,6 +388,8 @@ const styles = StyleSheet.create((theme) => ({
       md: theme.spacing[2],
     },
     justifyContent: "center",
+    flexShrink: 1,
+    minWidth: 0,
     position: "relative",
   },
   menuOnlyTrigger: {
@@ -312,31 +412,36 @@ const styles = StyleSheet.create((theme) => ({
   splitButtonPrimaryDisabled: {
     opacity: 0.6,
   },
-  quickMergeButton: {
-    height: {
-      xs: buttonControlHeight.xs,
-      md: HEADER_CONTROL_HEIGHT,
-    },
-    paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[2],
-    },
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-  },
   splitButtonText: {
+    flexShrink: 1,
     fontSize: theme.fontSize.base,
     lineHeight: theme.fontSize.base * 1.5,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
   },
+  splitButtonTextWarning: {
+    flexShrink: 1,
+    fontSize: theme.fontSize.base,
+    lineHeight: theme.fontSize.base * 1.5,
+    color: theme.colors.statusWarning,
+    fontWeight: theme.fontWeight.normal,
+  },
+  count: {
+    flexShrink: 0,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.base * 1.5,
+    color: theme.colors.foregroundMuted,
+    fontVariant: ["tabular-nums"],
+  },
+  detail: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+  },
   splitButtonContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 0,
     gap: {
       xs: theme.spacing[2],
       md: theme.spacing[1],

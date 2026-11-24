@@ -4817,6 +4817,54 @@ test("requests checkout pull via RPC", async () => {
   });
 });
 
+test("requests checkout rebase via RPC", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.checkoutRebase("/tmp/project", "req-rebase");
+
+  expect(mock.sent).toHaveLength(1);
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request.type).toBe("checkout.rebase.request");
+  expect(request.cwd).toBe("/tmp/project");
+  expect(request.requestId).toBe("req-rebase");
+
+  mock.triggerMessage(
+    JSON.stringify({
+      type: "session",
+      message: {
+        type: "checkout.rebase.response",
+        payload: {
+          cwd: "/tmp/project",
+          requestId: "req-rebase",
+          success: true,
+          error: null,
+        },
+      },
+    }),
+  );
+
+  await expect(promise).resolves.toEqual({
+    cwd: "/tmp/project",
+    requestId: "req-rebase",
+    success: true,
+    error: null,
+  });
+});
+
 test("resubscribes checkout diff streams after reconnect", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

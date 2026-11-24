@@ -1,5 +1,25 @@
 # Ait changelog
 
+## Unreleased
+
+- The Git control at the top right of a workspace is one button that is always pressable. It
+  commits, rebases, pulls, pushes, merges the PR, opens the PR, creates the PR or resets a delivered
+  workspace, and a state it cannot fix in one press, such as conflicts or an unknown Git status,
+  opens the panel instead of showing a disabled label. A PR that can be merged is merged from
+  this button with the merge method you chose, so the separate "Merge PR" button is gone.
+- The Git menu is now a panel with a status summary and the groups Changes, Sync, Pull request and
+  Local. An action that cannot run is greyed out and says why in the row instead of in a toast
+  after you click. When a PR allows more than one merge method, you choose it once on a sub-page
+  and it is remembered on this device for each host and project. "Merge locally" names the branch
+  it merges into, and "Reset workspace" sits last in the destructive style; once your work is
+  merged, its confirmation is a single short question.
+- A branch that has diverged from its remote copy is fixed with "Rebase remote", which replays
+  your commits onto the remote branch, keeps local merges, moves no other local branch, and leaves
+  the checkout unchanged if it hits conflicts. It refuses a branch whose rebase would duplicate
+  commits that are already published, such as one that was rebased onto its base branch after it was
+  pushed, and a branch that is pushed to a different remote branch. It replaces "Pull and push" and
+  needs a host that supports it; on an older host the button shows the state and opens the panel.
+
 ## 0.2.25 - 2026-11-23
 
 - Stopping an Agent refreshes that session's authoritative state, clearing a stale busy indicator

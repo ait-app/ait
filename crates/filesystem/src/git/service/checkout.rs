@@ -236,6 +236,14 @@ impl Checkout {
         self.runtime.pull(cwd)
     }
 
+    /// Rebase the current branch onto its same-named remote branch.
+    ///
+    /// # Errors
+    /// Returns refusal, conflict, remote, or Git failures.
+    pub(crate) fn rebase(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
+        self.runtime.rebase(cwd)
+    }
+
     /// Push the current branch.
     ///
     /// # Errors

@@ -209,7 +209,7 @@ function useWorkspaceCommandCenterActions(): void {
     ),
   );
   const { overrides } = useKeyboardShortcutOverrides();
-  const { gitActions, isGit } = useGitActions({
+  const { gitControl, isGit } = useGitActions({
     serverId: serverId ?? "",
     cwd: cwd ?? "",
   });
@@ -244,7 +244,7 @@ function useWorkspaceCommandCenterActions(): void {
   const actions = useMemo(
     () =>
       buildWorkspaceCommandCenterContributions({
-        gitActions,
+        gitControl,
         labels: {
           section: t("workspace.header.actions.workspaceActions"),
           newAgent: t("workspace.tabs.actions.newAgent"),
@@ -330,7 +330,7 @@ function useWorkspaceCommandCenterActions(): void {
       copyPath,
       currentBranch,
       focusedTabs.length,
-      gitActions,
+      gitControl,
       isCompact,
       isArchiving,
       isGit,

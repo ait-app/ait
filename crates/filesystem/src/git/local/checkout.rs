@@ -4,6 +4,7 @@ mod branch_status;
 mod highlight;
 mod naming;
 mod paths;
+mod rebase;
 mod renames;
 pub(crate) mod summary;
 
@@ -76,10 +77,7 @@ impl LocalCheckout {
         let current_branch = git_optional(&cwd, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
         let (dirty, has_conflicts) = working_tree_state(&cwd)?;
         let remotes = lines(&git_required(&cwd, &["remote"], SMALL_OUTPUT_LIMIT)?);
-        let preferred_remote = remotes
-            .iter()
-            .find(|remote| remote.as_str() == "origin")
-            .or_else(|| remotes.first());
+        let preferred_remote = preferred_remote(&remotes);
         let remote_url = preferred_remote
             .map(|remote| git_optional(&cwd, &["remote", "get-url", remote]))
             .transpose()?
@@ -629,6 +627,10 @@ impl CheckoutRuntime for LocalCheckout {
         outcome
     }
 
+    fn rebase(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
+        rebase::rebase(cwd)
+    }
+
     fn push(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
         let cwd = require_git_directory(cwd)?;
         let current = current_branch(&cwd, "push")?;
@@ -773,6 +775,14 @@ fn path_text(path: &Path) -> Result<String, CheckoutRuntimeError> {
             "Checkout path is not valid UTF-8",
         )
     })
+}
+
+/// Remote whose same-named branch workspace actions compare with: `origin`, else the first.
+fn preferred_remote(remotes: &[String]) -> Option<&String> {
+    remotes
+        .iter()
+        .find(|remote| remote.as_str() == "origin")
+        .or_else(|| remotes.first())
 }
 
 fn lines(value: &str) -> Vec<String> {

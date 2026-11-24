@@ -168,7 +168,13 @@ test.describe("Project with no workspaces persists", () => {
         timeout: 30_000,
       });
       await workspaceRow.click();
-      await expect(page.getByTestId("changes-primary-cta")).toHaveCount(0);
+      // A clean workspace with nothing to do names its state rather than offering an action.
+      await expect(page.getByTestId("changes-primary-cta")).toHaveText(/^(Up to date|Git)$/);
+      // Pressing that state opens the Git panel instead of running anything.
+      await page.getByTestId("changes-primary-cta").click();
+      await expect(page.getByTestId("changes-primary-cta-menu")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("changes-primary-cta-menu")).toBeHidden();
 
       await archiveWorkspaceFromSidebar(page, workspace.workspaceId);
 

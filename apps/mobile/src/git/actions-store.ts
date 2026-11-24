@@ -13,7 +13,7 @@ export type CheckoutGitAsyncActionId =
   | "commit"
   | "pull"
   | "push"
-  | "pull-and-push"
+  | "rebase"
   | "refresh"
   | "create-pr"
   | "merge-pr-squash"
@@ -153,7 +153,7 @@ interface CheckoutGitActionsStoreState {
   commit: (params: { serverId: string; cwd: string }) => Promise<void>;
   pull: (params: { serverId: string; cwd: string }) => Promise<void>;
   push: (params: { serverId: string; cwd: string }) => Promise<void>;
-  pullAndPush: (params: { serverId: string; cwd: string }) => Promise<void>;
+  rebase: (params: { serverId: string; cwd: string }) => Promise<void>;
   refresh: (params: { serverId: string; cwd: string }) => Promise<void>;
   createPr: (params: { serverId: string; cwd: string }) => Promise<void>;
   mergePr: (params: {
@@ -286,15 +286,14 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
     });
   },
 
-  pullAndPush: async ({ serverId, cwd }) => {
+  rebase: async ({ serverId, cwd }) => {
     await runCheckoutAction({
       serverId,
       cwd,
-      actionId: "pull-and-push",
+      actionId: "rebase",
       run: async () => {
         const client = resolveClient(serverId);
-        throwOnPayloadError(await client.checkoutPull(cwd));
-        throwOnPayloadError(await client.checkoutPush(cwd));
+        throwOnPayloadError(await client.checkoutRebase(cwd));
       },
     });
   },

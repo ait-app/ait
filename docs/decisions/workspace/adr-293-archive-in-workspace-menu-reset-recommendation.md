@@ -12,6 +12,7 @@ paths:
 # ADR-293：归档移入 Workspace 菜单，交付完成后主按钮推荐重置
 
 - 关联：ADR-083、ADR-084
+- 后续修订：[ADR-303](adr-303-workspace-git-control-grouped-panel-and-rebase.md) 将无主按钮时的菜单入口改为带文字的按钮，并缩短已交付状态下的重置确认。
 
 ## 背景
 

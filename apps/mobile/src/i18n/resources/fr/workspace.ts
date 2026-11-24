@@ -364,18 +364,7 @@ export const workspace = {
         pending: "Push en cours...",
         success: "Push effectué",
       },
-      pullAndPush: {
-        label: "Pull et push",
-        pending: "Pull et push en cours...",
-        success: "Pull et push effectués",
-      },
       viewPr: "Voir PR",
-      branchStatus: {
-        behind: "Branche en retard sur le distant",
-        diverged: "La branche a divergé",
-        conflicts: "Résoudre les conflits",
-        unknown: "État Git indisponible",
-      },
       createPr: {
         label: "Créer PR",
         pending: "Création de PR...",
@@ -385,11 +374,14 @@ export const workspace = {
         success_mr: "MR créé",
       },
       mergeBranch: {
-        label: "Fusionner localement",
+        labelInto: "Fusionner dans {{base}}",
         pending: "Fusion...",
         success: "Fusionné",
       },
       resetWorkspace: {
+        description: "Tout abandonner et revenir au dernier {{base}}",
+        deliveredConfirmMessage:
+          "Votre travail est fusionné. Réinitialiser cet espace de travail sur le dernier {{base}} ?",
         label: "Réinitialiser l’espace de travail",
         pending: "Réinitialisation...",
         success: "Espace de travail réinitialisé",
@@ -417,68 +409,83 @@ export const workspace = {
         enableRebase: "Fusion automatique (rebase)",
         enabled: "Fusion automatique activée",
         enabling: "Activation de la fusion automatique...",
+        disable: "Désactiver la fusion automatique",
         disabling: "Désactivation de la fusion automatique...",
         disabled: "Fusion automatique désactivée",
       },
-      unavailable: {
-        resetNoInitialBranch: "Réinitialisation impossible : branche initiale inconnue",
-        resetNoRemote: "Réinitialisation impossible : origin non configuré",
-        viewPrNoForge:
-          "Voir {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
-        pullNoRemote:
-          "Pull n'est pas disponible ici car cette branche n'est pas encore connectée à un dépôt distant",
-        pullDirty:
-          "Pull n'est pas disponible tant que vous avez des modifications locales, alors validez-les ou cachez-les d'abord",
-        pullUpToDate: "Pull n'est pas disponible car cette branche est déjà à jour",
-        pushNoRemote:
-          "Push n'est pas disponible ici car cette branche n'est pas encore connectée à un dépôt distant",
-        pushBehind:
-          "Push n'est pas encore disponible, car il faut d'abord récupérer des modifications plus récentes",
-        pushNothing: "Push n'est pas disponible car il n'y a rien de nouveau à envoyer",
-        pullAndPushNoRemote:
-          "Le pull et le push ne sont pas disponibles ici car cette branche n'est pas encore connectée à un dépôt distant",
-        pullAndPushDirty:
-          "Pull et push ne sont pas disponibles tant que vous avez des modifications locales, alors validez-les ou cachez-les d'abord",
-        pullAndPushNoIncoming:
-          "Pull et push ne sont pas disponibles car il n'y a aucun changement entrant à récupérer d'abord",
-        pullAndPushInSync:
-          "Les fonctions Pull et Push ne sont pas disponibles car cette branche est déjà synchronisée",
-        pullAndPushNothingToPush:
-          "Pull et push ne sont pas disponibles car il n'y a rien de nouveau à envoyer après le pull",
-        createPrNoForge:
-          "Créer {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
-        createPrNoCommits:
-          "Créer PR n'est pas disponible car cette branche n'a pas encore de nouveaux commits",
-        mergeNoBase:
-          "La fusion n'est pas disponible car nous n'avons pas pu déterminer la branche de base",
-        mergeDirty:
-          "La fusion n'est pas disponible tant que vous avez des modifications locales, alors validez-les ou cachez-les d'abord",
-        mergeNothing:
-          "La fusion n'est pas disponible car cette branche n'a encore rien de nouveau à fusionner",
-        mergePrNoForge:
-          "La fusion {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
-        mergePrMissing:
-          "La fusion de PR n'est pas disponible car il n'y a pas encore de demande d'extraction",
-        mergePrDraft:
-          "La fusion de PR n'est pas disponible car la demande d'extraction est encore un brouillon",
-        mergePrMerged:
-          "La fusion de PR n'est pas disponible car la demande d'extraction est déjà fusionnée",
-        mergePrClosed:
-          "La fusion de PR n'est pas disponible car la demande d'extraction est fermée",
-        mergePrConflicts:
-          "La fusion de PR n'est pas disponible car la demande d'extraction présente des conflits",
-        mergePrQueue:
-          "La fusion de PR n'est pas disponible ici car ce dépôt utilise une file d'attente de fusion",
-        mergePrNotReady:
-          "La fusion {{noun}} n'est pas disponible jusqu'à ce que {{brand}} signale que {{noun}} est prête à fusionner",
-        autoMergeCannotDisable:
-          "La fusion automatique est activée, mais ce compte ne peut pas la désactiver",
+      rebase: {
+        label: "Rebaser",
+        pending: "Rebasage...",
+        success: "Rebasé",
+        remote: "Rebaser sur le distant",
+      },
+      state: {
+        conflicts: "Conflits",
+        diverged: "Divergente",
+        behind: "En retard sur le distant",
+        unknown: "Git",
+        upToDate: "À jour",
+        idle: "Git",
+      },
+      sections: {
+        changes: "Modifications",
+        sync: "Synchronisation",
+        pullRequest: "Demande de tirage",
+        pullRequest_mr: "Demande de fusion",
+        local: "En local",
+      },
+      mergeMethod: {
+        label: "Méthode de fusion",
+        squash: "Écraser (squash)",
+        merge: "Commit de fusion",
+        rebase: "Rebaser",
+      },
+      detail: {
+        incoming: "Entrants : {{count}}",
+        outgoing: "Sortants : {{count}}",
+      },
+      summary: {
+        branchInto: "{{branch}} → {{base}}",
+        ahead: "{{count}} en avance",
+        behind: "{{count}} en retard",
+        clean: "Propre",
+        dirty: "Modifications non validées",
+        notPushed: "Pas encore poussée",
+        pullRequest: "{{noun}} {{number}}",
+      },
+      reason: {
+        resetNoInitialBranch: "Branche initiale inconnue",
+        resetNoRemote: "origin n’est pas configuré",
+        viewPrNoForge: "{{brand}} n’est pas connecté",
+        pullNoRemote: "Pas connectée à un distant",
+        pullDirty: "Validez d’abord vos modifications",
+        pullUpToDate: "Déjà à jour",
+        pushNoRemote: "Pas connectée à un distant",
+        pushBehind: "Récupérez d’abord les nouveautés",
+        pushRebaseFirst: "Rebasez d’abord sur le distant",
+        pushNothing: "Rien à pousser",
+        createPrNoForge: "{{brand}} n’est pas connecté",
+        createPrNoCommits: "Aucun nouveau commit",
+        mergeNoBase: "Branche de base inconnue",
+        mergeDirty: "Validez d’abord vos modifications",
+        mergeNothing: "Rien de nouveau à fusionner",
+        mergePrNoForge: "{{brand}} n’est pas connecté",
+        mergePrDraft: "Encore un brouillon",
+        mergePrConflicts: "{{noun}} en conflit",
+        mergePrQueue: "Le dépôt utilise une file de fusion",
+        mergePrNotReady: "{{noun}} : fusion pas encore possible",
+        mergePrAutoMerge: "Fusion automatique déjà active",
+        autoMergeCannotDisable: "Impossible de désactiver la fusion auto",
+        rebaseDirty: "Validez d’abord vos modifications",
+        rebaseNoRemote: "Aucune branche distante pour rebaser",
+        rebaseNothing: "Rien de nouveau sur le distant",
+        rebaseOtherTarget: "L’amont est une autre branche",
       },
       toasts: {
+        failedRebase: "Échec du rebasage",
         failedCommit: "Échec de la validation",
         failedPull: "Échec de l'extraction",
         failedPush: "Échec du push",
-        failedPullAndPush: "Échec du pull et du push",
         failedCreatePr: "Échec de la création de PR",
         failedMergePr: "Échec de la fusion de PR",
         failedEnableAutoMerge: "Échec de l'activation de la fusion automatique",

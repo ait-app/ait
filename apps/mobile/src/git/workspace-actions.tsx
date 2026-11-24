@@ -7,7 +7,7 @@ interface WorkspaceActionsProps {
 }
 
 export function WorkspaceActions({ serverId, cwd }: WorkspaceActionsProps) {
-  const { gitActions } = useGitActions({ serverId, cwd });
+  const { gitControl } = useGitActions({ serverId, cwd });
 
-  return <GitActionsSplitButton gitActions={gitActions} />;
+  return <GitActionsSplitButton control={gitControl} />;
 }

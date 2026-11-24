@@ -6,6 +6,7 @@ import {
   __resetCheckoutGitActionsStoreForTests,
   useCheckoutGitActionsStore,
 } from "@/git/actions-store";
+import { checkoutStatusQueryKey } from "@/git/query-keys";
 
 vi.mock("@react-native-async-storage/async-storage", () => ({
   default: {
@@ -107,73 +108,65 @@ describe("checkout-git-actions-store", () => {
     ).toBe("idle");
   });
 
-  it("runs pull then push sequentially for pull-and-push", async () => {
-    const order: string[] = [];
-    const client = {
-      checkoutPull: vi.fn(async () => {
-        order.push("pull");
-        return {};
-      }),
-      checkoutPush: vi.fn(async () => {
-        order.push("push");
-        return {};
-      }),
-    };
+  it("rebase calls checkoutRebase once and refreshes Git queries", async () => {
+    const client = { checkoutRebase: vi.fn(async () => ({ success: true, error: null })) };
     useSessionStore.setState((state) => ({
       ...state,
       sessions: {
-        ...state.sessions,
         [serverId]: { client } as unknown as (typeof state.sessions)[string],
       },
     }));
+    const invalidate = vi.spyOn(appQueryClient, "invalidateQueries");
 
-    await useCheckoutGitActionsStore.getState().pullAndPush({ serverId, cwd });
+    await useCheckoutGitActionsStore.getState().rebase({ serverId, cwd });
 
-    expect(order).toEqual(["pull", "push"]);
+    expect(client.checkoutRebase).toHaveBeenCalledTimes(1);
+    expect(client.checkoutRebase).toHaveBeenCalledWith(cwd);
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: checkoutStatusQueryKey(serverId, cwd),
+    });
     expect(
-      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "pull-and-push" }),
+      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "rebase" }),
     ).toBe("success");
+    invalidate.mockRestore();
   });
 
-  it("does not push when pull fails for pull-and-push", async () => {
-    const client = {
-      checkoutPull: vi.fn(async () => ({ error: { message: "pull conflict" } })),
-      checkoutPush: vi.fn(async () => ({})),
-    };
+  it("a second rebase while one is pending does not send a second request", async () => {
+    const deferred = createDeferred<unknown>();
+    const client = { checkoutRebase: vi.fn(() => deferred.promise) };
     useSessionStore.setState((state) => ({
       ...state,
       sessions: {
-        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+    const store = useCheckoutGitActionsStore.getState();
+
+    const first = store.rebase({ serverId, cwd });
+    const second = store.rebase({ serverId, cwd });
+    expect(store.getStatus({ serverId, cwd, actionId: "rebase" })).toBe("pending");
+
+    deferred.resolve({ success: true, error: null });
+    await Promise.all([first, second]);
+
+    expect(client.checkoutRebase).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a refused rebase with the host's message and returns to idle", async () => {
+    const message = "Commit or stash your changes before rebasing";
+    const client = { checkoutRebase: vi.fn(async () => ({ success: false, error: { message } })) };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
         [serverId]: { client } as unknown as (typeof state.sessions)[string],
       },
     }));
 
-    await expect(
-      useCheckoutGitActionsStore.getState().pullAndPush({ serverId, cwd }),
-    ).rejects.toThrow("pull conflict");
+    await expect(useCheckoutGitActionsStore.getState().rebase({ serverId, cwd })).rejects.toThrow(
+      message,
+    );
     expect(
-      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "pull-and-push" }),
-    ).toBe("idle");
-  });
-
-  it("surfaces push errors from pull-and-push after a successful pull", async () => {
-    const client = {
-      checkoutPull: vi.fn(async () => ({})),
-      checkoutPush: vi.fn(async () => ({ error: { message: "push rejected" } })),
-    };
-    useSessionStore.setState((state) => ({
-      ...state,
-      sessions: {
-        ...state.sessions,
-        [serverId]: { client } as unknown as (typeof state.sessions)[string],
-      },
-    }));
-
-    await expect(
-      useCheckoutGitActionsStore.getState().pullAndPush({ serverId, cwd }),
-    ).rejects.toThrow("push rejected");
-    expect(
-      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "pull-and-push" }),
+      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "rebase" }),
     ).toBe("idle");
   });
 

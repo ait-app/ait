@@ -2493,6 +2493,12 @@ export const CheckoutPullRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const CheckoutRebaseRequestSchema = z.object({
+  type: z.literal("checkout.rebase.request"),
+  cwd: z.string(),
+  requestId: z.string(),
+});
+
 export const CheckoutPushRequestSchema = z.object({
   type: z.literal("checkout.push.request"),
   cwd: z.string(),
@@ -3509,6 +3515,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutMergeFromBaseRequestSchema,
   CheckoutResetWorkspaceRequestSchema,
   CheckoutPullRequestSchema,
+  CheckoutRebaseRequestSchema,
   CheckoutPushRequestSchema,
   CheckoutRefreshRequestSchema,
   CheckoutDiscardChangesRequestSchema,
@@ -3815,6 +3822,8 @@ export const ServerInfoStatusPayloadSchema = z
         // feature gate and checkoutGithubSetAutoMerge fallback after 2027-01-17
         // once the supported daemon floor is >= v0.2.0.
         checkoutForgeSetAutoMerge: z.boolean().optional(),
+        // COMPAT(checkoutRebase): added in v0.2.26, remove gate after 2027-05-24.
+        checkoutRebase: z.boolean().optional(),
         // COMPAT(checkoutGithubSetAutoMerge): added in v0.1.75 and retained as
         // the fallback for checkoutForgeSetAutoMerge. Stop advertising and
         // consuming it after 2027-01-17 once supported floors are >= v0.2.0.
@@ -5826,6 +5835,16 @@ export const CheckoutPullResponseSchema = z.object({
   }),
 });
 
+export const CheckoutRebaseResponseSchema = z.object({
+  type: z.literal("checkout.rebase.response"),
+  payload: z.object({
+    cwd: z.string(),
+    success: z.boolean(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const CheckoutPushResponseSchema = z.object({
   type: z.literal("checkout.push.response"),
   payload: z.object({
@@ -7156,6 +7175,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutMergeFromBaseResponseSchema,
   CheckoutResetWorkspaceResponseSchema,
   CheckoutPullResponseSchema,
+  CheckoutRebaseResponseSchema,
   CheckoutPushResponseSchema,
   CheckoutRefreshResponseSchema,
   CheckoutDiscardChangesResponseSchema,
@@ -7338,6 +7358,7 @@ export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema
 export type CheckoutMergeResponse = z.infer<typeof CheckoutMergeResponseSchema>;
 export type CheckoutResetWorkspaceResponse = z.infer<typeof CheckoutResetWorkspaceResponseSchema>;
 export type CheckoutPullResponse = z.infer<typeof CheckoutPullResponseSchema>;
+export type CheckoutRebaseResponse = z.infer<typeof CheckoutRebaseResponseSchema>;
 export type CheckoutPushResponse = z.infer<typeof CheckoutPushResponseSchema>;
 export type CheckoutRefreshResponse = z.infer<typeof CheckoutRefreshResponseSchema>;
 export type CheckoutCommitFile = z.infer<typeof CheckoutCommitFileSchema>;

@@ -363,18 +363,7 @@ export const workspace = {
         pending: "Haciendo push...",
         success: "Push completado",
       },
-      pullAndPush: {
-        label: "Pull y push",
-        pending: "Haciendo pull y push...",
-        success: "Pull y push completados",
-      },
       viewPr: "Ver PR",
-      branchStatus: {
-        behind: "Rama atrasada respecto al remoto",
-        diverged: "La rama ha divergido",
-        conflicts: "Resuelve los conflictos",
-        unknown: "Estado de Git no disponible",
-      },
       createPr: {
         label: "Crear PR",
         pending: "Creando PR...",
@@ -384,11 +373,14 @@ export const workspace = {
         success_mr: "MR creado",
       },
       mergeBranch: {
-        label: "Fusionar localmente",
+        labelInto: "Fusionar en {{base}}",
         pending: "Fusionando...",
         success: "Fusionado",
       },
       resetWorkspace: {
+        description: "Descartar todo y volver al último {{base}}",
+        deliveredConfirmMessage:
+          "Tu trabajo está fusionado. ¿Restablecer este espacio de trabajo al último {{base}}?",
         label: "Restablecer espacio de trabajo",
         pending: "Restableciendo...",
         success: "Espacio de trabajo restablecido",
@@ -416,66 +408,83 @@ export const workspace = {
         enableRebase: "Fusión automática (rebase)",
         enabled: "Combinación automática habilitada",
         enabling: "Habilitando la fusión automática...",
+        disable: "Desactivar la fusión automática",
         disabling: "Desactivando la fusión automática...",
         disabled: "Fusión automática deshabilitada",
       },
-      unavailable: {
-        resetNoInitialBranch: "No se puede restablecer: se desconoce la rama inicial",
-        resetNoRemote: "No se puede restablecer: origin no está configurado",
-        viewPrNoForge:
-          "Ver {{noun}} no está disponible en este momento porque {{brand}} no está conectado",
-        pullNoRemote:
-          "Pull no está disponible aquí porque esta rama aún no está conectada a un remoto",
-        pullDirty:
-          "Pull no está disponible mientras tenga cambios locales, así que confírmelos o guárdelos primero",
-        pullUpToDate: "Pull no está disponible porque esta rama ya está actualizada",
-        pushNoRemote:
-          "Push no está disponible aquí porque esta rama aún no está conectada a un remoto",
-        pushBehind:
-          "Push aún no está disponible porque primero hay que traer cambios más recientes",
-        pushNothing: "Push no está disponible porque no hay nada nuevo que enviar",
-        pullAndPushNoRemote:
-          "Pull y push no está disponible aquí porque esta rama aún no está conectada a un remoto",
-        pullAndPushDirty:
-          "Pull y push no está disponible mientras tenga cambios locales, así que confírmelos o guárdelos primero",
-        pullAndPushNoIncoming:
-          "Pull y push no está disponible porque no hay cambios entrantes que traer primero",
-        pullAndPushInSync: "Pull y push no está disponible porque esta rama ya está sincronizada",
-        pullAndPushNothingToPush:
-          "Pull y push no está disponible porque no hay nada nuevo que enviar después del pull",
-        createPrNoForge:
-          "Crear {{noun}} no está disponible en este momento porque {{brand}} no está conectado",
-        createPrNoCommits:
-          "Crear PR no está disponible porque esta rama aún no tiene nuevas confirmaciones",
-        mergeNoBase: "La combinación no está disponible porque no pudimos determinar la rama base",
-        mergeDirty:
-          "La combinación no está disponible mientras tenga cambios locales, así que confírmelos o guárdelos primero",
-        mergeNothing:
-          "La combinación no está disponible porque esta rama aún no tiene nada nuevo que fusionar",
-        mergePrNoForge:
-          "Fusionar {{noun}} no está disponible en este momento porque {{brand}} no está conectado",
-        mergePrMissing:
-          "Fusionar PR no está disponible porque aún no hay una solicitud de extracción",
-        mergePrDraft:
-          "Fusionar PR no está disponible porque la solicitud de extracción aún es un borrador",
-        mergePrMerged:
-          "Fusionar PR no está disponible porque la solicitud de extracción ya está fusionada",
-        mergePrClosed:
-          "Fusionar PR no está disponible porque la solicitud de extracción está cerrada",
-        mergePrConflicts:
-          "Fusionar PR no está disponible porque la solicitud de extracción tiene conflictos",
-        mergePrQueue:
-          "Fusionar PR no está disponible aquí porque este repositorio utiliza una cola de fusión",
-        mergePrNotReady:
-          "Fusionar {{noun}} no está disponible hasta que {{brand}} informe que {{noun}} está listo para fusionarse",
-        autoMergeCannotDisable:
-          "La combinación automática está habilitada, pero esta cuenta no puede deshabilitarla",
+      rebase: {
+        label: "Rebasar",
+        pending: "Rebasando...",
+        success: "Rebase completado",
+        remote: "Rebasar sobre el remoto",
+      },
+      state: {
+        conflicts: "Conflictos",
+        diverged: "Divergida",
+        behind: "Atrasada respecto al remoto",
+        unknown: "Git",
+        upToDate: "Actualizada",
+        idle: "Git",
+      },
+      sections: {
+        changes: "Cambios",
+        sync: "Sincronización",
+        pullRequest: "Solicitud de incorporación",
+        pullRequest_mr: "Solicitud de fusión",
+        local: "En local",
+      },
+      mergeMethod: {
+        label: "Método de fusión",
+        squash: "Combinar (squash)",
+        merge: "Commit de fusión",
+        rebase: "Rebasar",
+      },
+      detail: {
+        incoming: "Entrantes: {{count}}",
+        outgoing: "Salientes: {{count}}",
+      },
+      summary: {
+        branchInto: "{{branch}} → {{base}}",
+        ahead: "{{count}} por delante",
+        behind: "{{count}} por detrás",
+        clean: "Limpio",
+        dirty: "Cambios sin confirmar",
+        notPushed: "Aún sin push",
+        pullRequest: "{{noun}} {{number}}",
+      },
+      reason: {
+        resetNoInitialBranch: "Rama inicial desconocida",
+        resetNoRemote: "origin no está configurado",
+        viewPrNoForge: "{{brand}} no está conectado",
+        pullNoRemote: "Sin conexión a un remoto",
+        pullDirty: "Confirma tus cambios primero",
+        pullUpToDate: "Ya está actualizada",
+        pushNoRemote: "Sin conexión a un remoto",
+        pushBehind: "Trae primero los cambios nuevos",
+        pushRebaseFirst: "Rebasa primero sobre el remoto",
+        pushNothing: "Nada que enviar",
+        createPrNoForge: "{{brand}} no está conectado",
+        createPrNoCommits: "Aún no hay commits nuevos",
+        mergeNoBase: "Rama base desconocida",
+        mergeDirty: "Confirma tus cambios primero",
+        mergeNothing: "Nada nuevo que fusionar",
+        mergePrNoForge: "{{brand}} no está conectado",
+        mergePrDraft: "Todavía es un borrador",
+        mergePrConflicts: "{{noun}} con conflictos",
+        mergePrQueue: "El repositorio usa cola de fusión",
+        mergePrNotReady: "{{noun}} aún no se puede fusionar",
+        mergePrAutoMerge: "La fusión automática ya está activa",
+        autoMergeCannotDisable: "No puedes desactivar la fusión automática",
+        rebaseDirty: "Confirma tus cambios primero",
+        rebaseNoRemote: "No hay rama remota sobre la que rebasar",
+        rebaseNothing: "Nada nuevo en el remoto",
+        rebaseOtherTarget: "El upstream es otra rama",
       },
       toasts: {
+        failedRebase: "Error al rebasar",
         failedCommit: "No se pudo confirmar",
         failedPull: "No se pudo hacer pull",
         failedPush: "No se pudo hacer push",
-        failedPullAndPush: "No se pudo hacer pull y push",
         failedCreatePr: "No se pudo crear PR",
         failedMergePr: "No se pudo fusionar PR",
         failedEnableAutoMerge: "No se pudo habilitar la combinación automática",
