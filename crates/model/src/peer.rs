@@ -132,8 +132,9 @@ pub trait Peers: fmt::Debug + Send + Sync {
     /// target's refusal (`Error::NotAccepting`, `Error::TooLarge` or
     /// `Error::Rejected`) when it replied with an error. When `timeout` passes
     /// the error is `Error::Offline` if the target had not accepted the call's
-    /// session, `Error::OutcomeUnknown` if the request was sent, and
-    /// `Error::Capacity` if it was still waiting for its turn to be sent.
+    /// session and `Error::OutcomeUnknown` if the request was sent. A call
+    /// still waiting for its turn to be sent ends as `Error::Unavailable` when
+    /// the link is not connected, and as `Error::Capacity` only while it is.
     async fn call(&self, node: Uuid, request: Request, timeout: Duration) -> Result<Value, Error>;
 }
 
