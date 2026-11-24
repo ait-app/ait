@@ -56,7 +56,7 @@ pub(super) async fn run(mut session: Session, kind: SessionKind, payload: Bytes)
         SessionKind::Download => download::serve(&mut session, &payload)
             .await
             .map(|()| "done"),
-        SessionKind::Unsupported => Err("unsupported"),
+        SessionKind::Peer | SessionKind::Unsupported => Err("unsupported"),
     };
     let code = result.unwrap_or_else(|code| code);
     let _ = session

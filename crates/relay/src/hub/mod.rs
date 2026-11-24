@@ -7,6 +7,8 @@
 //! The link always declares `lease`, `credit` and `download` (and `bulk` when
 //! the owner can obtain bulk tickets). A center that does not declare or enable
 //! all of them predates this daemon; the link fails instead of downgrading.
+//! `peer`, for sessions between sibling Hosts, is optional: the link declares
+//! it only when the center does, and runs whether or not the center enables it.
 //! Sessions still adapt to their opener: an `open` without `w` is served without
 //! flow control, one without `k` is an RPC session.
 
@@ -206,7 +208,11 @@ impl Connector {
         }
         let center = center_url(&grant.center_url)?;
         validate_ticket(grant.hub_ticket.expose_secret())?;
-        let offer = wire::offer(grant.tickets.is_some());
+        let peer = grant
+            .hub_features
+            .iter()
+            .any(|feature| feature == wire::PEER);
+        let offer = wire::offer(grant.tickets.is_some(), peer);
         if let Some(feature) = wire::missing(&offer, &grant.hub_features) {
             tracing::error!(
                 feature,
@@ -550,6 +556,7 @@ async fn join(
         }
         Inbound::Ack { .. }
         | Inbound::Open { .. }
+        | Inbound::Accept { .. }
         | Inbound::Msg { .. }
         | Inbound::Reply { .. }
         | Inbound::Close { .. }
@@ -617,7 +624,8 @@ impl Sessions {
         if self.routes.len() >= MAX_SESSIONS {
             return Err("capacity");
         }
-        if opening.kind == SessionKind::Unsupported
+        // Peer sessions are not served yet.
+        if matches!(opening.kind, SessionKind::Peer | SessionKind::Unsupported)
             || (self.downloads_only && opening.kind != SessionKind::Download)
         {
             return Err("unsupported");
@@ -830,6 +838,8 @@ impl Pump<'_> {
                     .err()
                     .map(|code| (s, code))
             }
+            // This link opens no sessions, so no accept belongs to one.
+            Inbound::Accept { .. } => return Ok(None),
             Inbound::Credit { s, c } => {
                 self.sessions.credit(s, c);
                 return Ok(None);
