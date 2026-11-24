@@ -1,6 +1,7 @@
 import type { ToolCallTimelineItem } from "./agent-types.js";
 import { buildPaseoToolDisplay } from "./paseo-tool-presentation/index.js";
 import { stripCwdPrefix } from "./path-utils.js";
+import { summarizeUnknownToolInput } from "./tool-detail-presentation.js";
 
 export type ToolCallDisplayInput = Pick<
   ToolCallTimelineItem,
@@ -118,7 +119,7 @@ function buildCanonicalDetailDisplay(input: ToolCallDisplayInput): DetailDisplay
         displayName: "Plan",
       };
     case "unknown":
-      return {};
+      return { summary: summarizeUnknownToolInput(input.detail.input) };
     default:
       throw new Error("unreachable");
   }
@@ -196,7 +197,11 @@ export function buildToolCallDisplayModel(input: ToolCallDisplayInput): ToolCall
     unknownDetailOverride.displayName ??
     canonicalDisplay.displayName ??
     humanizeToolName(input.name);
-  const summary = unknownDetailOverride.summary ?? canonicalDisplay.summary;
+  // A tool with its own label owns its summary; the generic unknown-input summary does not apply.
+  const ownsSummary =
+    unknownDetailOverride.displayName !== undefined && input.detail.type === "unknown";
+  const summary =
+    unknownDetailOverride.summary ?? (ownsSummary ? undefined : canonicalDisplay.summary);
 
   return {
     displayName,

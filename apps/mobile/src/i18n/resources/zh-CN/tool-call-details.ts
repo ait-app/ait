@@ -6,4 +6,5 @@ export const toolCallDetails = {
   preparingWorktree: "正在准备工作树 {{branchName}}，位置：{{worktreePath}}",
   input: "输入",
   output: "输出",
+  imagesBelow: "下方显示 {{count}} 张图片",
 };

@@ -77,4 +77,45 @@ describe("ToolCallDetailsContent labels", () => {
       .map((element) => element.textContent);
     expect(renderedOrder).toEqual(["Title", "Notify on finish", "Internal", "Settings"]);
   });
+
+  it("lays out an unknown tool's code, text output and moved images without JSON syntax", () => {
+    render(
+      <ToolCallDetailsContent
+        toolName="cua_repl.js"
+        detail={{
+          type: "unknown",
+          input: { code: "await tab.goto('https://example.com')\ntext(await tab.title())" },
+          output: {
+            content: [
+              { type: "text", text: "Script completed" },
+              { type: "text", text: "[Image]" },
+            ],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText("Input")).toBeTruthy();
+    expect(screen.getByText("Code")).toBeTruthy();
+    expect(screen.getByText("Output")).toBeTruthy();
+    expect(screen.getByText("Script completed")).toBeTruthy();
+    expect(screen.getByText("Images shown below: 1")).toBeTruthy();
+    expect(document.body.textContent).not.toContain('"code"');
+    expect(document.body.textContent).not.toContain('"content"');
+  });
+
+  it("shows a skill call as a labeled field", () => {
+    render(
+      <ToolCallDetailsContent
+        toolName="Skill"
+        detail={{
+          type: "unknown",
+          input: { skill: "superpowers:brainstorming" },
+          output: "Launching skill: superpowers:brainstorming",
+        }}
+      />,
+    );
+    expect(screen.getByText("Skill")).toBeTruthy();
+    expect(screen.getByText("superpowers:brainstorming")).toBeTruthy();
+    expect(screen.getByText("Launching skill: superpowers:brainstorming")).toBeTruthy();
+  });
 });

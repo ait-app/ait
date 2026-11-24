@@ -8,16 +8,19 @@ import {
 } from "react-native";
 import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { StyleSheet } from "react-native-unistyles";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import type { ToolCallDetail } from "@ait/protocol/agent-types";
 import {
   buildPaseoToolDetailSections,
   type PaseoToolDetailSection,
 } from "@ait/protocol/paseo-tool-presentation/index";
+import {
+  buildToolDetailGroups,
+  type ToolDetailBlock,
+  type ToolDetailGroup,
+} from "@ait/protocol/tool-detail-presentation";
 import { buildLineDiff, parseUnifiedDiff, type DiffLine } from "@/utils/tool-call-parsers";
 import { highlightDiffLines } from "@/utils/diff-highlight";
-import { hasMeaningfulToolCallDetail } from "@/utils/tool-call-detail-state";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { extensionFromPath, highlightToKeyedLines } from "@/utils/highlight-cache";
@@ -45,7 +48,6 @@ interface DetailStyles {
   codeVerticalScrollStyle: StyleProp<ViewStyle>;
   scrollAreaFillStyle: StyleProp<ViewStyle>;
   scrollAreaStyle: StyleProp<ViewStyle>;
-  jsonScrollCombined: StyleProp<ViewStyle>;
   jsonScrollErrorCombined: StyleProp<ViewStyle>;
   fullBleedContainerStyle: StyleProp<ViewStyle>;
   loadingContainerStyle: StyleProp<ViewStyle>;
@@ -107,7 +109,6 @@ function useDetailStyles(
     ],
     [resolvedMaxHeight],
   );
-  const jsonScrollCombined = styles.jsonScroll;
   const jsonScrollErrorCombined = [styles.jsonScroll, styles.jsonScrollError];
   const fullBleedContainerStyle = useMemo(
     () => [
@@ -127,7 +128,6 @@ function useDetailStyles(
     codeVerticalScrollStyle,
     scrollAreaFillStyle,
     scrollAreaStyle,
-    jsonScrollCombined,
     jsonScrollErrorCombined,
     fullBleedContainerStyle,
     loadingContainerStyle,
@@ -407,6 +407,8 @@ interface ScrollableContentProps {
   wrapInSectionFill?: boolean;
   // Drives syntax highlighting (extension only) and, with startLine, a gutter.
   filePath?: string | null;
+  // Grammar extension when there is no file path, e.g. `js` for REPL code.
+  language?: string;
   startLine?: number;
 }
 
@@ -415,11 +417,13 @@ function ScrollableTextSection({
   ds,
   wrapInSectionFill = true,
   filePath,
+  language,
   startLine,
 }: ScrollableContentProps) {
+  const extension = language ?? extensionFromPath(filePath);
   const keyedLines = useMemo(
-    () => (filePath ? highlightToKeyedLines(content, extensionFromPath(filePath)) : null),
-    [content, filePath],
+    () => (extension ? highlightToKeyedLines(content, extension) : null),
+    [content, extension],
   );
   const body = (
     <ScrollView
@@ -518,66 +522,87 @@ function buildSearchSections(detail: SearchDetail, ds: DetailStyles): ReactNode[
   return out;
 }
 
-function serializeUnknownValue(value: unknown): string {
-  try {
-    return typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
 interface UnknownDetail {
   input: unknown;
   output: unknown;
 }
 
-function buildUnknownSections(detail: UnknownDetail, ds: DetailStyles, t: TFunction): ReactNode[] {
-  const plainInputText =
-    typeof detail.input === "string" && detail.output === null ? detail.input : null;
+function DetailBlockLabel({ label }: { label: string | undefined }) {
+  if (!label) return null;
+  return <Text style={styles.detailBlockLabel}>{label}</Text>;
+}
 
-  if (plainInputText !== null) {
-    return [<ScrollablePlainTextSection key="unknown-plain-text" text={plainInputText} ds={ds} />];
+function ToolDetailBlockView({ block, ds }: { block: ToolDetailBlock; ds: DetailStyles }) {
+  const { t } = useTranslation();
+  if (block.kind === "fields") {
+    return (
+      <View style={styles.paseoFields}>
+        {block.fields.map((field, index) => (
+          <View key={`${field.label}-${index}`} style={styles.paseoFieldRow}>
+            <Text style={styles.paseoFieldLabel}>{field.label}</Text>
+            <Text selectable style={styles.paseoFieldValue}>
+              {field.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+    );
   }
-
-  const sectionsFromTopLevel = [
-    { title: t("toolCallDetails.input"), value: detail.input },
-    { title: t("toolCallDetails.output"), value: detail.output },
-  ].filter((entry) =>
-    hasMeaningfulToolCallDetail({
-      type: "unknown",
-      input: entry.value ?? null,
-      output: null,
-    }),
+  if (block.kind === "text") {
+    return (
+      <View style={styles.section}>
+        <DetailBlockLabel label={block.label} />
+        <Text selectable style={styles.plainText}>
+          {block.text}
+        </Text>
+      </View>
+    );
+  }
+  if (block.kind === "code") {
+    return (
+      <View style={styles.section}>
+        <DetailBlockLabel label={block.label} />
+        <ScrollableTextSection
+          content={block.text}
+          ds={ds}
+          wrapInSectionFill={false}
+          language={block.language}
+        />
+      </View>
+    );
+  }
+  return (
+    <Text style={styles.detailImagesNote}>
+      {t("toolCallDetails.imagesBelow", { count: block.count })}
+    </Text>
   );
+}
 
-  const out: ReactNode[] = [];
-  for (const section of sectionsFromTopLevel) {
-    const value = serializeUnknownValue(section.value);
-    if (!value.length) {
-      continue;
-    }
-    out.push(
-      <View key={`${section.title}-header`} style={styles.groupHeader}>
-        <Text style={styles.groupHeaderText}>{section.title}</Text>
-      </View>,
-    );
-    out.push(
-      <View key={`${section.title}-value`} style={styles.section}>
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          style={ds.jsonScrollCombined}
-          contentContainerStyle={styles.jsonContent}
-          showsHorizontalScrollIndicator={true}
-        >
-          <Text selectable style={styles.scrollText} dataSet={CODE_SURFACE_DATASET}>
-            {value}
-          </Text>
-        </ScrollView>
-      </View>,
-    );
+function ToolDetailGroupView({ group, ds }: { group: ToolDetailGroup; ds: DetailStyles }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.detailGroup}>
+      <Text style={styles.detailGroupTitle}>
+        {group.role === "input" ? t("toolCallDetails.input") : t("toolCallDetails.output")}
+      </Text>
+      {group.blocks.map((block, index) => (
+        <ToolDetailBlockView key={`${block.kind}-${index}`} block={block} ds={ds} />
+      ))}
+    </View>
+  );
+}
+
+function buildUnknownSections(
+  toolName: string | undefined,
+  detail: UnknownDetail,
+  ds: DetailStyles,
+): ReactNode[] {
+  if (typeof detail.input === "string" && detail.output === null) {
+    return [<ScrollablePlainTextSection key="unknown-plain-text" text={detail.input} ds={ds} />];
   }
-  return out;
+  return buildToolDetailGroups(toolName, detail.input, detail.output).map((group) => (
+    <ToolDetailGroupView key={group.role} group={group} ds={ds} />
+  ));
 }
 
 function PaseoDetailSection({ section }: { section: PaseoToolDetailSection }) {
@@ -619,7 +644,6 @@ function buildDetailSections(
   detail: ToolCallDetail | undefined,
   diffLines: DiffLine[] | undefined,
   ds: DetailStyles,
-  t: TFunction,
 ): ReactNode[] {
   if (!detail) return [];
   if (detail.type === "shell") {
@@ -691,7 +715,9 @@ function buildDetailSections(
     return [<ScrollablePlainTextSection key="plain-text" text={detail.text} ds={ds} />];
   }
   if (detail.type === "unknown") {
-    return buildPaseoUnknownSections(toolName, detail) ?? buildUnknownSections(detail, ds, t);
+    return (
+      buildPaseoUnknownSections(toolName, detail) ?? buildUnknownSections(toolName, detail, ds)
+    );
   }
   return [];
 }
@@ -743,7 +769,7 @@ export function ToolCallDetailsContent({
   const ds = useDetailStyles(detail, resolvedMaxHeight, fillAvailableHeight);
   const diffLines = useDiffLines(detail);
 
-  const sections: ReactNode[] = buildDetailSections(toolName, detail, diffLines, ds, t);
+  const sections: ReactNode[] = buildDetailSections(toolName, detail, diffLines, ds);
 
   if (errorText) {
     sections.push(<ErrorSection key="error" errorText={errorText} ds={ds} />);
@@ -773,19 +799,24 @@ const styles = StyleSheet.create((theme) => {
       gap: theme.spacing[2],
       padding: 0,
     },
-    groupHeader: {
-      flexDirection: "row",
-      alignItems: "center",
+    detailGroup: {
       gap: theme.spacing[2],
-      paddingHorizontal: theme.spacing[3],
-      paddingVertical: theme.spacing[2],
-      borderBottomWidth: theme.borderWidth[1],
-      borderBottomColor: theme.colors.border,
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[1],
     },
-    groupHeaderText: {
+    detailGroupTitle: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.base,
-      fontWeight: theme.fontWeight.normal,
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.medium,
+    },
+    detailBlockLabel: {
+      color: theme.colors.foregroundMuted,
+      fontSize: theme.fontSize.sm,
+    },
+    detailImagesNote: {
+      color: theme.colors.foregroundMuted,
+      fontSize: theme.fontSize.sm,
+      fontStyle: "italic",
     },
     paseoSection: {
       gap: theme.spacing[3],

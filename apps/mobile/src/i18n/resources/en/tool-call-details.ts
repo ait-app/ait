@@ -6,4 +6,5 @@ export const toolCallDetails = {
   preparingWorktree: "Preparing worktree {{branchName}} at {{worktreePath}}",
   input: "Input",
   output: "Output",
+  imagesBelow: "Images shown below: {{count}}",
 };

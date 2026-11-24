@@ -68,7 +68,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function humanizeKey(key: string): string {
+export function humanizeKey(key: string): string {
   const known = FIELD_LABELS[key];
   if (known) return known;
   const words = key
@@ -80,7 +80,7 @@ function humanizeKey(key: string): string {
   return `${sentence[0]?.toUpperCase() ?? ""}${sentence.slice(1)}`;
 }
 
-function formatValue(value: unknown, depth = 0): string {
+export function formatValue(value: unknown, depth = 0): string {
   if (value === null) return "None";
   if (value === undefined) return "";
   if (typeof value === "boolean") return value ? "Yes" : "No";

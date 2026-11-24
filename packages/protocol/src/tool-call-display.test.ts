@@ -21,7 +21,7 @@ describe("shared tool-call display mapping", () => {
     });
   });
 
-  it("does not infer summaries from unknown raw detail", () => {
+  it("summarizes unknown raw detail by its leading argument", () => {
     const display = buildToolCallDisplayModel({
       name: "exec_command",
       status: "running",
@@ -35,6 +35,7 @@ describe("shared tool-call display mapping", () => {
 
     expect(display).toEqual({
       displayName: "Exec command",
+      summary: "npm test",
     });
   });
 

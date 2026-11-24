@@ -6,4 +6,5 @@ export const toolCallDetails = {
   preparingWorktree: "ワークツリー {{branchName}} を {{worktreePath}} に準備しています",
   input: "入力",
   output: "出力",
+  imagesBelow: "下に画像を {{count}} 件表示",
 };

@@ -1248,7 +1248,7 @@ describe("stream reducer canonical tool calls", () => {
     assert.strictEqual(summary, "README.md");
   });
 
-  it("does not infer command summary when detail is absent", () => {
+  it("summarizes a tool without typed detail by its leading input argument", () => {
     const callId = "running-summary-shell-input-only";
     const state = hydrateStreamState([
       {
@@ -1273,7 +1273,7 @@ describe("stream reducer canonical tool calls", () => {
       error: tool.payload.data.error,
       detail: tool.payload.data.detail,
     });
-    assert.strictEqual(display.summary, undefined);
+    assert.strictEqual(display.summary, "npm run lint");
     assert.strictEqual(display.displayName, "Exec command");
   });
 
