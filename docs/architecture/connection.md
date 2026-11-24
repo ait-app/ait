@@ -114,6 +114,7 @@
 - daemon 的 serve 链路始终声明 `lease`、`credit`、`download`，能取得 bulk 票据时再声明 `bulk`；
   中心未声明或未启用其中任一项时链路失败，不降级。客户端要求中心 `hub_features` 含全部六项，
   `welcome.f` 不完整也拒绝（[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)）。
+  可选 feature `peer` 不在这六项之内，见[跨主机 peer 会话](#跨主机-peer-会话)。
 - Hub 会话独立于物理链路：断线后用 `resume_token` 在中心宽限期内续传，未确认重放缓冲上限 8 MiB，
   缓冲满时暂停读取本地会话；续连按 250 ms 至 8 s 退避。收到中心 `replaced` 后让出 5 分钟再接管
   （[ADR-180](../decisions/daemon/adr-180-hub-serve-endpoint.md)、
@@ -132,6 +133,26 @@
   （托管时 `relay_managed`/409，否则 `not_implemented`/410），stop 在自主发布的 daemon 上执行完整断开
   （[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)、
   [ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)）。
+
+## 跨主机 peer 会话
+
+同账号的 daemon 经 Hub 互相调用 MCP 工具（[ADR-305](../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md)，用法见
+[MCP 手册](../operations/mcp.md#跨主机调用)；中心一侧见 `ait-server` 仓库的 `docs/hub-protocol.md` 第 11.8 节与
+`docs/decisions/adr-008-hub-peer-sessions.md`）。
+
+- feature `peer` 可选：中心的 `hub_features` 含它时 main serve 链路才声明，bulk 链路不参与；旧中心上链路照常建立，
+  `host_list` 只有本机。`peer` 会话 `k:"peer"` 只在 serve 链路之间开，发起方打开时声明 1 MiB 的接收窗口。
+  对端身份（`host_id`、`server_id`、`name`）由中心填入转给目标的 `open`，接收方只凭它授权。
+- 会话内是独立的小协议：`open` 与 `accept` 的 payload 为 `{"v":1}`，之后每条 UTF-8 JSON 文本 `msg` 是请求 `{id, tool, arguments, caller?}`
+  或回复 `{id, result}`／`{id, error:{code, message}}`；超过 1 MiB 的回复以 `-32000` 替换，不分块。接收方自己产生的错误码只有 `-32001`
+  （当前不接受，随后以 `peer_disabled` 关闭会话）、`-32000` 与 `-32002`（此刻无法执行，调用未执行）；其余 `error` 是工具调用自己的拒绝。
+- 每条链路发起的与接受的 peer 会话各至多 8 个，不占每链路 16 个普通会话；每个会话至多同时 16 个调用。发起方的会话空闲 60 秒后以 `done` 关闭，
+  对每台目标最多保持一个，调用以请求 id 复用它。
+- 接受每个格式正确的 peer 会话，逐次调用时读取当前的 `mcp.enabled` 与 `mcp.acceptPeers` 决定是否执行（中心的发布可能滞后）。
+  发布 `hub.peers.publish` 在每条新逻辑链路上重复（中心把新链路视为不接受），每次变化后重复，链路仍在而超时时重试。
+- 发现用 `hub.peers.list`，结果缓存 5 秒，没有按未知目标刷新；`hostId` 是 daemon 的 `serverId`。
+- `api` 只依赖 `model::peer::Peers` 端口，由 `relay` 实现、daemon 组装；`api` 不接触 Hub 帧。一次转发调用共用一个 55 秒期限，
+  请求发出后被放弃的调用以“结果未知”结束，从不重放。
 
 ## 授权与发布
 
@@ -166,6 +187,7 @@
   只是调用上下文，权限边界是作用域凭据（[ADR-148](../decisions/daemon/adr-148-daemon-mcp.md)、
   [ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)、
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、[MCP 手册](../operations/mcp.md)）。
+  第三类调用者是经 Hub peer 会话到达的同账号其他主机，只能调用带跨主机标记的 13 个工具，不经 HTTP 入口。
 - 可选 MCP Unix socket 只暴露 `/mcp/agents`，HTTP authority 固定为 `localhost`，鉴权与 TCP 的 MCP
   路由相同。父目录须为当前用户所有的 0700 非符号链接目录，socket 为 0600；只回收无监听者的旧
   socket，停止时只删除本次绑定的 device/inode

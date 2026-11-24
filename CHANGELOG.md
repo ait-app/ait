@@ -1,5 +1,15 @@
 # Ait changelog
 
+## Unreleased
+
+- Agents can work across the hosts of one account. `host_list` shows the account's other hosts and
+  whether each can take calls, and the agent, workspace and provider tools (13 of them, from
+  `agent_create` to `profile_list`) accept an optional `hostId` that runs them on that host, so an
+  agent can create, prompt and wait for agents there. A host accepts such calls only after you turn
+  on `mcp.acceptPeers` (off by default); turning it on trusts every host of the account, because
+  another host's agent can then run agents, in any mode, in any directory on this one. It needs an
+  account service that supports peer sessions, and it does not change calls without `hostId`.
+
 ## 0.2.26 - 2026-11-24
 
 - The Git control at the top right of a workspace is one button that is always pressable. It

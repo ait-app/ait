@@ -35,7 +35,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
-- [ADR-295：MCP 工具按“域在前”命名，旧名字作为别名保留](daemon/adr-295-mcp-tool-naming-and-aliases.md)
+- [ADR-305：跨主机 MCP——peer 会话与对端调用者](daemon/adr-305-cross-host-mcp-peer-sessions.md)
+- [ADR-295：MCP 工具按“域在前”命名，旧名字作为别名保留](daemon/adr-295-mcp-tool-naming-and-aliases.md)（经 [ADR-305](daemon/adr-305-cross-host-mcp-peer-sessions.md) 修订）
 - [ADR-294：创建回执按键存入 SQLite](daemon/adr-294-sqlite-creation-receipts.md)
 - [ADR-291：单连接的活动心跳允许过载丢弃](daemon/adr-291-best-effort-activity-heartbeats.md)
 - [ADR-288：Agent 状态延迟写入 `agents.json`，启动时由 Timeline 补齐](daemon/adr-288-deferred-agent-status-writes.md)
@@ -48,7 +49,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-181：Host 向 Hub 发布事件与目录摘要](daemon/adr-181-hub-host-publication.md)
 - [ADR-180：消息 Hub 服务端点（ait-hub-v1）](daemon/adr-180-hub-serve-endpoint.md)（经 [ADR-181](daemon/adr-181-hub-host-publication.md)、[ADR-200](daemon/adr-200-headless-independent-transports.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-204](clients/adr-204-hub-only-online-business-transport.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-155：可协商的持久 Relay 数据隧道](daemon/adr-155-persistent-relay-data-tunnel.md)（经 [ADR-204](clients/adr-204-hub-only-online-business-transport.md) 修订）
-- [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)（经 [ADR-202](providers/adr-202-agent-mcp-injection.md)、[ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-295](daemon/adr-295-mcp-tool-naming-and-aliases.md) 修订）
+- [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)（经 [ADR-202](providers/adr-202-agent-mcp-injection.md)、[ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-295](daemon/adr-295-mcp-tool-naming-and-aliases.md)、[ADR-305](daemon/adr-305-cross-host-mcp-peer-sessions.md) 修订）
 - [ADR-142：PTY 拥有基础终端设备属性回复](daemon/adr-142-terminal-primary-device-attributes.md)
 - [ADR-140：Headless daemon 自动保存本地 API 凭据](daemon/adr-140-headless-local-api-token.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)
@@ -222,7 +223,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-235：稳定版 Release 通过 API 启动 iOS 内部 TestFlight 构建](clients/adr-235-ios-testflight-in-release-workflow.md)
 - [ADR-234：稳定版 Release 自动提交 Google Play 内部测试](clients/adr-234-play-internal-in-release-workflow.md)（经 [ADR-236](clients/adr-236-google-signed-apk-release-asset.md) 修订）
 - [ADR-223：桌面多窗口与 Workspace 状态归属](clients/adr-223-desktop-workspace-windows.md)
-- [ADR-218：Hub feature 协商收敛在线连接](clients/adr-218-hub-feature-negotiation.md)
+- [ADR-218：Hub feature 协商收敛在线连接](clients/adr-218-hub-feature-negotiation.md)（经 [ADR-305](daemon/adr-305-cross-host-mcp-peer-sessions.md) 修订）
 - [ADR-216：默认数据目录统一为 `~/.ait`](clients/adr-216-default-data-directory-ait.md)
 - [ADR-214：客户端 Workspace Bot 标签页 v2](clients/adr-214-workspace-bot-tab-v2.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-221](bot/adr-221-read-only-bot-session-inspection.md) 修订）
 - [ADR-212：打包的 daemon 可执行文件统一命名为 aitd](clients/adr-212-packaged-daemon-name-aitd.md)

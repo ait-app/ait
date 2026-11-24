@@ -40,7 +40,7 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 | `bot`                       | Workspace Bot、Channel、隐藏会话与消息协调      | `domain`、`model`、`provider`、`provider-core`                                                                                                                               |
 | `schedule`                  | 定时任务服务与协议                              | `domain`、`model`                                                                                                                                                            |
 | `browser`                   | 浏览器自动化与 TCP 隧道                         | `model`                                                                                                                                                                      |
-| `relay`                     | Hub serve、下载 Relay、控制与传输               | `model`                                                                                                                                                                      |
+| `relay`                     | Hub serve、peer 会话、下载 Relay、控制与传输    | `model`                                                                                                                                                                      |
 | `host-link`                 | 机器授权、节点租约与发布协调                    | 无，通过 ports 调用适配器                                                                                                                                                    |
 | `api`                       | HTTP/WebSocket、鉴权、分发与跨能力协调          | `domain`、`model`、`host-link` 及上述功能 crate；`provider-builtin` 仅测试使用                                                                                               |
 | `daemon`                    | CLI/配置、进程锁、身份、服务组装与停机          | `api`、`domain`、`model`、`persistence`、`provider-builtin` 及功能 crate                                                                                                     |
@@ -189,6 +189,10 @@ Hub feature 协商与旧版本兼容见
 [ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)。
 单连接将客户端活动心跳作为可丢弃的周期快照，worker 队列满时仍保留业务连接。
 见 [连接与传输规格](connection.md#准入与分发)。
+同账号的 daemon 还经 Hub 的 `peer` 会话互相调用 13 个 MCP 工具：`api` 的 MCP 层只依赖 `model::peer::Peers` 端口，
+`relay` 实现发起与接收，daemon 组装；接收方把对端当作第三类 MCP 调用者，默认不接受（`mcp.acceptPeers`），
+见 [ADR-305](../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md)、[连接规格](connection.md#跨主机-peer-会话)与
+[MCP 手册](../operations/mcp.md#跨主机调用)。
 Host 通过 `model::hub` 发布事件和目录摘要，`persistence` 保存发布 journal；中心方法由握手协商。
 Desktop 内置 daemon 默认启用 Hub 原生通知，独立 daemon 默认直发，可用 `AIT_SERVER_HUB_NOTIFICATIONS` 覆盖。
 通知配置和凭据归属见[移动端通知](../operations/mobile-notifications.md)。

@@ -9,7 +9,7 @@ paths:
 
 # ADR-148：daemon 的无状态 MCP 编排接口
 
-- 后续修订：[ADR-202](../providers/adr-202-agent-mcp-injection.md) 接入 Provider 运行时注入与 MCP 专用凭证；[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 说明 `X-Ait-Agent-Id` 仍不是权限边界，Bot 作用域凭据才是。
+- 后续修订：[ADR-202](../providers/adr-202-agent-mcp-injection.md) 接入 Provider 运行时注入与 MCP 专用凭证；[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 说明 `X-Ait-Agent-Id` 仍不是权限边界，Bot 作用域凭据才是；[ADR-305](adr-305-cross-host-mcp-peer-sessions.md) 增加第三类调用者（同账号其他主机，经 Hub peer 会话）与跨主机路由。
 
 ## 背景
 
