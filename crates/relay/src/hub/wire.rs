@@ -175,10 +175,6 @@ pub(super) enum Inbound {
         service: Option<Service>,
         #[serde(default)]
         k: SessionKind,
-        #[cfg_attr(
-            not(test),
-            expect(dead_code, reason = "read once this Host serves peer sessions")
-        )]
         #[serde(default)]
         peer: Option<Identity>,
         #[serde(default)]

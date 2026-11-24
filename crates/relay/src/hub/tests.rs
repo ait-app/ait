@@ -11,6 +11,7 @@ use super::*;
 mod bulk_lane;
 mod center_calls;
 mod features;
+mod peer;
 
 const HELLO: &str = r#"{"type":"hello","client_id":"hub-test"}"#;
 const TICKET: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -147,13 +148,25 @@ async fn serving(
     hub_features: Vec<String>,
     tickets: Option<Arc<dyn bulk::Tickets>>,
 ) -> (crate::Connector, Connector, TcpListener, Connections) {
+    let (api, connections) = crate::test_support::FakeApi::new(false);
+    let (relay, hub, center) = granted(local, hub_features, tickets, api).await;
+    (relay, hub, center, connections)
+}
+
+/// A connector for the local destination `local` serving sessions with `api`,
+/// granted `hub_features` and bulk `tickets`.
+async fn granted(
+    local: std::net::SocketAddr,
+    hub_features: Vec<String>,
+    tickets: Option<Arc<dyn bulk::Tickets>>,
+    api: Arc<crate::test_support::FakeApi>,
+) -> (crate::Connector, Connector, TcpListener) {
     let center = TcpListener::bind("127.0.0.1:0").await.expect("bind center");
     let relay = crate::Connector::new(
         local,
         Uuid::new_v4().to_string(),
         Uuid::new_v4().to_string(),
     );
-    let (api, connections) = crate::test_support::FakeApi::new(false);
     relay.attach_api(api);
     let hub = relay.hub().clone();
     hub.start(Grant {
@@ -165,7 +178,7 @@ async fn serving(
     })
     .await
     .expect("start");
-    (relay, hub, center, connections)
+    (relay, hub, center)
 }
 
 #[tokio::test]

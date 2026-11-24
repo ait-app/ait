@@ -298,7 +298,7 @@ async fn a_center_declaring_peer_is_offered_it_and_may_leave_it_disabled() {
     let status = next_status(&hub, |status| status.online).await;
     assert_eq!(status.features, MAIN);
 
-    // Peer sessions are refused until this Host serves them.
+    // Peer sessions the center opens are served; their calls are answered by the API.
     let s = Uuid::new_v4();
     let identity = json!({"host_id":Uuid::new_v4(),"server_id":Uuid::new_v4(),"name":"Studio"});
     socket
@@ -309,8 +309,8 @@ async fn a_center_declaring_peer_is_offered_it_and_may_leave_it_disabled() {
         .await
         .expect("peer open");
     assert_eq!(
-        next(&mut socket).await.0,
-        json!({"t":"close","seq":1,"s":s,"code":"unsupported"})
+        next(&mut socket).await,
+        (json!({"t":"accept","seq":1,"s":s}), br#"{"v":1}"#.to_vec())
     );
     hub.stop().await;
 }

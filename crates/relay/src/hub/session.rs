@@ -1,18 +1,20 @@
 //! One hub session served in-process: a business connection to the local API,
-//! or a file download.
+//! a file download, or calls from a sibling Host.
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use model::peer::Identity;
 use model::share::Visitor;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Bytes;
+use tracing::Instrument;
 use uuid::Uuid;
 
-use super::bridge::{Admission, Connection, Frame};
-use super::credit;
+use super::bridge::{Admission, Connection, Frame, PeerRefusal};
 use super::wire::{self, PayloadKind, SessionKind};
+use super::{credit, peer};
 use crate::Local;
 use crate::protocol::{self, ClientHello};
 
@@ -41,6 +43,8 @@ pub(super) struct Session {
     pub(super) visitor: Option<Visitor>,
     /// Whether the center opened this session for automation.
     pub(super) automation: bool,
+    /// The calling Host of a peer session.
+    pub(super) peer: Option<Identity>,
     /// Peer messages in link order; closed when the link drops the session.
     pub(super) inbound: mpsc::Receiver<Frame>,
     pub(super) output: mpsc::Sender<(Uuid, Output)>,
@@ -49,14 +53,16 @@ pub(super) struct Session {
 }
 
 /// Serve session `kind` until either side closes, then report the closure.
-/// `payload` is the `open` payload: the client hello, or the download request.
+/// `payload` is the `open` payload: the client hello, the download request, or
+/// the peer version.
 pub(super) async fn run(mut session: Session, kind: SessionKind, payload: Bytes) {
     let result = match kind {
         SessionKind::Rpc => bridge(&mut session, payload).await.map(|()| "closed"),
         SessionKind::Download => download::serve(&mut session, &payload)
             .await
             .map(|()| "done"),
-        SessionKind::Peer | SessionKind::Unsupported => Err("unsupported"),
+        SessionKind::Peer => serve_peer(&mut session, &payload).await.map(|()| "closed"),
+        SessionKind::Unsupported => Err("unsupported"),
     };
     let code = result.unwrap_or_else(|code| code);
     let _ = session
@@ -162,6 +168,69 @@ async fn bridge(session: &mut Session, hello: Bytes) -> Result<(), &'static str>
             if sender.send(frame).await.is_err() {
                 return Ok(());
             }
+            if granting
+                && let Some(credit) = delivered.delivered(length)
+                && output.send((id, Output::Credit(credit))).await.is_err()
+            {
+                return Ok(());
+            }
+        }
+        Ok(())
+    };
+    tokio::select! {
+        result = to_peer => result,
+        result = to_api => result,
+    }
+}
+
+/// Serve calls from the sibling Host that opened a peer session. Each request
+/// runs in its own task and is answered when it completes, so replies may
+/// leave out of order. The session ends when the center closes it, without
+/// cancelling calls that already run, or after answering a call this Host no
+/// longer accepts.
+async fn serve_peer(session: &mut Session, hello: &[u8]) -> Result<(), &'static str> {
+    peer::decode_hello(hello).map_err(|_| "unsupported")?;
+    let from = Arc::new(session.peer.take().ok_or("unsupported")?);
+    let api = session.local.api.get().ok_or("unavailable")?.clone();
+    let accept = Output::Accept(Bytes::from_static(peer::HELLO));
+    if session.output.send((session.id, accept)).await.is_err() {
+        return Ok(());
+    }
+    let (replies_tx, mut replies) = mpsc::unbounded_channel();
+    let (id, granting) = (session.id, session.credit.is_some());
+    let mut outlet = Outlet {
+        id,
+        output: &session.output,
+        credit: session.credit.as_mut(),
+    };
+    let to_peer = async {
+        while let Some((request, outcome)) = replies.recv().await {
+            let disabled = matches!(outcome, Err(PeerRefusal::Disabled));
+            let reply = peer::encode_reply(request, outcome.map_err(peer::refusal));
+            outlet.send(PayloadKind::Text, reply).await?;
+            if disabled {
+                return Err("peer_disabled");
+            }
+        }
+        Ok(())
+    };
+    let (inbound, output) = (&mut session.inbound, &session.output);
+    let to_api = async {
+        let mut delivered = credit::Incoming::default();
+        // Closed when the link drops the session.
+        while let Some(frame) = inbound.recv().await {
+            let length = frame.len();
+            let Frame::Text(text) = frame else {
+                return Err("invalid_message");
+            };
+            let (request, call) = peer::decode_request(&text).map_err(|_| "invalid_message")?;
+            let (api, from, replies) = (api.clone(), from.clone(), replies_tx.clone());
+            tokio::spawn(
+                async move {
+                    let _ = replies.send((request, api.peer(&from, call).await));
+                }
+                .in_current_span(),
+            );
             if granting
                 && let Some(credit) = delivered.delivered(length)
                 && output.send((id, Output::Credit(credit))).await.is_err()

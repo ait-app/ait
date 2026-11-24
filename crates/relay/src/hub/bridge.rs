@@ -3,7 +3,9 @@
 //! The API crate implements [`LocalApi`]; the daemon attaches it to the
 //! connector, so a session never dials a loopback WebSocket.
 
+use model::peer::{Identity, Request};
 use model::share::Visitor;
+use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Bytes;
 
@@ -62,8 +64,24 @@ pub enum Admission<'a> {
 #[error("local API refused the session")]
 pub struct Refused;
 
+/// Why the local API did not run a call from another Host.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum PeerRefusal {
+    /// This Host does not accept calls from other Hosts; the session ends.
+    #[error("this host does not accept calls from other hosts")]
+    Disabled,
+    /// The call was refused or failed; the caller gets `code` and `message`.
+    #[error("{message}")]
+    Failed {
+        /// JSON-RPC style error code.
+        code: i32,
+        /// Human-readable reason.
+        message: String,
+    },
+}
+
 /// Opens business connections inside this process with the same admission as
-/// an authenticated local WebSocket upgrade.
+/// an authenticated local WebSocket upgrade, and runs calls from other Hosts.
 #[async_trait::async_trait]
 pub trait LocalApi: std::fmt::Debug + Send + Sync {
     /// Open one connection with the authority `admission` names.
@@ -71,4 +89,24 @@ pub trait LocalApi: std::fmt::Debug + Send + Sync {
     /// # Errors
     /// Returns [`Refused`] when the API does not admit the connection.
     async fn connect(&self, admission: Admission<'_>) -> Result<Connection, Refused>;
+
+    /// Run one tool call that the Host `from` sent over a peer session.
+    ///
+    /// # Arguments
+    /// * `from` - The calling Host, as the center authenticated it.
+    /// * `request` - The tool call.
+    ///
+    /// # Returns
+    /// The tool call's result object.
+    ///
+    /// # Errors
+    /// Returns [`PeerRefusal::Disabled`] when this Host does not accept calls
+    /// from other Hosts (the default), and [`PeerRefusal::Failed`] when the
+    /// call is refused or fails.
+    async fn peer(&self, _from: &Identity, _request: Request) -> Result<Value, PeerRefusal> {
+        Err(PeerRefusal::Disabled)
+    }
 }
+
+#[cfg(test)]
+mod tests;

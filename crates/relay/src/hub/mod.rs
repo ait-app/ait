@@ -9,6 +9,7 @@
 //! all of them predates this daemon; the link fails instead of downgrading.
 //! `peer`, for sessions between sibling Hosts, is optional: the link declares
 //! it only when the center does, and runs whether or not the center enables it.
+//! A peer session another Host opens is served by the local API, one task per call.
 //! Sessions still adapt to their opener: an `open` without `w` is served without
 //! flow control, one without `k` is an RPC session.
 
@@ -17,6 +18,7 @@ pub mod bulk;
 mod calls;
 mod credit;
 mod link;
+mod peer;
 mod session;
 mod wire;
 
@@ -27,6 +29,7 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use model::hub::{Center, LinkState, Scope};
+use model::peer::Identity;
 use model::share::{Outcome, Visitor};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
@@ -44,8 +47,11 @@ use link::{Joined, Link};
 use session::{Output, Session};
 use wire::{Inbound, Outbound, SessionKind};
 
-/// Sessions per link; the center enforces the same bound.
+/// Sessions per link besides peer sessions; the center enforces the same bound.
 const MAX_SESSIONS: usize = 16;
+/// Peer sessions per link, counted apart from the others; the center enforces
+/// the same bound.
+const MAX_PEER_SESSIONS: usize = 8;
 /// Buffered business messages per session before it is closed as `overflow`.
 const SESSION_QUEUE: usize = 64;
 /// Message bound of a flow-controlled session. Its window already bounds the
@@ -589,6 +595,8 @@ struct Sessions {
 /// The link's handle on one session task.
 struct Route {
     inbound: mpsc::Sender<Frame>,
+    /// Whether this is a peer session, which has its own quota.
+    peer: bool,
     /// Flow control of a session opened with a window.
     credit: Option<RouteCredit>,
 }
@@ -605,13 +613,16 @@ struct Opening<'a> {
     visitor: Option<&'a Visitor>,
     service: Option<&'a wire::Service>,
     kind: SessionKind,
+    /// The calling Host of a peer session.
+    peer: Option<&'a Identity>,
     /// The opener's receive window; present only on flow-controlled sessions.
     window: Option<u32>,
 }
 
 impl Sessions {
     /// Start a session, or return the close code that refuses it.
-    /// A `visitor` session is served as a guest of one shared resource.
+    /// A `visitor` session is served as a guest of one shared resource, and a
+    /// peer session as calls from the Host the center named in `peer`.
     fn open(
         &mut self,
         id: Uuid,
@@ -621,11 +632,22 @@ impl Sessions {
         if self.routes.contains_key(&id) {
             return Ok(());
         }
-        if self.routes.len() >= MAX_SESSIONS {
+        let peer = opening.kind == SessionKind::Peer;
+        let limit = if peer {
+            MAX_PEER_SESSIONS
+        } else {
+            MAX_SESSIONS
+        };
+        if self
+            .routes
+            .values()
+            .filter(|route| route.peer == peer)
+            .count()
+            >= limit
+        {
             return Err("capacity");
         }
-        // Peer sessions are not served yet.
-        if matches!(opening.kind, SessionKind::Peer | SessionKind::Unsupported)
+        if opening.kind == SessionKind::Unsupported
             || (self.downloads_only && opening.kind != SessionKind::Download)
         {
             return Err("unsupported");
@@ -642,7 +664,13 @@ impl Sessions {
             }
             Some(_) => return Err("unsupported"),
         };
-        let (credit, peer) = match opening.window {
+        // Only the center names the calling Host, and never on behalf of a guest.
+        let caller = match (peer, opening.peer, opening.visitor) {
+            (false, _, _) => None,
+            (true, Some(identity), None) => Some(identity.clone()),
+            (true, None, _) | (true, Some(_), Some(_)) => return Err("unsupported"),
+        };
+        let (credit, window) = match opening.window {
             Some(window) => {
                 let (peer, credit) = watch::channel(0);
                 (
@@ -652,7 +680,7 @@ impl Sessions {
             }
             None => (None, None),
         };
-        let queue = if peer.is_some() {
+        let queue = if window.is_some() {
             CREDIT_QUEUE
         } else {
             SESSION_QUEUE
@@ -662,7 +690,8 @@ impl Sessions {
             id,
             Route {
                 inbound: inbound_tx,
-                credit: peer,
+                peer,
+                credit: window,
             },
         );
         let span = tracing::info_span!("hub_session", session = %id);
@@ -671,6 +700,7 @@ impl Sessions {
             local: self.local.clone(),
             visitor: opening.visitor.cloned(),
             automation,
+            peer: caller,
             inbound: inbound_rx,
             output: self.output.clone(),
             credit,
@@ -824,6 +854,7 @@ impl Pump<'_> {
                 visitor,
                 service,
                 k,
+                peer,
                 w,
                 ..
             } => {
@@ -831,6 +862,7 @@ impl Pump<'_> {
                     visitor: visitor.as_ref(),
                     service: service.as_ref(),
                     kind: k,
+                    peer: peer.as_ref(),
                     window: w,
                 };
                 self.sessions

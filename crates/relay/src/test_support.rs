@@ -3,13 +3,15 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use model::peer::{Identity, Request};
 use model::share::Visitor;
+use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tokio::sync::{OnceCell, mpsc};
+use tokio::sync::{OnceCell, mpsc, oneshot};
 
 use crate::Local;
-use crate::hub::bridge::{Admission, Connection, Frame, LocalApi, Refused};
+use crate::hub::bridge::{Admission, Connection, Frame, LocalApi, PeerRefusal, Refused};
 use crate::transport::Dialer;
 
 /// A local destination at `address` serving sessions with `api`, if any.
@@ -87,11 +89,25 @@ impl Accepted {
     }
 }
 
+/// One call from another Host, answered by the test.
+#[derive(Debug)]
+pub(crate) struct PeerCall {
+    /// The calling Host the session was opened by.
+    pub(crate) from: Identity,
+    /// The tool call.
+    pub(crate) request: Request,
+    /// The API's outcome for the call.
+    pub(crate) reply: oneshot::Sender<Result<Value, PeerRefusal>>,
+}
+
 /// Hands every admitted connection to the test; refuses all when `refuse` is set.
+/// Calls from other Hosts reach the test when it asked for them, and are
+/// refused as [`PeerRefusal::Disabled`] otherwise.
 #[derive(Debug)]
 pub(crate) struct FakeApi {
     connections: mpsc::UnboundedSender<Accepted>,
     refuse: bool,
+    peers: Option<mpsc::UnboundedSender<PeerCall>>,
 }
 
 impl FakeApi {
@@ -102,8 +118,28 @@ impl FakeApi {
             Arc::new(Self {
                 connections,
                 refuse,
+                peers: None,
             }),
             accepted,
+        )
+    }
+
+    /// An API double that admits connections and hands calls from other Hosts to the test.
+    pub(crate) fn with_peers() -> (
+        Arc<Self>,
+        mpsc::UnboundedReceiver<Accepted>,
+        mpsc::UnboundedReceiver<PeerCall>,
+    ) {
+        let (connections, accepted) = mpsc::unbounded_channel();
+        let (peers, calls) = mpsc::unbounded_channel();
+        (
+            Arc::new(Self {
+                connections,
+                refuse: false,
+                peers: Some(peers),
+            }),
+            accepted,
+            calls,
         )
     }
 }
@@ -131,5 +167,21 @@ impl LocalApi for FakeApi {
             sender: to_api,
             receiver: from_api,
         })
+    }
+
+    async fn peer(&self, from: &Identity, request: Request) -> Result<Value, PeerRefusal> {
+        let Some(peers) = &self.peers else {
+            return Err(PeerRefusal::Disabled);
+        };
+        let (reply, outcome) = oneshot::channel();
+        let call = PeerCall {
+            from: from.clone(),
+            request,
+            reply,
+        };
+        if peers.send(call).is_err() {
+            return Err(PeerRefusal::Disabled);
+        }
+        outcome.await.unwrap_or(Err(PeerRefusal::Disabled))
     }
 }

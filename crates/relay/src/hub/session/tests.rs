@@ -36,6 +36,7 @@ impl Harness {
             local: local(address(), Some(api)),
             visitor: guest,
             automation: false,
+            peer: None,
             inbound: inbound_rx,
             output: output_tx,
             credit,
@@ -162,6 +163,7 @@ fn session(local: Arc<Local>, output: mpsc::Sender<(Uuid, Output)>) -> Session {
         local,
         visitor: None,
         automation: false,
+        peer: None,
         inbound: mpsc::channel(1).1,
         output,
         credit: None,
@@ -357,4 +359,38 @@ async fn a_credit_session_waiting_for_credit_ends_when_its_route_is_dropped() {
     ));
     drop(peer);
     assert_eq!(next(&mut harness.output).await, Output::Closed("closed"));
+}
+
+#[tokio::test]
+async fn peer_sessions_end_on_messages_that_are_not_requests_and_need_the_api() {
+    let identity = Identity {
+        host_id: Uuid::new_v4(),
+        server_id: Uuid::new_v4(),
+        name: "Studio".to_owned(),
+    };
+    let version = Bytes::from_static(br#"{"v":1}"#);
+    for message in [
+        Frame::Binary(Bytes::from_static(&[1])),
+        Frame::Text(Bytes::from_static(br#"{"id":1,"tool":"agent_list"}"#)),
+    ] {
+        let (api, _connections) = FakeApi::new(false);
+        let (output, mut output_rx) = mpsc::channel(4);
+        let (inbound, inbound_rx) = mpsc::channel(4);
+        let mut peer = session(local(address(), Some(api)), output);
+        peer.inbound = inbound_rx;
+        peer.peer = Some(identity.clone());
+        tokio::spawn(run(peer, SessionKind::Peer, version.clone()));
+        assert_eq!(next(&mut output_rx).await, Output::Accept(version.clone()));
+        inbound.send(message).await.expect("message");
+        assert_eq!(
+            next(&mut output_rx).await,
+            Output::Closed("invalid_message")
+        );
+    }
+
+    let (output, mut output_rx) = mpsc::channel(4);
+    let mut peer = session(local(address(), None), output);
+    peer.peer = Some(identity);
+    run(peer, SessionKind::Peer, version).await;
+    assert_eq!(next(&mut output_rx).await, Output::Closed("unavailable"));
 }

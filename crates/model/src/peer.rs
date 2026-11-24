@@ -43,6 +43,7 @@ pub struct Host {
 }
 
 /// The calling Host, as filled in by the center from its authenticated session.
+/// Its serde shape is the center's `open.peer` object (hub-protocol §11.8).
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct Identity {
     /// The account's identifier of the calling Host.
