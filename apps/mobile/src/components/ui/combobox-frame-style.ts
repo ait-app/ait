@@ -31,18 +31,19 @@ export function buildDesktopFrameStyle(input: DesktopFrameStyleInput): StyleProp
     typeof availableHeight === "number"
       ? { maxHeight: Math.min(availableHeight, desktopFixedHeight ?? 400) }
       : null;
-  const floor = Math.max(desktopMinWidth ?? 0, referenceWidth ?? 200);
+  const availableWidth = Math.max(0, input.availableWidth ?? Number.POSITIVE_INFINITY);
+  const floor = Math.min(Math.max(desktopMinWidth ?? 0, referenceWidth ?? 200), availableWidth);
   // Native flex rows do not provide an intrinsic popover width. In particular,
   // a short badge anchor must not collapse the search field and option labels.
   const nativeWidth = Math.min(
     Math.max(desktopMinWidth ?? 240, referenceWidth ?? 0),
-    Math.max(0, input.availableWidth ?? Number.POSITIVE_INFINITY),
+    availableWidth,
   );
   const widthStyle = input.nativePopover
     ? { width: nativeWidth, minWidth: nativeWidth, maxWidth: nativeWidth }
     : desktopLockWidth
       ? { width: floor, minWidth: floor, maxWidth: floor }
-      : { minWidth: floor, maxWidth: Math.max(400, floor) };
+      : { minWidth: floor, maxWidth: Math.min(Math.max(400, floor), availableWidth) };
   return [
     {
       position: "absolute" as const,

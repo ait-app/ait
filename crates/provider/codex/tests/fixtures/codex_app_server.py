@@ -264,6 +264,18 @@ for line in sys.stdin:
     elif method == "collaborationMode/list":
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
+    elif method in ("thread/goal/get", "thread/goal/set", "thread/goal/clear"):
+        goal_path = root / ("native-goal-" + params["threadId"] + ".json")
+        goal = json.loads(goal_path.read_text()) if goal_path.exists() else None
+        if method == "thread/goal/clear":
+            goal = None
+        elif method == "thread/goal/set":
+            goal = goal or {"objective": params.get("objective", "Fixture"), "status": "active", "tokensUsed": 0}
+            for key in ("objective", "status", "tokenBudget"):
+                if key in params:
+                    goal[key] = params[key]
+        goal_path.write_text(json.dumps(goal))
+        result = {"goal": goal}
     elif method in ("thread/start", "thread/resume", "thread/read"):
         agent_mcp = params.get("config", {}).get("mcp_servers", {}).get("ait")
         if method == "thread/resume" and mode == "realtime-writer-busy":

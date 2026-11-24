@@ -75,6 +75,20 @@ fn persisted_legacy_features_are_accepted_and_ignored() {
 }
 
 #[test]
+fn advisor_switch_accepts_only_boolean_values() {
+    for value in [json!(true), json!(false), json!("on"), Value::Null] {
+        let config = StoredAgentConfig {
+            feature_values: Some(BTreeMap::from([(
+                "advisorEnabled".to_owned(),
+                value.clone(),
+            )])),
+            ..StoredAgentConfig::default()
+        };
+        assert_eq!(validate(&config).is_ok(), value.is_boolean());
+    }
+}
+
+#[test]
 fn runtime_validates_native_facts() {
     let state = json!({"sessionId":"id","model":{"provider":"p","id":"m"},"thinkingLevel":"high"});
     assert_eq!(

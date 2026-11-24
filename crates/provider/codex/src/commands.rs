@@ -33,7 +33,7 @@ impl CodexSession {
             return Err(AgentSessionError::Rejected);
         }
         let (name, args) = split(&prompt.text).ok_or(AgentSessionError::Rejected)?;
-        let (method, params, message) = match name {
+        let (method, mut params, message) = match name {
             "compact" if args.is_empty() && self.manual_compactions == 0 => (
                 Some("thread/compact/start"),
                 json!({"threadId":self.id}),
@@ -46,6 +46,9 @@ impl CodexSession {
             .client_message_id
             .as_deref()
             .ok_or(AgentSessionError::Rejected)?;
+        if name == "goal" && method.is_some() {
+            params["origin"] = json!("user");
+        }
         let entry = NativeItem {
             key: format!("native:codex:control:{message_id}"),
             turn_id: self
@@ -62,11 +65,19 @@ impl CodexSession {
             && params["status"] == "active"
             && self.active_turn.is_none();
         if let Some(method) = method {
-            self.transport
+            let response = self
+                .transport
                 .as_mut()
                 .ok_or(AgentSessionError::Failed)?
                 .request(method, params)
                 .await?;
+            if name == "goal" {
+                if method == "thread/goal/clear" {
+                    self.observe_goal(&Value::Null);
+                } else if let Some(goal) = response.get("goal") {
+                    self.observe_goal(goal);
+                }
+            }
         }
         if name == "compact" {
             self.manual_compactions += 1;
@@ -86,10 +97,17 @@ impl CodexSession {
         method: &str,
         params: &Value,
     ) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
-        if method == "thread/goal/updated" && params["goal"]["status"] != "active"
-            || method == "thread/goal/cleared"
-        {
-            self.pending_goal_start = false;
+        if matches!(method, "thread/goal/updated" | "thread/goal/cleared") {
+            if params["threadId"].as_str() != Some(self.id.as_str()) {
+                return Ok(None);
+            }
+            let goal = if method == "thread/goal/cleared" {
+                &Value::Null
+            } else {
+                &params["goal"]
+            };
+            self.observe_goal(goal);
+            return Ok(self.stream.events.pop_front());
         }
         if method == "turn/plan/updated" {
             self.plan_progress(params)?;
@@ -160,6 +178,22 @@ impl CodexSession {
         Ok(None)
     }
 
+    /// Retain only confirmed native facts and notify clients through the existing runtime stream.
+    pub(super) fn observe_goal(&mut self, native: &Value) {
+        if let Some(goal) = provider_native::goal::snapshot(native, true) {
+            if goal["status"] != "active" {
+                self.pending_goal_start = false;
+            }
+            let extra = self.info.extra.get_or_insert_with(Default::default);
+            if extra.get("goal") != Some(&goal) {
+                extra.insert("goal".to_owned(), goal);
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::RuntimeInfo(self.info.clone()));
+            }
+        }
+    }
+
     /// Queue the request segment of a sub-agent thread's `thread/tokenUsage/updated`.
     ///
     /// The segment belongs to the active parent turn. Usage read outside that turn, or of a
@@ -193,8 +227,19 @@ impl CodexSession {
 }
 
 fn goal(thread: &str, args: &str) -> (Option<&'static str>, Value, String) {
+    if let Some(objective) = args
+        .strip_prefix("set ")
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    {
+        return (
+            Some("thread/goal/set"),
+            json!({"threadId":thread,"objective":objective}),
+            "Goal updated.".to_owned(),
+        );
+    }
     match args.to_ascii_lowercase().as_str() {
-        "" => (
+        "" | "set" => (
             None,
             Value::Null,
             "Usage: /goal <objective>|pause|resume|clear".to_owned(),

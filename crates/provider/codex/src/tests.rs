@@ -610,3 +610,53 @@ async fn uninstalled_adapter_still_imports_sessions_and_hosts_bot_sessions_nativ
         }
     );
 }
+
+#[tokio::test]
+async fn goal_runtime_snapshot_tracks_native_mutations_and_restores_without_a_prompt() {
+    let fixture = Fixture::new();
+    fixture.mode("workflows");
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    for (index, (text, objective, status)) in [
+        ("/goal Ship feature", "Ship feature", "active"),
+        ("/goal pause", "Ship feature", "paused"),
+        ("/goal set pause", "pause", "paused"),
+        ("/goal resume", "pause", "active"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut prompt = provider_core::protocol::prompt::AgentPrompt::text(text);
+        prompt.client_message_id = Some(format!("goal-{index}"));
+        session.out_of_band(&prompt).await.unwrap();
+        let info = session.runtime_info().await.unwrap();
+        let goal = &info.extra.unwrap()["goal"];
+        assert_eq!(goal["objective"], objective);
+        assert_eq!(goal["status"], status);
+        assert_eq!(goal["actions"]["edit"], true);
+    }
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let mut session = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    assert_eq!(
+        session.runtime_info().await.unwrap().extra.unwrap()["goal"]["objective"],
+        "pause"
+    );
+    let mut prompt = provider_core::protocol::prompt::AgentPrompt::text("/goal clear");
+    prompt.client_message_id = Some("goal-clear".to_owned());
+    session.out_of_band(&prompt).await.unwrap();
+    assert!(session.runtime_info().await.unwrap().extra.unwrap()["goal"].is_null());
+    session.close().await.unwrap();
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|request| request["method"] == "turn/start")
+            .count(),
+        0
+    );
+}

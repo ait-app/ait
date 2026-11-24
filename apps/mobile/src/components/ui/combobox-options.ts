@@ -10,13 +10,14 @@ export interface ComboboxOptionModel {
   id: string;
   label: string;
   description?: string;
+  searchTerms?: readonly string[];
   kind?: ComboboxOptionKind;
 }
 
 const DESCRIPTION_FALLBACK_TIER = 99;
 
 function scoreOption(opt: ComboboxOptionModel, search: string): MatchScore | null {
-  const best = scoreTextFields(search, [opt.label, opt.id]);
+  const best = scoreTextFields(search, [opt.label, opt.id, ...(opt.searchTerms ?? [])]);
   if (best) return best;
   if (!opt.description) return null;
   const descriptionScore = scoreTextFields(search, [opt.description]);

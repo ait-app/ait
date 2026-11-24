@@ -290,6 +290,13 @@ pub(super) fn launches(calls: &[Value]) -> Vec<Vec<String>> {
         .iter()
         .filter_map(|call| serde_json::from_value(call.get("args")?.clone()).ok())
         .filter(|args: &Vec<String>| args.first().is_some_and(|arg| arg == "--mode"))
+        // Private overlay paths are volatile; their contents are verified from raw calls.
+        .map(|mut args| {
+            if let Some(index) = args.iter().position(|arg| arg == "--config") {
+                args.drain(index..index + 2);
+            }
+            args
+        })
         .collect()
 }
 

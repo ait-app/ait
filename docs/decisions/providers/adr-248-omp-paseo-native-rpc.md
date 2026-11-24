@@ -21,6 +21,7 @@ paths:
 # ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC
 
 - 后续修订：[ADR-302](adr-302-omp-command-ownership.md) 的会话级命令归属。
+- 后续修订：[ADR-303](adr-303-native-goal-composer-track.md) 的 Goal 带外操作与 RPC 驱动。
 
 - 状态说明：Accepted，取代 [ADR-190](adr-190-omp-acp-settlement.md)。
 - 修订：[ADR-180](adr-180-omp-native-rpc-provider.md) 的启动、传输、取消、特性、用量与诊断；

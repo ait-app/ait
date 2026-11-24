@@ -63,6 +63,11 @@ flowchart LR
   同步更新会话已选模型快照，确保切回原预设默认模型时仍触发切换；会话仍用 `rpc-ui`
   （[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)，已由
   [ADR-286](../decisions/providers/adr-286-provider-preset-fallbacks-and-picker-priority.md) 修订）。
+- 显式分配 advisor 模型时，同一会话 overlay 同时设置 `advisor.enabled: true`；显式 `unset`
+  同时关闭 advisor，`native` 不覆盖原生开关。仅保存预设不改变开关，应用预设或角色选择才生效，
+  不改写全局或项目设置；活动轮次沿用当前配置，下一轮按已有重启路径应用。原生目录确认支持开关且
+  advisor 模型可解析时，在功能菜单暴露独立的 `advisorEnabled` 开关；手动关闭覆盖自动启用，清空模型
+  始终关闭，未分配可用模型时不能单独启用。
 
 ## 会话与恢复
 

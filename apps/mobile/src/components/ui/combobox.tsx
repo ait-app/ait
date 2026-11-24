@@ -245,7 +245,10 @@ export function ComboboxItem({
     >
       {leadingContent}
       <View style={itemContentStyle}>
-        <Text numberOfLines={1} style={styles.comboboxItemLabel}>
+        <Text
+          numberOfLines={1}
+          style={[styles.comboboxItemLabel, description && styles.labelWithDescription]}
+        >
           {label}
         </Text>
         {description ? (
@@ -1342,6 +1345,10 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
     flexShrink: 0,
+  },
+  labelWithDescription: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   comboboxItemDescription: {
     fontSize: theme.fontSize.sm,

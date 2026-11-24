@@ -86,3 +86,17 @@ describe("filterAndRankComboboxOptions", () => {
     expect(result.map((o) => o.id)).toEqual(["gpt-5.4"]);
   });
 });
+
+it("matches localized names, native commands and aliases without displaying aliases", () => {
+  const options = [
+    {
+      id: "command:compact",
+      label: "压缩上下文",
+      description: "/compact",
+      searchTerms: ["/compress"],
+    },
+  ];
+  for (const query of ["压缩", "/compact", "/compress"]) {
+    expect(filterAndRankComboboxOptions(options, query)).toEqual(options);
+  }
+});

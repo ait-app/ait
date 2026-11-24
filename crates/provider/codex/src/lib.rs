@@ -954,6 +954,19 @@ impl AgentSession for CodexSession {
     }
 
     async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        if self.client.goals() && self.active_turn.is_none() && !self.history {
+            let response = self
+                .transport
+                .as_mut()
+                .ok_or(AgentSessionError::Failed)?
+                .request("thread/goal/get", json!({"threadId":self.id}))
+                .await;
+            if let Ok(response) = response
+                && let Some(goal) = response.get("goal")
+            {
+                self.observe_goal(goal);
+            }
+        }
         Ok(self.info.clone())
     }
 

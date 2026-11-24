@@ -119,6 +119,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-303：原生 Goal 状态投影到共享胶囊轨道](providers/adr-303-native-goal-composer-track.md)
 - [ADR-302：OMP 命令归属由活动会话裁决](providers/adr-302-omp-command-ownership.md)
 - [ADR-301：模型预设与普通模型的选择身份](providers/adr-301-preset-selection-identity.md)
 - [ADR-300：由父会话控制原生子 Agent](providers/adr-300-parent-owned-subagent-controls.md)（提议中）
@@ -134,7 +135,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-273：Provider crate 家族收拢到 `crates/provider/`](providers/adr-273-provider-crate-directory.md)
 - [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)（经 [ADR-273](providers/adr-273-provider-crate-directory.md)、[ADR-299](providers/adr-299-runtime-reads-adapter-capabilities.md) 修订）
 - [ADR-249：OMP 适配器独立为 `provider-omp` crate](providers/adr-249-omp-adapter-crate.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
-- [ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC](providers/adr-248-omp-paseo-native-rpc.md)（经 [ADR-302](providers/adr-302-omp-command-ownership.md) 修订）
+- [ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC](providers/adr-248-omp-paseo-native-rpc.md)（经 [ADR-302](providers/adr-302-omp-command-ownership.md)、[ADR-303](providers/adr-303-native-goal-composer-track.md) 修订）
 - [ADR-246：按 Host 记录的 Harness 用量账本](providers/adr-246-harness-usage-ledger.md)
 - [ADR-240：DSH 非活动历史只读浏览与固定截面预览](providers/adr-240-dsh-inactive-history-preview.md)（提议中）
 - [ADR-239：已保存 Timeline 导出与一次性客户端下载](providers/adr-239-persisted-timeline-export-downloads.md)（提议中）

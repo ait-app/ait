@@ -2,49 +2,62 @@ import { defineConfig } from "vitest/config";
 import { playwright } from "@vitest/browser-playwright";
 import path from "node:path";
 import { transformSync } from "@babel/core";
+import type { Plugin } from "vite";
 import base from "./vitest.config";
 
 const appRoot = __dirname;
 const appSource = path.resolve(appRoot, "src");
 const unistylesRoot = path.resolve(appRoot, "../../node_modules/react-native-unistyles");
 
+export function productionUnistylesPlugin(includeThemeModules = false): Plugin {
+  return {
+    name: "btw-production-unistyles",
+    enforce: "pre",
+    transform(code, id) {
+      const file = id.split("?")[0];
+      // Shared theme styles also live in .ts modules, including composer/pill-styles.ts.
+      // Production Unistyles also rewrites Reanimated's native component imports.
+      const animatedComponent = /react-native-reanimated\/(?:src|lib\/module)\/component\//u.test(
+        file,
+      );
+      const appComponentOrStyles =
+        file.startsWith(appSource) &&
+        (file.endsWith(".tsx") ||
+          (file.endsWith(".ts") && code.includes("react-native-unistyles")));
+      if (includeThemeModules) {
+        if ((!appComponentOrStyles && !animatedComponent) || !/\.[jt]sx?$/u.test(file)) return null;
+      } else if (!file.startsWith(appSource) || !file.endsWith(".tsx")) return null;
+      // Unistyles skips its Babel visitor under NODE_ENV=test. Enable only this
+      // synchronous production rewrite, then restore the test runner's environment.
+      const previousEnvironment = process.env.NODE_ENV;
+      Reflect.set(process.env, "NODE_ENV", "development");
+      try {
+        return (
+          transformSync(code, {
+            filename: file,
+            cwd: appRoot,
+            root: appRoot,
+            configFile: false,
+            babelrc: false,
+            presets: [
+              "@babel/preset-typescript",
+              ["@babel/preset-react", { runtime: "automatic" }],
+            ],
+            plugins: [["react-native-unistyles/plugin", { root: "src" }]],
+          })?.code ?? null
+        );
+      } finally {
+        if (previousEnvironment === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
+        else Reflect.set(process.env, "NODE_ENV", previousEnvironment);
+      }
+    },
+  };
+}
+
 // Keep this regression independent of unrelated native route dependencies.
 export default defineConfig({
   ...base,
-  plugins: [
-    ...(base.plugins ?? []),
-    {
-      name: "btw-production-unistyles",
-      enforce: "pre",
-      transform(code, id) {
-        const file = id.split("?")[0];
-        if (!file.startsWith(appSource) || !file.endsWith(".tsx")) return null;
-        // Unistyles skips its Babel visitor under NODE_ENV=test. Enable only this
-        // synchronous production rewrite, then restore the test runner's environment.
-        const previousEnvironment = process.env.NODE_ENV;
-        Reflect.set(process.env, "NODE_ENV", "development");
-        try {
-          return (
-            transformSync(code, {
-              filename: file,
-              cwd: appRoot,
-              root: appRoot,
-              configFile: false,
-              babelrc: false,
-              presets: [
-                "@babel/preset-typescript",
-                ["@babel/preset-react", { runtime: "automatic" }],
-              ],
-              plugins: [["react-native-unistyles/plugin", { root: "src" }]],
-            })?.code ?? null
-          );
-        } finally {
-          if (previousEnvironment === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
-          else Reflect.set(process.env, "NODE_ENV", previousEnvironment);
-        }
-      },
-    },
-  ],
+  plugins: [...(base.plugins ?? []), productionUnistylesPlugin()],
   resolve: {
     ...base.resolve,
     alias: [

@@ -1,6 +1,7 @@
 import { WorkspaceDiffStatPill } from "@/composer/diff-stat-pill";
 import { AgentTaskList } from "@/composer/task-list";
 import { ComposerTrackBar } from "@/composer/tracks";
+import { AgentGoalTrack, useAgentGoal } from "@/composer/goal";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSettings } from "@/hooks/use-settings";
@@ -29,6 +30,7 @@ import { useSubagentOpensInSheet } from "@/subagents";
  */
 export const AgentTracks = memo(function AgentTracks({
   serverId,
+  agentId,
   workspaceId,
   cwd,
   subagentRows,
@@ -46,6 +48,7 @@ export const AgentTracks = memo(function AgentTracks({
   onArchiveFinished: () => void;
 }): ReactElement | null {
   const { tabId } = usePaneContext();
+  const goal = useAgentGoal(serverId, agentId);
   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
   const isCompact = useIsCompactFormFactor();
   const openInSidePane = useSettings((settings) => settings.openInSidePane);
@@ -105,6 +108,7 @@ export const AgentTracks = memo(function AgentTracks({
       subagentRows,
       tasks,
       archiveFinishedStatus,
+      hasGoal: goal !== null,
     })
   ) {
     return null;
@@ -130,18 +134,26 @@ export const AgentTracks = memo(function AgentTracks({
         workspaceId={workspaceId}
         onPress={handleOpenChanges}
       />
+      <AgentGoalTrack serverId={serverId} agentId={agentId} goal={goal} />
     </ComposerTrackBar>
   );
 });
 
 export function hasAgentTracks({
+  hasGoal = false,
   subagentRows,
   tasks,
   archiveFinishedStatus,
 }: {
+  hasGoal?: boolean;
   subagentRows: readonly SubagentRow[];
   tasks: readonly TodoEntry[] | undefined;
   archiveFinishedStatus: ArchiveFinishedStatus;
 }): boolean {
-  return subagentRows.length > 0 || Boolean(tasks?.length) || archiveFinishedStatus.kind !== "idle";
+  return (
+    hasGoal ||
+    subagentRows.length > 0 ||
+    Boolean(tasks?.length) ||
+    archiveFinishedStatus.kind !== "idle"
+  );
 }

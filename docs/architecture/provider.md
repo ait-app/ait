@@ -4,7 +4,21 @@
 供修改 Provider 代码前核对。每条规则只陈述现状；决策背景、被修订的旧规则和验证记录见所引 ADR。
 组件总览见[当前架构](README.md)。
 
+## 原生 Goal
+
+当前目标通过 `runtimeInfo.extra.goal` 的规范快照投影，`null` 确认清除，缺省不承诺支持。
+客户端在变更统计旁复用 composer track 胶囊和卡片，展示目标、状态、已知预算及用量，
+只提供快照声明的操作；操作不覆盖输入草稿，状态以原生确认为准。
+Codex 支持读取、编辑、暂停、恢复、清除；OMP 复用原生 RPC Goal 控制器提供读取、创建、
+暂停、恢复、移除，并在会话私有配置中启用 RPC 自动续跑；当前原生接口不支持编辑已有目标。
+其他 adapter 提供同一能力后复用卡片，无需客户端白名单
+（[ADR-303](../decisions/providers/adr-303-native-goal-composer-track.md)）。
+
 ## 模型预设
+
+Composer 的“功能”入口使用与模式选择相同的搜索下拉菜单，收纳当前 Provider 的功能开关和可用操作。
+模型角色与备选链只在模型设置中配置，不作为功能菜单条目。菜单复用斜杠命令目录的支持、来源和归属过滤，
+操作项先填入输入框并保留草稿，提交时沿用原有路由；打开菜单不执行命令。
 
 - `domain::preset` 定义内容与存储限额，`provider-core::ports::preset` 定义存储能力、来源与错误；
   `AgentClient::preset_backend` 无 I/O 声明存储归属，运行时 `PresetService` 经 daemon 注入的配置端口管理

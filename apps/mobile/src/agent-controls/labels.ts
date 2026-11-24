@@ -38,6 +38,9 @@ const THINKING_LABEL_KEYS = new Map([
 ]);
 
 const FEATURE_LABEL_KEYS = new Map([
+  ["advisorEnabled", "agentControls.commands.advisor"],
+  ["plan_mode", "schedules.modeLabels.planMode"],
+  ["fast_mode", "agentControls.features.fastMode"],
   ["autoCompaction", "agentControls.features.autoCompaction"],
   ["autoRetry", "agentControls.features.autoRetry"],
   ["fastMode", "agentControls.features.fastMode"],

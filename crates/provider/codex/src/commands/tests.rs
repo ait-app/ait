@@ -17,3 +17,11 @@ fn command_parsing_never_interprets_unrelated_text_as_a_native_mutation() {
     );
     assert!(goal("thread", "").0.is_none());
 }
+
+#[test]
+fn goal_edits_are_explicit_and_do_not_resume_a_paused_goal() {
+    assert!(goal("thread", "set").0.is_none());
+    let (_, params, _) = goal("thread", "set pause");
+    assert_eq!(params["objective"], "pause");
+    assert!(params.get("status").is_none());
+}

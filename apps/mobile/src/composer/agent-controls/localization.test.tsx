@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React, { type ComponentProps, type ReactNode } from "react";
-import { act, cleanup, render, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n/i18next";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
@@ -15,7 +15,25 @@ vi.mock("./model-sheet", () => ({
   CompactModelSheet: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock("@/components/combined-model-selector", () => ({ CombinedModelSelector: () => null }));
-vi.mock("@/components/ui/combobox", () => ({ Combobox: () => null, ComboboxItem: () => null }));
+vi.mock("@/components/ui/combobox", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/combobox")>();
+  return {
+    ...actual,
+    Combobox: (props: ComponentProps<typeof actual.Combobox>) =>
+      props.open ? (
+        <>
+          {props.options.map((option) =>
+            props.renderOption?.({
+              option,
+              selected: false,
+              active: false,
+              onPress: () => props.onSelect(option.id),
+            }),
+          )}
+        </>
+      ) : null,
+  };
+});
 vi.mock("@/hooks/use-shortcut-keys", () => ({ useShortcutKeys: () => [] }));
 vi.mock("@/hooks/use-keyboard-action-handler", () => ({
   useKeyboardActionHandler: () => undefined,
@@ -86,11 +104,10 @@ describe("OMP model settings presentation", () => {
     };
     const view = render(<DraftAgentControls {...props} />);
     const thinking = view.getByTestId("agent-controls-thinking");
-    const role = view.getByTestId("agent-feature-modelRole.worker");
     expect(thinking.getAttribute("aria-disabled")).toBe("true");
-    expect(role.getAttribute("aria-disabled")).toBe("true");
+    expect(view.queryByTestId("agent-feature-modelRole.worker")).toBeNull();
     expect(thinking.getAttribute("aria-label")).toContain("请在预设管理中修改此预设");
-    expect(role.getAttribute("aria-label")).toContain("请在预设管理中修改此预设");
+    fireEvent.click(view.getByTestId("agent-controls-features"));
     expect(view.getByTestId("agent-feature-autoRetry").getAttribute("aria-disabled")).not.toBe(
       "true",
     );
@@ -128,6 +145,7 @@ describe("OMP model settings presentation", () => {
       onSetFeature: vi.fn(),
     };
     const view = render(<DraftAgentControls {...props} />);
+    fireEvent.click(view.getByTestId("agent-controls-features"));
     for (const [id, label, icon] of [
       ["autoCompaction", "自动压缩上下文", "compaction"],
       ["autoRetry", "自动重试", "retry"],

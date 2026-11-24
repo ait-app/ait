@@ -354,7 +354,7 @@ async fn a_native_snapshot_applies_through_the_existing_private_overlay() {
             .unwrap();
     assert_eq!(
         value,
-        json!({"modelRoles":{"task":null},"retry":{"fallbackChains":{"default":["other/model:auto"]}}})
+        json!({"modelRoles":{"task":null},"retry":{"fallbackChains":{"default":["other/model:auto"]}},"goal":{"continuationModes":["rpc"]}})
     );
     session.close().await.unwrap();
 }

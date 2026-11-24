@@ -143,6 +143,8 @@ const MAX_ALIASES: usize = 4096;
 /// A built-in command Ait runs out of band.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Builtin {
+    /// `/goal` uses the native RPC Goal controller, without an inference prompt.
+    Goal,
     /// `/compact [instructions]`.
     Compact,
     /// `/autocompact [on|off|toggle]`.
@@ -181,6 +183,7 @@ pub(super) fn split(text: &str) -> Option<(&str, &str)> {
 pub(super) fn builtin(text: &str) -> Option<(Builtin, &str)> {
     let (name, args) = split(text)?;
     let command = match name.to_ascii_lowercase().as_str() {
+        "goal" => Builtin::Goal,
         "compact" => Builtin::Compact,
         "autocompact" => Builtin::AutoCompact,
         "handoff" => Builtin::Handoff,

@@ -139,6 +139,7 @@ export const Code = StubIcon;
 
 export const Maximize2 = StubIcon;
 export const Minimize2 = StubIcon;
+export const RotateCcw = StubIcon;
 export const Turtle = StubIcon;
 export const Hammer = StubIcon;
 export const ListTodo = StubIcon;

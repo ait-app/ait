@@ -36,6 +36,7 @@ export function ComposerInputPresentation({
   inputWrapperStyle,
   inputPointerEvents,
   attachmentSlot,
+  inputHint,
   showFullscreenButton,
   onEnter,
   overlay,
@@ -50,6 +51,7 @@ export function ComposerInputPresentation({
   inputWrapperStyle: ViewProps["style"];
   inputPointerEvents: ViewProps["pointerEvents"];
   attachmentSlot: ReactNode;
+  inputHint?: ReactNode;
   showFullscreenButton: boolean;
   onEnter: () => void;
   overlay: ReactNode;
@@ -99,6 +101,7 @@ export function ComposerInputPresentation({
       ) : null}
       <ComposerFullscreenBody fullscreen={fullscreen}>
         <View
+          testID="composer-input-surface"
           style={fullscreen ? styles.fullscreenInputWrapper : inputWrapperStyle}
           pointerEvents={inputPointerEvents}
         >
@@ -120,6 +123,7 @@ export function ComposerInputPresentation({
               </Button>
             ) : null}
           </View>
+          {inputHint}
           {fullscreen ? null : toolbar}
         </View>
       </ComposerFullscreenBody>

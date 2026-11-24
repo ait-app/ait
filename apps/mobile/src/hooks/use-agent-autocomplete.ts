@@ -62,9 +62,9 @@ interface AgentAutocompleteInputSnapshot {
   selection: { start: number; end: number };
 }
 
-type AgentAutocompleteOption =
+export type AgentAutocompleteOption =
   | (AutocompleteOption & { type: "client_command"; command: ClientSlashCommand })
-  | (AutocompleteOption & { type: "provider_command" })
+  | (AutocompleteOption & { type: "provider_command"; command: AgentSlashCommand })
   | (AutocompleteOption & {
       type: "workspace_entry";
       entryPath: string;
@@ -73,7 +73,7 @@ type AgentAutocompleteOption =
 
 interface AgentAutocompleteResult {
   isVisible: boolean;
-  options: AutocompleteOption[];
+  options: AgentAutocompleteOption[];
   selectedIndex: number;
   isLoading: boolean;
   errorMessage?: string;
@@ -199,6 +199,7 @@ function mapCommandToOption(
   return {
     ...base,
     type: "provider_command",
+    command: entry.command,
   };
 }
 
@@ -226,6 +227,7 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
   if (input.mode === "command") {
     const sideCommand: AgentSlashCommand = {
       name: "btw",
+      source: "ait",
       description: input.t("btw.commandDescription"),
       argumentHint: "[question]",
     };

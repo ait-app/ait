@@ -25,6 +25,8 @@ pub(super) const FALLBACK_PREFIX: &str = "modelFallback.";
 pub(super) const INHERIT: &str = "native";
 /// Stored value meaning "explicitly unassigned" (overlay writes null for the role).
 pub(super) const UNSET: &str = "unset";
+/// Session-only advisor switch; the model remains a separate role assignment.
+pub(super) const ADVISOR_ENABLED: &str = "advisorEnabled";
 
 const MAX_ROLES: usize = 128;
 const MAX_MODELS: usize = 8192;
@@ -87,6 +89,7 @@ pub(super) struct Catalog {
     inherited_fallbacks: BTreeMap<String, Vec<String>>,
     models: Vec<Model>,
     providers: BTreeSet<String>,
+    advisor_enabled: Option<bool>,
 }
 
 impl Catalog {
@@ -113,6 +116,7 @@ impl Catalog {
         })?;
         catalog.inherited_fallbacks =
             parse_inherited_fallbacks(&settings["retry.fallbackChains"]["value"]);
+        catalog.advisor_enabled = settings["advisor.enabled"]["value"].as_bool();
         // Include custom roles referenced by native presets or fallback chains so an applied
         // snapshot uses the same validation and overlay.
         let preset_roles = settings["modelPresets"]["value"]
@@ -221,6 +225,7 @@ impl Catalog {
             inherited_fallbacks: BTreeMap::new(),
             models: parsed_models,
             providers,
+            advisor_enabled: None,
         })
     }
 
@@ -238,6 +243,9 @@ impl Catalog {
     /// Validate explicit role assignments and fallback chains against this profile's real role
     /// and model pools. Inherited entries remain native; invalid models or kinds reject.
     pub(super) fn validate(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        if advisor_override(config) == Some(true) && !self.advisor_configured(config) {
+            return Err(AgentSessionError::Rejected);
+        }
         for (key, value) in config.feature_values.iter().flatten() {
             if let Some(role) = key.strip_prefix(PREFIX) {
                 let value = value.as_str().ok_or(AgentSessionError::Rejected)?;
@@ -341,7 +349,34 @@ impl Catalog {
             };
             !self.roles.iter().any(|role| role.id == id)
         }));
+        if let Some(native_enabled) = self.advisor_enabled
+            && self.advisor_configured(config)
+        {
+            features.push(json!({
+                "id": ADVISOR_ENABLED, "type": "toggle", "label": "Advisor", "icon": "bot",
+                "value": advisor_override(config).unwrap_or(native_enabled)
+            }));
+        }
         features
+    }
+
+    /// Whether the selected advisor role resolves to a usable chat model.
+    fn advisor_configured(&self, config: &StoredAgentConfig) -> bool {
+        let selection = config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get("modelRole.advisor"))
+            .and_then(Value::as_str);
+        let selector = match selection {
+            Some(UNSET) => return false,
+            None | Some(INHERIT) => self.resolve_alias("advisor"),
+            Some(selector) => Some(selector.to_owned()),
+        };
+        selector.is_some_and(|selector| {
+            self.models
+                .iter()
+                .any(|model| selected(model, &selector) && accepts("advisor", model))
+        })
     }
 
     /// Append role controls without altering the current conversation's model catalog.
@@ -554,14 +589,31 @@ pub(super) fn fallback_overrides(config: &StoredAgentConfig) -> BTreeMap<String,
         .collect()
 }
 
-/// Whether `config` carries any explicit role or fallback overlay entry.
+/// Whether `config` carries an explicit role, fallback chain or advisor switch overlay.
 pub(super) fn has_overrides(config: &StoredAgentConfig) -> bool {
-    !overrides(config).is_empty() || !fallback_overrides(config).is_empty()
+    !overrides(config).is_empty()
+        || !fallback_overrides(config).is_empty()
+        || advisor_override(config).is_some()
 }
 
-/// Whether two selections produce the same native role and fallback overlay.
+/// Whether two selections produce the same native role, fallback and advisor overlay.
 pub(super) fn same_overlay(left: &StoredAgentConfig, right: &StoredAgentConfig) -> bool {
-    overrides(left) == overrides(right) && fallback_overrides(left) == fallback_overrides(right)
+    overrides(left) == overrides(right)
+        && fallback_overrides(left) == fallback_overrides(right)
+        && advisor_override(left) == advisor_override(right)
+}
+
+/// Explicit clearing disables advisor; otherwise a user switch overrides automatic role activation.
+fn advisor_override(config: &StoredAgentConfig) -> Option<bool> {
+    let values = config.feature_values.as_ref()?;
+    let role = values.get("modelRole.advisor").and_then(Value::as_str);
+    if role == Some(UNSET) {
+        return Some(false);
+    }
+    values
+        .get(ADVISOR_ENABLED)
+        .and_then(Value::as_bool)
+        .or_else(|| role.filter(|selector| *selector != INHERIT).map(|_| true))
 }
 
 /// Render persisted overrides before the native owner or catalog is available.
@@ -595,17 +647,29 @@ pub(super) fn stored_features(config: &StoredAgentConfig) -> Vec<Value> {
         .collect()
 }
 
-/// Materialize a private native `--config` overlay; no file is created when everything inherits.
+/// Materialize a private native `--config` overlay, including the optional RPC Goal driver.
+/// Without that driver, inherited roles, fallbacks and advisor settings need no file.
 /// Returns filesystem/serialization failures without editing global or project configuration.
 pub(super) async fn overlay(
     config: &StoredAgentConfig,
+    rpc_goals: bool,
 ) -> Result<Option<tempfile::NamedTempFile>, AgentSessionError> {
     let assignments = overrides(config);
     let fallbacks = fallback_overrides(config);
-    if assignments.is_empty() && fallbacks.is_empty() {
+    let advisor = advisor_override(config);
+    if assignments.is_empty() && fallbacks.is_empty() && advisor.is_none() && !rpc_goals {
         return Ok(None);
     }
     let mut overlay = serde_json::Map::new();
+    if rpc_goals {
+        // OMP defaults to TUI-only continuation. Opt this RPC session into its native driver.
+        overlay.insert("goal".to_owned(), json!({"continuationModes":["rpc"]}));
+    }
+    // OMP separates the advisor model from its switch. An explicit role selection must
+    // activate it (or disable it when cleared), without changing native user settings.
+    if let Some(enabled) = advisor {
+        overlay.insert("advisor".to_owned(), json!({ "enabled": enabled }));
+    }
     if !assignments.is_empty() {
         let mapped: BTreeMap<_, _> = assignments
             .into_iter()

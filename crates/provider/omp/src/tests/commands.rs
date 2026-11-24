@@ -389,3 +389,41 @@ async fn model_changes_publish_omps_runtime_facts() {
     assert_eq!(info.mode_id.as_deref(), Some("full"));
     session.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn goal_commands_use_native_rpc_and_publish_current_state_without_inference() {
+    let (root, client, spec) = fixture_with(&[("OMP_FIXTURE_GOAL", "1")]);
+    let mut session = client.create_session(&spec).await.unwrap();
+    while session.command_catalog().is_none() {
+        next(session.as_mut()).await.unwrap();
+    }
+    for (text, expected) in [
+        ("/goal Ship feature", "active"),
+        ("/goal pause", "paused"),
+        ("/goal resume", "active"),
+        ("/goal clear", "clear"),
+    ] {
+        session.out_of_band(&AgentPrompt::text(text)).await.unwrap();
+        loop {
+            if let AgentTurnEvent::RuntimeInfo(info) = next(session.as_mut()).await.unwrap() {
+                let goal = &info.extra.unwrap()["goal"];
+                if expected == "clear" {
+                    if !goal.is_null() {
+                        continue;
+                    }
+                } else {
+                    if goal["status"] != expected {
+                        continue;
+                    }
+                    assert_eq!(goal["status"], expected);
+                    assert_eq!(goal["actions"]["edit"], false);
+                }
+                break;
+            }
+        }
+    }
+    session.close().await.unwrap();
+    let calls = calls_after(root.path(), 0);
+    assert_eq!(count(&calls, "goal"), 4);
+    assert_eq!(count(&calls, "prompt"), 0);
+}

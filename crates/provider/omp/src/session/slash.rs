@@ -20,6 +20,8 @@ const AUTOCOMPACT_UNKNOWN: &str =
 /// A built-in command awaiting OMP's answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Pending {
+    /// A native Goal controller request.
+    Goal,
     /// `/compact`, with the compaction id its rows share.
     Compact(String),
     /// `/autocompact toggle` reading OMP's current `autoCompactionEnabled`.
@@ -70,6 +72,17 @@ impl Session {
             Builtin::FollowUp => return self.queue_message(prompt, args, "followUp").await,
             _ if !prompt.images.is_empty() || !prompt.attachments.is_empty() => {
                 return Err(AgentSessionError::Rejected);
+            }
+            Builtin::Goal => {
+                let supported = self.commands.catalog().is_some_and(|entries| {
+                    entries
+                        .iter()
+                        .any(|entry| entry["name"] == "goal" && entry["source"] == "builtin")
+                });
+                if !supported {
+                    return Err(AgentSessionError::Rejected);
+                }
+                ("goal", goal_arguments(args)?, Some(Pending::Goal))
             }
             // Paseo refuses a second compaction while one runs.
             Builtin::Compact if self.compacting() => return Err(AgentSessionError::Rejected),
@@ -143,6 +156,12 @@ impl Session {
     pub(super) fn command_answered(&mut self, pending: Pending, event: &Value) {
         let success = event["success"] == true;
         match pending {
+            Pending::Goal if success => {
+                if let Some(goal) = event["data"].get("goal") {
+                    self.observe_goal(goal);
+                }
+            }
+            Pending::Goal => self.command_failed("goal", "Goal operation failed", &event["error"]),
             Pending::Compact(id) => {
                 self.stream
                     .end_manual_compaction(&id, success.then_some(&event["data"]));
@@ -228,3 +247,26 @@ fn instructions(args: &str) -> Value {
         json!({"customInstructions":args})
     }
 }
+
+/// Map only the public Goal operations; editing an existing objective stays native-owned.
+fn goal_arguments(args: &str) -> Result<Value, AgentSessionError> {
+    let fields = match args {
+        "" | "show" => json!({"op":"get"}),
+        "pause" => json!({"op":"pause"}),
+        "resume" => json!({"op":"resume"}),
+        "clear" | "drop" => json!({"op":"drop"}),
+        "set" | "budget" => return Err(AgentSessionError::Rejected),
+        text if text.starts_with("budget ") => return Err(AgentSessionError::Rejected),
+        text => {
+            let objective = text.strip_prefix("set ").unwrap_or(text).trim();
+            if objective.is_empty() {
+                return Err(AgentSessionError::Rejected);
+            }
+            json!({"op":"create","objective":objective})
+        }
+    };
+    Ok(fields)
+}
+
+#[cfg(test)]
+mod tests;

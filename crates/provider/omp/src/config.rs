@@ -77,7 +77,10 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             if super::roles::is_fallback_key(key) {
                 return !super::roles::valid_fallback(key, value);
             }
-            (key != FAST_MODE && !LEGACY_FEATURES.contains(&key.as_str())) || !value.is_boolean()
+            (key != FAST_MODE
+                && key != super::roles::ADVISOR_ENABLED
+                && !LEGACY_FEATURES.contains(&key.as_str()))
+                || !value.is_boolean()
         })
     {
         return Err(AgentSessionError::Rejected);
@@ -268,8 +271,8 @@ pub(super) struct Launch<'a> {
     pub(super) resume_model: Option<&'a str>,
     /// Fast selection restored once OMP is ready.
     pub(super) fast: Option<bool>,
-    /// Private AIT-owned overlay file OMP reads through `--config`; absent when every role
-    /// inherits the layered native setting.
+    /// Private AIT-owned overlay file OMP reads through `--config` for role overrides
+    /// and the RPC Goal driver. Native role settings still apply to omitted entries.
     pub(super) overlay: Option<&'a str>,
 }
 

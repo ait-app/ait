@@ -68,6 +68,7 @@ impl Peer {
             "get_session_stats" => self.response(command, self.session_stats()),
             "compact" => self.compact(command),
             "handoff" => self.handoff(command),
+            "goal" if env_set("OMP_FIXTURE_GOAL") => self.goal(command),
             "set_auto_retry" | "set_ask_dialog" | "set_subagent_subscription" => {
                 self.response(command, Value::Null);
             }
@@ -77,6 +78,9 @@ impl Peer {
                 let mut commands =
                     vec![json!({"name": "review", "description": "Review", "source": "skill"})];
                 commands.extend(self.read_plugins());
+                if env_set("OMP_FIXTURE_GOAL") {
+                    commands.push(json!({"name":"goal","source":"builtin","description":"Goal"}));
+                }
                 self.response(command, json!({"commands": commands}));
             }
             "interactive_control" => {
@@ -142,7 +146,40 @@ impl Peer {
             state["fastModeEnabled"] = json!(self.fast_enabled);
             state["fastModeActive"] = json!(self.fast_active());
         }
+        if env_set("OMP_FIXTURE_GOAL") {
+            let path = self.root.join("goal.json");
+            state["goal"] = if path.exists() {
+                super::read_json(&path)
+            } else {
+                Value::Null
+            };
+        }
         self.response(command, state);
+    }
+
+    fn goal(&mut self, command: &Value) {
+        let path = self.root.join("goal.json");
+        let mut goal = if path.exists() {
+            super::read_json(&path)
+        } else {
+            Value::Null
+        };
+        match command["op"].as_str().expect("goal operation") {
+            "get" => {}
+            "create" if goal.is_null() => {
+                goal = json!({"objective":command["objective"],"status":"active","tokensUsed":0});
+            }
+            "pause" if !goal.is_null() => goal["status"] = json!("paused"),
+            "resume" if !goal.is_null() => goal["status"] = json!("active"),
+            "drop" => goal = Value::Null,
+            _ => {
+                self.reject(command, "Goal operation rejected");
+                return;
+            }
+        }
+        fs::write(path, goal.to_string()).expect("persist fixture goal");
+        self.emit(&json!({"type":"goal_updated","goal":goal}));
+        self.response(command, json!({"goal":goal}));
     }
 
     fn new_context(&mut self, command: &Value) {

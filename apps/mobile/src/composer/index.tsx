@@ -109,6 +109,8 @@ import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useAgentAutocomplete } from "@/hooks/use-agent-autocomplete";
+import { ComposerFeatureCommandsProvider } from "@/composer/agent-controls/features-menu";
+import { featureCommandDraft } from "@/composer/agent-controls/feature-command-draft";
 import { fetchAgentCommands, type DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { useFilePicker } from "@/hooks/use-file-picker";
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
@@ -2393,17 +2395,45 @@ function ComposerContentImpl({
     [attachments, setSelectedAttachments, setGithubSearchQuery, setIsGithubPickerOpen],
   );
 
+  const insertFeatureCommand = useCallback(
+    (command: string) => {
+      const current = readLiveDraftText(messageInputRef.current, textSource);
+      replaceUserInput(featureCommandDraft(current, command));
+      focusInput();
+    },
+    [focusInput, replaceUserInput, textSource],
+  );
+  const featureCommandContext = useMemo(
+    () => ({
+      serverId,
+      agentId,
+      draftConfig: commandDraftConfig,
+      setUserInput: insertFeatureCommand,
+    }),
+    [serverId, agentId, commandDraftConfig, insertFeatureCommand],
+  );
   const leftContent = useMemo(
-    () =>
-      renderLeftContent({
-        agentControls,
-        agentId,
-        serverId,
-        focusInput,
-        isCompactLayout,
-        showAgentControls: mode.showAgentControls,
-      }),
-    [agentControls, agentId, focusInput, isCompactLayout, mode.showAgentControls, serverId],
+    () => (
+      <ComposerFeatureCommandsProvider value={featureCommandContext}>
+        {renderLeftContent({
+          agentControls,
+          agentId,
+          serverId,
+          focusInput,
+          isCompactLayout,
+          showAgentControls: mode.showAgentControls,
+        })}
+      </ComposerFeatureCommandsProvider>
+    ),
+    [
+      agentControls,
+      agentId,
+      featureCommandContext,
+      focusInput,
+      isCompactLayout,
+      mode.showAgentControls,
+      serverId,
+    ],
   );
 
   const handleAttachButtonRef = useCallback((node: View | null) => {
@@ -2528,6 +2558,19 @@ function ComposerContentImpl({
         sendNowLabel: t("composer.attachments.sendQueuedMessageNow"),
       }),
     [handleEditQueuedMessage, handleSendQueuedNow, queuedMessages, t],
+  );
+
+  const commandHintContent = useMemo(
+    () =>
+      inputMode === "chat" && !readOnly ? (
+        <CommandArgumentHint
+          text={textSource}
+          serverId={serverId}
+          agentId={agentId}
+          draftConfig={commandDraftConfig}
+        />
+      ) : null,
+    [inputMode, readOnly, textSource, serverId, agentId, commandDraftConfig],
   );
 
   const autocompleteConfiguration = useMemo(
@@ -2696,20 +2739,13 @@ function ComposerContentImpl({
                   onHeightChange={onComposerHeightChange}
                   inputWrapperStyle={inputWrapperStyle}
                   attachmentSlot={attachmentTray}
+                  inputHint={commandHintContent}
                   inputMode={inputMode}
                   readOnly={readOnly}
                   textReplacement={textReplacement}
                   submitLabel={submitLabel}
                 />
               </RenderProfile>
-              {inputMode === "chat" && !readOnly ? (
-                <CommandArgumentHint
-                  text={textSource}
-                  serverId={serverId}
-                  agentId={agentId}
-                  draftConfig={commandDraftConfig}
-                />
-              ) : null}
               <Combobox
                 options={githubSearchOptions}
                 value=""

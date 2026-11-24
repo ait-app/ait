@@ -142,7 +142,7 @@ pub(super) struct Session {
     pending: BTreeMap<String, slash::Pending>,
     child_controls: child_controls::Controls,
     model: Model,
-    /// Private role overlay the running process reads; dropped with the process it belongs to.
+    /// Private config overlay the running process reads; dropped with its owning process.
     overlay: Option<tempfile::NamedTempFile>,
     /// Discovered at open; absent when native metadata could not be read, which only hides roles.
     catalog: Option<std::sync::Arc<roles::Catalog>>,
@@ -272,9 +272,9 @@ pub(super) async fn open(
     let session = path.filter(|_| persisted);
     // OMP refuses to start on a missing --model, so a resume keeps the session's model and
     // switches afterwards only to a listed one (D29).
-    // Explicit role assignments ride a private overlay read at startup; inherited roles add
-    // no file and the native layered settings apply unchanged.
-    let overlay = roles::overlay(&spec.config).await?;
+    // The private startup overlay enables the RPC Goal driver and carries explicit roles;
+    // omitted roles continue to inherit the native layered settings.
+    let overlay = roles::overlay(&spec.config, true).await?;
     let overlay_path = overlay
         .as_ref()
         .map(|file| file.path().to_str().ok_or(AgentSessionError::Failed))
@@ -427,8 +427,8 @@ impl Session {
         let path = config::text(&self.state, "sessionFile")?.to_owned();
         let persisted = std::path::Path::new(&path).is_file();
         // Materialized before launch so the new process can read it, and kept until that
-        // process is replaced; inherited roles create no file.
-        let overlay = roles::overlay(config).await?;
+        // process is replaced. Inherited roles remain omitted from the driver overlay.
+        let overlay = roles::overlay(config, true).await?;
         let overlay_path = overlay
             .as_ref()
             .map(|file| file.path().to_str().ok_or(AgentSessionError::Failed))
@@ -822,6 +822,11 @@ impl Session {
     }
 
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if event["type"] == "goal_updated"
+            && let Some(goal) = event.get("goal").or_else(|| event.pointer("/state/goal"))
+        {
+            self.observe_goal(goal);
+        }
         if event["type"] == "available_commands_update" {
             if self.commands.update(event) {
                 self.stream
@@ -1128,9 +1133,30 @@ impl Session {
         Ok(())
     }
 
+    /// Cache confirmed native Goal facts and publish their runtime projection.
+    fn observe_goal(&mut self, goal: &Value) {
+        if provider_native::goal::snapshot(goal, false).is_some() {
+            self.state["goal"] = goal.clone();
+            if let Ok(info) = self.runtime() {
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::RuntimeInfo(info));
+            }
+        }
+    }
+
     /// Runtime facts from the last native state, with the effective mode: none means Full.
     fn runtime(&self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
         let mut info = config::runtime(&self.state)?;
+        if let Some(goal) = self
+            .state
+            .get("goal")
+            .and_then(|native| provider_native::goal::snapshot(native, false))
+        {
+            info.extra
+                .get_or_insert_with(Default::default)
+                .insert("goal".to_owned(), goal);
+        }
         info.mode_id = Some(
             self.config
                 .mode_id

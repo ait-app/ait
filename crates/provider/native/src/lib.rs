@@ -12,6 +12,7 @@ pub mod compaction;
 pub mod configuration;
 pub mod diagnostics;
 pub mod elicitation;
+pub mod goal;
 pub mod images;
 pub mod json_lines;
 pub mod metadata_process;

@@ -148,7 +148,7 @@ async fn fallbacks_validate_selectors_and_materialize_retry_fallback_chains() {
         assert!(catalog.validate(&rejected).is_err(), "{invalid:?}");
     }
 
-    let file = overlay(&valid_fallbacks)
+    let file = overlay(&valid_fallbacks, false)
         .await
         .unwrap()
         .expect("fallback overlay");
@@ -197,7 +197,7 @@ fn same_overlay_compares_only_role_assignments() {
 async fn overlay_is_private_and_omits_inherited_roles() {
     let inherited = config_with(&[("modelRole.default", "native")]);
     assert!(
-        overlay(&inherited).await.unwrap().is_none(),
+        overlay(&inherited, false).await.unwrap().is_none(),
         "no file when all inherited"
     );
 
@@ -205,12 +205,109 @@ async fn overlay_is_private_and_omits_inherited_roles() {
         ("modelRole.task", "test/model:high"),
         ("modelRole.custom-role", "unset"),
     ]);
-    let file = overlay(&config).await.unwrap().expect("overlay file");
+    let file = overlay(&config, false)
+        .await
+        .unwrap()
+        .expect("overlay file");
     let bytes = std::fs::read(file.path()).unwrap();
     let value: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(value["modelRoles"]["task"], "test/model:high");
     assert!(value["modelRoles"]["custom-role"].is_null());
     assert!(value["modelRoles"].get("default").is_none());
+    assert!(value.get("advisor").is_none());
+}
+
+#[tokio::test]
+async fn explicit_advisor_role_controls_the_native_switch() {
+    for (selector, enabled, model) in [
+        ("test/model:high", true, json!("test/model:high")),
+        ("unset", false, Value::Null),
+    ] {
+        let config = config_with(&[("modelRole.advisor", selector)]);
+        let file = overlay(&config, false)
+            .await
+            .unwrap()
+            .expect("advisor overlay");
+        let value: Value = serde_json::from_slice(&std::fs::read(file.path()).unwrap()).unwrap();
+
+        assert_eq!(value["advisor"]["enabled"], enabled, "{selector}");
+        assert_eq!(value["modelRoles"]["advisor"], model, "{selector}");
+    }
+}
+
+#[tokio::test]
+async fn inherited_advisor_preserves_native_switch_with_other_overrides() {
+    let config = config_with(&[
+        ("modelRole.advisor", "native"),
+        ("modelRole.task", "test/model:high"),
+    ]);
+    let file = overlay(&config, false)
+        .await
+        .unwrap()
+        .expect("task overlay");
+    let value: Value = serde_json::from_slice(&std::fs::read(file.path()).unwrap()).unwrap();
+
+    assert_eq!(value, json!({"modelRoles":{"task":"test/model:high"}}));
+    assert!(
+        overlay(&config_with(&[("modelRole.advisor", "native")]), false)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn advisor_switch_overrides_automatic_activation_and_requires_a_model() {
+    let (roles, tags, cycle, models) = catalog_json();
+    let mut catalog = Catalog::parse(&roles, &tags, &cycle, &models).unwrap();
+    catalog.advisor_enabled = Some(false);
+    let mut config = config_with(&[("modelRole.advisor", "test/model:high")]);
+    assert!(catalog.validate(&config).is_ok());
+    let advisor = |config: &StoredAgentConfig| {
+        catalog
+            .features(config)
+            .into_iter()
+            .find(|feature| feature["id"] == ADVISOR_ENABLED)
+    };
+    assert_eq!(advisor(&config).unwrap()["value"], true);
+    let enabled = config.clone();
+    config
+        .feature_values
+        .as_mut()
+        .unwrap()
+        .insert(ADVISOR_ENABLED.to_owned(), json!(false));
+    assert_eq!(advisor(&config).unwrap()["value"], false);
+    assert!(!same_overlay(&enabled, &config));
+    let file = overlay(&config, false).await.unwrap().unwrap();
+    let value: Value = serde_json::from_slice(&std::fs::read(file.path()).unwrap()).unwrap();
+    assert_eq!(value["advisor"]["enabled"], false);
+    assert_eq!(value["modelRoles"]["advisor"], "test/model:high");
+
+    let switch_only = StoredAgentConfig {
+        feature_values: Some(BTreeMap::from([(ADVISOR_ENABLED.to_owned(), json!(true))])),
+        ..StoredAgentConfig::default()
+    };
+    assert!(catalog.validate(&switch_only).is_err());
+    assert!(advisor(&switch_only).is_none());
+    catalog
+        .inherited
+        .insert("advisor".to_owned(), "test/model".to_owned());
+    assert!(catalog.validate(&switch_only).is_ok());
+    assert!(has_overrides(&switch_only));
+    let file = overlay(&switch_only, false).await.unwrap().unwrap();
+    let value: Value = serde_json::from_slice(&std::fs::read(file.path()).unwrap()).unwrap();
+    assert_eq!(value, json!({"advisor":{"enabled":true}}));
+}
+
+#[test]
+fn clearing_advisor_model_overrides_a_stored_enabled_switch() {
+    let mut config = config_with(&[("modelRole.advisor", "unset")]);
+    config
+        .feature_values
+        .as_mut()
+        .unwrap()
+        .insert(ADVISOR_ENABLED.to_owned(), json!(true));
+    assert_eq!(advisor_override(&config), Some(false));
 }
 
 #[test]
@@ -364,4 +461,14 @@ async fn failed_refresh_preserves_last_good_catalog_for_its_identity() {
             .is_ok()
     );
     assert!(client.role_catalog("/different-identity").await.is_err());
+}
+
+#[tokio::test]
+async fn rpc_goal_continuation_is_scoped_to_the_private_session_overlay() {
+    let file = overlay(&StoredAgentConfig::default(), true)
+        .await
+        .unwrap()
+        .unwrap();
+    let value: Value = serde_json::from_slice(&std::fs::read(file.path()).unwrap()).unwrap();
+    assert_eq!(value, json!({"goal":{"continuationModes":["rpc"]}}));
 }

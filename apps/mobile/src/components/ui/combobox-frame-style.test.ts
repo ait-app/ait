@@ -6,6 +6,7 @@ import { buildDesktopFrameStyle } from "./combobox-frame-style";
 function buildWidthStyle(input: {
   desktopMinWidth?: number;
   referenceWidth: number | null;
+  availableWidth?: number;
 }): Pick<ViewStyle, "width" | "minWidth" | "maxWidth"> {
   const [frameStyle] = buildDesktopFrameStyle({
     desktopMinWidth: input.desktopMinWidth,
@@ -15,6 +16,7 @@ function buildWidthStyle(input: {
     desktopPositionStyle: { left: 0, top: 0 },
     shouldHideDesktopContent: false,
     availableHeight: undefined,
+    availableWidth: input.availableWidth,
   }) as ViewStyle[];
 
   return {
@@ -25,6 +27,20 @@ function buildWidthStyle(input: {
 }
 
 describe("buildDesktopFrameStyle", () => {
+  it("fits long content and oversized triggers inside a narrow web viewport", () => {
+    expect(
+      buildWidthStyle({ desktopMinWidth: 260, referenceWidth: 24, availableWidth: 358 }),
+    ).toEqual({
+      width: undefined,
+      minWidth: 260,
+      maxWidth: 358,
+    });
+    expect(buildWidthStyle({ referenceWidth: 470, availableWidth: 358 })).toEqual({
+      width: undefined,
+      minWidth: 358,
+      maxWidth: 358,
+    });
+  });
   it("lets a narrow trigger grow to the default desktop ceiling", () => {
     expect(buildWidthStyle({ referenceWidth: 120 })).toEqual({
       width: undefined,

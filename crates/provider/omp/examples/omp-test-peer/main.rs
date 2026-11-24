@@ -220,6 +220,9 @@ impl Peer {
             json!({ "name": "handoff", "description": "Hand off to a fresh context", "source": "builtin" }),
             json!({ "name": "review", "description": "Review", "source": "skill" }),
         ];
+        if env_set("OMP_FIXTURE_GOAL") {
+            commands.push(json!({"name":"goal","source":"builtin","description":"Goal"}));
+        }
         commands.extend(self.read_plugins());
         self.emit(&json!({ "type": "available_commands_update", "commands": commands }));
     }

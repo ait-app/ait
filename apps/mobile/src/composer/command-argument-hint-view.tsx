@@ -31,7 +31,5 @@ const styles = StyleSheet.create((theme) => ({
   hint: {
     color: theme.colors.foregroundMuted,
     fontSize: 12,
-    marginHorizontal: 12,
-    marginBottom: 4,
   },
 }));

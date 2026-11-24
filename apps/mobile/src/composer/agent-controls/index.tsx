@@ -11,17 +11,10 @@ import {
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { router } from "expo-router";
-import {
-  View,
-  Text,
-  Pressable,
-  Keyboard,
-  useWindowDimensions,
-  type LayoutChangeEvent,
-} from "react-native";
+import { View, Text, Keyboard, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
-import { Settings2 } from "lucide-react-native";
+import { AgentFeaturesControl } from "./features-menu";
 import {
   getAgentFeatureIcon,
   getAgentFeatureValueIcon,
@@ -51,7 +44,6 @@ import {
   useLiveAgentModeControl,
   type AgentModeControlValue,
 } from "@/composer/agent-controls/mode-control";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
   AgentFeature,
@@ -87,7 +79,6 @@ import {
   type ComposerControlPresentation,
 } from "@/composer/agent-controls/layout";
 import { ComposerControlLayoutProvider } from "@/composer/agent-controls/layout-context";
-import { ComposerToolbarGlyph } from "@/composer/agent-controls/glyph";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
 import { SpeedToggle } from "@/composer/agent-controls/speed-toggle";
 import { SPEED_FEATURE_ID } from "@/agent-controls/policy";
@@ -243,7 +234,7 @@ function getFeatureIconColor(
   }
 }
 
-type ActiveSheet = "thinking" | "features" | null;
+type ActiveSheet = "thinking" | null;
 
 function resolveHasAnyControl({
   canSelectModel,
@@ -443,10 +434,7 @@ function ControlledAgentControls({
   const features = useMemo(
     () =>
       nativeFeatures
-        ?.filter(
-          (feature) =>
-            feature.id !== "modelRole.default" && !feature.id.startsWith("modelFallback."),
-        )
+        ?.filter((feature) => !isPresetOwnedFeature(feature.id))
         .map((feature) => {
           const label = formatAgentFeatureLabel(feature, t);
           return label === feature.label ? feature : { ...feature, label };
@@ -575,13 +563,6 @@ function ControlledAgentControls({
       buildOpenChangeHandler(selector, setOpenSelector, onDropdownClose),
     [onDropdownClose],
   );
-  const handleSheetOpenChange = useCallback(
-    (selector: AgentControlSelector) => (nextOpen: boolean) => {
-      setOpenSelector(nextOpen ? selector : null);
-    },
-    [],
-  );
-
   const handleThinkingPress = useCallback(() => {
     handleOpenChange("thinking")(openSelector !== "thinking");
   }, [handleOpenChange, openSelector]);
@@ -673,14 +654,10 @@ function ControlledAgentControls({
             handleDesktopModelSelect={handleDesktopModelSelect}
             handleThinkingOpenChange={handleThinkingOpenChange}
             handleOpenChange={handleOpenChange}
-            handleNestedOpenChange={handleSheetOpenChange}
             renderThinkingOption={renderThinkingOption}
             modeControl={modeControl}
             presentation={presentation}
             glyphSize={layoutContextValue.glyphSize}
-            activeSheet={activeSheet}
-            handleOpenSheet={handleOpenSheet}
-            handleCloseSheet={handleCloseSheet}
             modelSelectorServerId={modelSelectorServerId}
           />
         ) : (
@@ -704,14 +681,12 @@ function ControlledAgentControls({
             canSelectThinking={canSelectThinking}
             modelSelectorProviders={modelSelectorProviders}
             comboboxThinkingOptions={comboboxThinkingOptions}
-            openSelector={openSelector}
             displayThinking={displayThinking}
             activeSheet={activeSheet}
             handleOpenSheet={handleOpenSheet}
             handleCloseSheet={handleCloseSheet}
             handleSheetModelSelect={handleSheetModelSelect}
             handleSelectThinkingAndClose={handleSelectThinkingAndClose}
-            handleOpenChange={handleSheetOpenChange}
             renderThinkingOption={renderThinkingOption}
             modeControl={modeControl}
             glyphSize={layoutContextValue.glyphSize}
@@ -753,7 +728,6 @@ interface DesktopAgentControlsContentProps {
   handleDesktopModelSelect: (providerId: string, modelId: string) => void;
   handleThinkingOpenChange: (open: boolean) => void;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
-  handleNestedOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   renderThinkingOption: (args: {
     option: ComboboxOption;
     selected: boolean;
@@ -763,16 +737,12 @@ interface DesktopAgentControlsContentProps {
   modeControl?: AgentModeControlValue | null;
   presentation: ComposerControlPresentation;
   glyphSize: number;
-  activeSheet: ActiveSheet;
-  handleOpenSheet: (sheet: Exclude<ActiveSheet, null>) => void;
-  handleCloseSheet: () => void;
   modelSelectorServerId: string | null;
 }
 
 const DESKTOP_SEARCH_THRESHOLD = 6;
 
 function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const {
     provider,
@@ -803,25 +773,16 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     handleDesktopModelSelect,
     handleThinkingOpenChange,
     handleOpenChange,
-    handleNestedOpenChange,
     renderThinkingOption,
     modeControl,
     presentation,
     glyphSize,
-    activeSheet,
-    handleOpenSheet,
-    handleCloseSheet,
     modelSelectorServerId,
   } = props;
   const modelToolbar = useMemo(
     () => ({ glyphSize, showCaret: presentation.showCarets }),
     [glyphSize, presentation.showCarets],
   );
-  const featuresSheetHeader = useMemo<SheetHeader>(
-    () => ({ title: t("agentControls.features.title") }),
-    [t],
-  );
-  const handleOpenFeatures = useCallback(() => handleOpenSheet("features"), [handleOpenSheet]);
   return (
     <>
       {canSelectModel ? (
@@ -908,94 +869,24 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
 
       {modeControl ? <AgentModeControl {...modeControl} onClose={onDropdownClose} /> : null}
 
-      {(() => {
-        const inlineFeatures = presentation.aggregateFeatures
-          ? []
-          : (features?.filter((feature) => !feature.id.startsWith("modelRole.")) ?? []);
-        const sheetFeatures = presentation.aggregateFeatures
-          ? (features ?? [])
-          : (features?.filter((feature) => feature.id.startsWith("modelRole.")) ?? []);
-        return (
-          <>
-            {inlineFeatures.map((feature) => (
-              <DesktopFeatureItem
-                key={`feature-${feature.id}`}
-                feature={feature}
-                disabled={
-                  disabled ||
-                  Boolean(
-                    (modelPresets?.selected ||
-                      modelPresets?.presetActive ||
-                      modelPresets?.selectionKnown === false) &&
-                    isPresetOwnedFeature(feature.id),
-                  )
-                }
-                lockedReason={
-                  (modelPresets?.selected ||
-                    modelPresets?.presetActive ||
-                    modelPresets?.selectionKnown === false) &&
-                  isPresetOwnedFeature(feature.id)
-                    ? t("modelSelector.presetEditInSettings")
-                    : undefined
-                }
-                openSelector={openSelector}
-                handleOpenChange={handleOpenChange}
-                onSetFeature={onSetFeature}
-                onActionComplete={onDropdownClose}
-              />
-            ))}
-            {sheetFeatures.length > 0 ? (
-              <>
-                <Pressable
-                  onPress={handleOpenFeatures}
-                  disabled={disabled}
-                  style={styles.modeIconBadge}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("agentControls.features.open")}
-                  testID="agent-controls-features"
-                >
-                  <ComposerToolbarGlyph size={glyphSize}>
-                    <Settings2 size={glyphSize} color={theme.colors.foregroundMuted} />
-                  </ComposerToolbarGlyph>
-                </Pressable>
-                <AdaptiveModalSheet
-                  header={featuresSheetHeader}
-                  visible={activeSheet === "features"}
-                  onClose={handleCloseSheet}
-                  testID="agent-features-sheet"
-                >
-                  {sheetFeatures.map((feature) => (
-                    <SheetFeatureItem
-                      key={`feature-${feature.id}`}
-                      feature={feature}
-                      disabled={
-                        disabled ||
-                        Boolean(
-                          (modelPresets?.selected ||
-                            modelPresets?.presetActive ||
-                            modelPresets?.selectionKnown === false) &&
-                          isPresetOwnedFeature(feature.id),
-                        )
-                      }
-                      lockedReason={
-                        (modelPresets?.selected ||
-                          modelPresets?.presetActive ||
-                          modelPresets?.selectionKnown === false) &&
-                        isPresetOwnedFeature(feature.id)
-                          ? t("modelSelector.presetEditInSettings")
-                          : undefined
-                      }
-                      openSelector={openSelector}
-                      handleOpenChange={handleNestedOpenChange}
-                      onSetFeature={onSetFeature}
-                    />
-                  ))}
-                </AdaptiveModalSheet>
-              </>
-            ) : null}
-          </>
-        );
-      })()}
+      {(presentation.aggregateFeatures ? [] : (features ?? [])).map((feature) => (
+        <DesktopFeatureItem
+          key={`feature-${feature.id}`}
+          feature={feature}
+          disabled={disabled}
+          openSelector={openSelector}
+          handleOpenChange={handleOpenChange}
+          onSetFeature={onSetFeature}
+          onActionComplete={onDropdownClose}
+        />
+      ))}
+      <AgentFeaturesControl
+        provider={provider}
+        features={features}
+        onSetFeature={onSetFeature}
+        disabled={disabled}
+        onClose={onDropdownClose}
+      />
     </>
   );
 }
@@ -1020,14 +911,12 @@ interface SheetAgentControlsContentProps {
   canSelectThinking: boolean;
   modelSelectorProviders: ProviderSelectorProvider[];
   comboboxThinkingOptions: ComboboxOption[];
-  openSelector: AgentControlSelector | null;
   displayThinking: string;
   activeSheet: ActiveSheet;
   handleOpenSheet: (sheet: Exclude<ActiveSheet, null>) => void;
   handleCloseSheet: () => void;
   handleSheetModelSelect: (providerId: string, modelId: string) => void;
   handleSelectThinkingAndClose: (thinkingOptionId: string) => void;
-  handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   renderThinkingOption: (args: {
     option: ComboboxOption;
     selected: boolean;
@@ -1062,14 +951,12 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     canSelectThinking,
     modelSelectorProviders,
     comboboxThinkingOptions,
-    openSelector,
     displayThinking,
     activeSheet,
     handleOpenSheet,
     handleCloseSheet,
     handleSheetModelSelect,
     handleSelectThinkingAndClose,
-    handleOpenChange,
     renderThinkingOption,
     modeControl,
     glyphSize,
@@ -1140,32 +1027,14 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
 
       {modeControl ? <AgentModeControl {...modeControl} surface="sheet" /> : null}
 
-      {(features ?? []).map((feature) => (
-        <SheetFeatureItem
-          key={`feature-${feature.id}`}
-          feature={feature}
-          disabled={
-            disabled ||
-            Boolean(
-              (modelPresets?.selected ||
-                modelPresets?.presetActive ||
-                modelPresets?.selectionKnown === false) &&
-              isPresetOwnedFeature(feature.id),
-            )
-          }
-          lockedReason={
-            (modelPresets?.selected ||
-              modelPresets?.presetActive ||
-              modelPresets?.selectionKnown === false) &&
-            isPresetOwnedFeature(feature.id)
-              ? t("modelSelector.presetEditInSettings")
-              : undefined
-          }
-          openSelector={openSelector}
-          handleOpenChange={handleOpenChange}
-          onSetFeature={onSetFeature}
-        />
-      ))}
+      <AgentFeaturesControl
+        provider={provider}
+        features={features}
+        onSetFeature={onSetFeature}
+        disabled={disabled}
+        onClose={onDropdownClose}
+        surface="sheet"
+      />
     </View>
   );
 
@@ -1356,148 +1225,6 @@ function DesktopFeatureItem({
           onOpenChange={handleFeatureOpenChange}
           anchorRef={featureAnchorRef}
           desktopPlacement="top-start"
-          renderOption={feature.id === "permission" ? renderFeatureOption : undefined}
-        />
-      </>
-    );
-  }
-
-  return null;
-}
-
-function SheetFeatureItem({
-  feature,
-  disabled,
-  lockedReason,
-  openSelector,
-  handleOpenChange,
-  onSetFeature,
-}: {
-  feature: AgentFeature;
-  disabled: boolean;
-  lockedReason?: string;
-  openSelector: AgentControlSelector | null;
-  handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
-  onSetFeature?: (featureId: string, value: unknown) => void;
-}) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  const featureSelector: AgentControlSelector = `feature-${feature.id}`;
-  const featureAnchorRef = useRef<View>(null);
-  const renderFeatureOption = useFeatureOptionRenderer(feature, theme.colors.foreground);
-
-  const handleFeatureOpenChange = useMemo(
-    () => handleOpenChange(featureSelector),
-    [handleOpenChange, featureSelector],
-  );
-  const handleSelectPress = useCallback(
-    () => handleFeatureOpenChange(openSelector !== featureSelector),
-    [featureSelector, handleFeatureOpenChange, openSelector],
-  );
-  const sheetHeader = useMemo<SheetHeader>(() => ({ title: feature.label }), [feature.label]);
-
-  const handleSelectOption = useCallback(
-    (optionId: string) => {
-      onSetFeature?.(feature.id, feature.type === "toggle" ? optionId === "true" : optionId);
-    },
-    [feature.id, feature.type, onSetFeature],
-  );
-  const comboboxOptions = useMemo<ComboboxOption[]>(() => {
-    if (feature.type === "select") {
-      return feature.options.map((option) => ({ id: option.id, label: option.label }));
-    }
-    return [
-      { id: "true", label: t("agentControls.features.on") },
-      { id: "false", label: t("agentControls.features.off") },
-    ];
-  }, [feature, t]);
-
-  if (feature.type === "select" && feature.id === SPEED_FEATURE_ID) {
-    return (
-      <SpeedToggle
-        feature={feature}
-        surface="sheet"
-        disabled={disabled}
-        onSetFeature={onSetFeature}
-      />
-    );
-  }
-
-  if (feature.type === "toggle") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon, feature.id);
-    return (
-      <>
-        <AgentControlTrigger
-          ref={featureAnchorRef}
-          icon={FeatureIcon}
-          iconColor={getFeatureIconColor(
-            feature,
-            theme.colors.palette,
-            theme.colors.foregroundMuted,
-          )}
-          surface="sheet"
-          label={feature.label}
-          value={feature.value ? t("agentControls.features.on") : t("agentControls.features.off")}
-          open={openSelector === featureSelector}
-          disabled={disabled}
-          onPress={handleSelectPress}
-          accessibilityLabel={
-            lockedReason
-              ? `${getFeatureTooltip(feature)}. ${lockedReason}`
-              : getFeatureTooltip(feature)
-          }
-          testID={`agent-feature-${feature.id}`}
-        />
-        <Combobox
-          options={comboboxOptions}
-          value={String(feature.value)}
-          onSelect={handleSelectOption}
-          open={openSelector === featureSelector}
-          onOpenChange={handleFeatureOpenChange}
-          anchorRef={featureAnchorRef}
-          presentation="push"
-          searchable={false}
-          header={sheetHeader}
-        />
-      </>
-    );
-  }
-
-  if (feature.type === "select") {
-    const FeatureIcon = getAgentFeatureValueIcon(feature, feature.value);
-    const selectedOption = feature.options.find((o) => o.id === feature.value);
-    return (
-      <>
-        <AgentControlTrigger
-          ref={featureAnchorRef}
-          icon={FeatureIcon}
-          iconColor={getFeatureIconColor(
-            feature,
-            theme.colors.palette,
-            theme.colors.foregroundMuted,
-          )}
-          surface="sheet"
-          label={feature.label}
-          value={selectedOption?.label ?? feature.label}
-          open={openSelector === featureSelector}
-          disabled={disabled}
-          onPress={handleSelectPress}
-          accessibilityLabel={
-            lockedReason
-              ? `${getFeatureTooltip(feature)}. ${lockedReason}`
-              : getFeatureTooltip(feature)
-          }
-          testID={`agent-feature-${feature.id}`}
-        />
-        <Combobox
-          options={comboboxOptions}
-          value={String(feature.value)}
-          onSelect={handleSelectOption}
-          open={openSelector === featureSelector}
-          onOpenChange={handleFeatureOpenChange}
-          anchorRef={featureAnchorRef}
-          presentation="push"
-          header={sheetHeader}
           renderOption={feature.id === "permission" ? renderFeatureOption : undefined}
         />
       </>
