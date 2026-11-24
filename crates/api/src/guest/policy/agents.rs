@@ -16,8 +16,13 @@ const CREATE_DENIED: [&str; 1] = ["env"];
 /// Native configuration unavailable to workspace and project guests.
 const CONFIG_DENIED: [&str; 2] = ["mcpServers", "providerOptions"];
 
-/// Label namespaces guests may not write: guest attribution and Bot scope.
-const RESERVED_LABEL_PREFIXES: [&str; 2] = ["ait.guest.", domain::bot::BOT_LABEL_PREFIX];
+/// Label namespaces guests may not write: guest attribution, Bot scope, and the remote parent
+/// that only this Host records, for Agents a sibling Host's Agent created.
+const RESERVED_LABEL_PREFIXES: [&str; 3] = [
+    "ait.guest.",
+    domain::bot::BOT_LABEL_PREFIX,
+    crate::mcp::peer::PARENT_LABEL_PREFIX,
+];
 
 /// Most Agents or terminals one guest request may name.
 const MAX_IDS: usize = 64;
