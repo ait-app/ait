@@ -81,10 +81,10 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 工作区、文件与 Git
 
-- [ADR-303：Git 控制合并为一个始终可按的主按钮与分组面板，分叉用 rebase 修复](workspace/adr-303-workspace-git-control-grouped-panel-and-rebase.md)
+- [ADR-304：Git 控制合并为一个始终可按的主按钮与分组面板，分叉用 rebase 修复](workspace/adr-304-workspace-git-control-grouped-panel-and-rebase.md)
 - [ADR-297：记事本是数据目录下的 Markdown 文件，由文件编辑器打开](workspace/adr-297-notepad-file-in-data-directory.md)
 - [ADR-296：每个 Workspace 一份由 daemon 保存的记事本](workspace/adr-296-workspace-notepad.md)（经 [ADR-297](workspace/adr-297-notepad-file-in-data-directory.md) 修订）
-- [ADR-293：归档移入 Workspace 菜单，交付完成后主按钮推荐重置](workspace/adr-293-archive-in-workspace-menu-reset-recommendation.md)（经 [ADR-303](workspace/adr-303-workspace-git-control-grouped-panel-and-rebase.md) 修订）
+- [ADR-293：归档移入 Workspace 菜单，交付完成后主按钮推荐重置](workspace/adr-293-archive-in-workspace-menu-reset-recommendation.md)（经 [ADR-304](workspace/adr-304-workspace-git-control-grouped-panel-and-rebase.md) 修订）
 - [ADR-283：RPC JSON 编解码统一归 model](workspace/adr-283-shared-rpc-codecs.md)
 - [ADR-230：归档 Worktree 时运行 teardown](workspace/adr-230-worktree-teardown.md)
 - [ADR-229：Workspace 脚本运行记录、输出与参数](workspace/adr-229-workspace-script-runs.md)
@@ -102,7 +102,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-113：filesystem 按能力组组织模块](workspace/adr-113-filesystem-capability-groups.md)（经 [ADR-129](providers/adr-129-provider-owned-skills.md)、[ADR-130](workspace/adr-130-workspace-methods-owned-by-metadata.md)、[ADR-136](workspace/adr-136-single-area-layer-flattening.md) 修订）
 - [ADR-104：Filesystem 仅通过 model 契约协作](workspace/adr-104-filesystem-model-collaboration.md)（经 [ADR-111](daemon/adr-111-domain-values-and-server-protocol.md)、[ADR-113](workspace/adr-113-filesystem-capability-groups.md)、[ADR-130](workspace/adr-130-workspace-methods-owned-by-metadata.md)、[ADR-139](bot/adr-139-workspace-bots-and-owned-channels.md)、[ADR-239](providers/adr-239-persisted-timeline-export-downloads.md) 修订）
 - [ADR-092：工作区重置同步 origin 同名分支](workspace/adr-092-reset-same-named-remote-branch.md)
-- [ADR-084：工作区主按钮按提交与 PR 生命周期推进](workspace/adr-084-workspace-primary-git-action.md)（经 [ADR-293](workspace/adr-293-archive-in-workspace-menu-reset-recommendation.md)、[ADR-303](workspace/adr-303-workspace-git-control-grouped-panel-and-rebase.md) 修订）
+- [ADR-084：工作区主按钮按提交与 PR 生命周期推进](workspace/adr-084-workspace-primary-git-action.md)（经 [ADR-293](workspace/adr-293-archive-in-workspace-menu-reset-recommendation.md)、[ADR-304](workspace/adr-304-workspace-git-control-grouped-panel-and-rebase.md) 修订）
 - [ADR-083：工作区重置到 origin 的最新默认分支](workspace/adr-083-reset-workspace-to-origin-default.md)（经 [ADR-092](workspace/adr-092-reset-same-named-remote-branch.md)、[ADR-293](workspace/adr-293-archive-in-workspace-menu-reset-recommendation.md) 修订）
 - [ADR-082：Workspace 可空字段使用单级 Option](workspace/adr-082-canonical-nullable-workspace-fields.md)
 - [ADR-081：由状态变更唤醒 Workspace 与 Agent 目录订阅](workspace/adr-081-directory-change-push.md)（经 [ADR-126](workspace/adr-126-workspace-target-read.md)、[ADR-156](clients/adr-156-setup-and-activity-events.md)、[ADR-210](providers/adr-210-committed-runtime-read-snapshots.md) 修订）

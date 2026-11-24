@@ -9,7 +9,7 @@ paths:
 # ADR-084：工作区主按钮按提交与 PR 生命周期推进
 
 - 关联：ADR-066、ADR-069、ADR-083
-- 后续修订：[ADR-303](adr-303-workspace-git-control-grouped-panel-and-rebase.md) 调整主按钮顺序，阻塞状态改为可按的动作，合并 PR 并入主按钮，分叉改用 rebase。
+- 后续修订：[ADR-304](adr-304-workspace-git-control-grouped-panel-and-rebase.md) 调整主按钮顺序，阻塞状态改为可按的动作，合并 PR 并入主按钮，分叉改用 rebase。
 
 ## 背景
 

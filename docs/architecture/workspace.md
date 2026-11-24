@@ -64,7 +64,7 @@
   该时间、或缺少创建时间的 PR/MR
   （[ADR-146](../decisions/workspace/adr-146-reset-workspace-change-request-association.md)）。
 - 客户端右上角的 Git 控制是一个分体按钮，下拉面板同时是变更面板的 Git 菜单
-  （[ADR-303](../decisions/workspace/adr-303-workspace-git-control-grouped-panel-and-rebase.md)）。主按钮始终可按，取第一个匹配的状态：
+  （[ADR-304](../decisions/workspace/adr-304-workspace-git-control-grouped-panel-and-rebase.md)）。主按钮始终可按，取第一个匹配的状态：
   冲突、提交、分叉时的变基到远端、仅落后时的拉取、状态未知、打开的 PR 上的推送或合并 PR、查看 PR、创建 PR、基础分支上的推送、重置工作区。
   冲突、状态未知以及一键修复不适用的分叉与落后只显示状态名并打开面板；动作不能执行时落到下一行（需要推送而推送不可用的打开 PR 显示“查看 PR”，不显示“合并 PR”）。
   按钮上的拉取要求 `upstreamRef` 等于 `branchStatus.remoteRef`，否则显示的计数与拉取的引用会不一致。合并方式按宿主和项目记在设备上，不进入项目设置。
@@ -76,7 +76,7 @@
   宿主在进行中的操作、不在分支上、没有远端、已跟踪文件有改动、推送会发往该远端分支以外的位置（按 `push` 的解析追到回退到 `origin`）、fetch 后远端分支不存在时拒绝，
   各用独立错误。它执行 `git rebase --rebase-merges --no-fork-point`，关闭 `rebase.updateRefs`；成功后若被替换的提交已被远端跟踪引用包含，就重置回原位并拒绝，
   因此推送后又在本地变基到基础分支的分支不会被重复发布，但也不会被修复。它不推送，成功后由普通推送完成
-  （[ADR-303](../decisions/workspace/adr-303-workspace-git-control-grouped-panel-and-rebase.md)）。
+  （[ADR-304](../decisions/workspace/adr-304-workspace-git-control-grouped-panel-and-rebase.md)）。
 - `Forge::pull_request(cwd, number)` 按编号读取 `cwd` 的 origin 仓库中的一个 PR/MR，供跟随它的 Bot 工单使用：
   状态（合并、关闭、打开；GitLab 的 `locked` 为打开）、头提交、至多 100 个检查与最新的审查活动，本账号写的条目带标记，
   每个条目带作者在仓库中的权限（能写入、其他人、机器人）；结果为中性的 `domain::forge::PullSnapshot`。

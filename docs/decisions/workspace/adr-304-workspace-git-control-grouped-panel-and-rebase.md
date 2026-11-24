@@ -1,5 +1,5 @@
 ---
-id: ADR-303
+id: ADR-304
 status: accepted
 date: 2026-11-24
 amends:
@@ -12,7 +12,7 @@ paths:
   - packages/client
 ---
 
-# ADR-303：Git 控制合并为一个始终可按的主按钮与分组面板，分叉用 rebase 修复
+# ADR-304：Git 控制合并为一个始终可按的主按钮与分组面板，分叉用 rebase 修复
 
 - 关联：ADR-083、ADR-084、ADR-293
 
