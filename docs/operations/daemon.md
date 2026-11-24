@@ -54,9 +54,8 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 
 ### MCP 配置与跨主机接受
 
-`mcp.enabled`、`mcp.injectIntoAgents` 与 `mcp.acceptPeers` 经 `daemon.config.set.request` 修改，都即时生效。
-`mcp.acceptPeers` 缺省为 `false`：打开后同账号其他主机上的 Agent 可以调用本机的 13 个 MCP 工具，等于信任账号内的每一台主机，
-并且要求 `mcp.enabled` 同时为 `true`。daemon 在每条新的 Hub 链路上以及每次变化后向中心发布是否接受。含义、风险与排查见
+`mcp.acceptPeers` 经 `daemon.config.set.request` 修改，即时生效。它缺省为 `false`：打开后同账号其他主机上的 Agent 可以调用本机的部分 MCP 工具，
+等于信任账号内的每一台主机，并且要求 `mcp.enabled` 同时为 `true`。daemon 在每条新的 Hub 链路上以及每次变化后向中心发布是否接受。含义、风险与排查见
 [MCP 手册](mcp.md#跨主机调用)。
 
 ### Hub 事件与中心原生通知

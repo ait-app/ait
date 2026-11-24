@@ -189,8 +189,7 @@ Hub feature 协商与旧版本兼容见
 [ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)。
 单连接将客户端活动心跳作为可丢弃的周期快照，worker 队列满时仍保留业务连接。
 见 [连接与传输规格](connection.md#准入与分发)。
-同账号的 daemon 还经 Hub 的 `peer` 会话互相调用 13 个 MCP 工具：`api` 的 MCP 层只依赖 `model::peer::Peers` 端口，
-`relay` 实现发起与接收，daemon 组装；接收方把对端当作第三类 MCP 调用者，默认不接受（`mcp.acceptPeers`），
+同账号的 daemon 还经 Hub 的 `peer` 会话互相调用部分 MCP 工具，接收方默认不接受（`mcp.acceptPeers`），
 见 [ADR-305](../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md)、[连接规格](connection.md#跨主机-peer-会话)与
 [MCP 手册](../operations/mcp.md#跨主机调用)。
 Host 通过 `model::hub` 发布事件和目录摘要，`persistence` 保存发布 journal；中心方法由握手协商。
