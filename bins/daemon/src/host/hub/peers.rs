@@ -5,15 +5,13 @@
 //! published, so each new link is published again, `enabled: false` included.
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use model::hub::{CallError, Center, LinkState};
+use model::hub::{CallError, Center};
 use serde_json::{Value, json};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
-use super::{MAX_BACKOFF, RETRY};
+use super::publisher::{self, Attempt, Publication};
 
 /// Center method that records whether this link accepts peer sessions.
 const PUBLISH_METHOD: &str = "hub.peers.publish";
@@ -21,16 +19,37 @@ const PUBLISH_METHOD: &str = "hub.peers.publish";
 /// Version of the publication body.
 const PUBLICATION_VERSION: u32 = 1;
 
-/// What the center last accepted, and on which logical link.
-type Sent = Option<(Option<Uuid>, bool)>;
+const PUBLICATION: Publication = Publication {
+    name: "Peer",
+    method: PUBLISH_METHOD,
+    coalesce: None,
+    classify,
+};
 
-/// How one publication attempt ended.
-#[derive(Debug, PartialEq, Eq)]
-enum Attempt {
-    /// Nothing to do, the center confirmed the publication, or retrying cannot help.
-    Settled,
-    /// Retry after a pause.
-    Retry,
+/// The publication body.
+fn body(enabled: bool) -> Value {
+    json!({"version": PUBLICATION_VERSION, "enabled": enabled})
+}
+
+/// Which failed publications settle. Publishing is idempotent, so a call that timed out or lost
+/// its reply on a link that is still live is sent again: otherwise the center would keep the
+/// previous value, and after a switch-off keep the link's accepted peer sessions open.
+fn classify(error: &CallError, link_gone: bool) -> Attempt {
+    match error {
+        // The center dropped the method; a fresh link reads its methods again.
+        CallError::Unsupported => Attempt::Settled,
+        // A fresh link publishes again anyway.
+        CallError::Unavailable if link_gone => Attempt::Settled,
+        // This link did not declare the peer feature; retrying on it cannot succeed.
+        CallError::Rejected(code) if code == "forbidden" => {
+            tracing::warn!("Center refused peer publication on a link without the peer feature");
+            Attempt::Settled
+        }
+        CallError::Unavailable
+        | CallError::Capacity
+        | CallError::Protocol
+        | CallError::Rejected(_) => Attempt::Retry,
+    }
 }
 
 /// Publish whether this Host accepts peer calls whenever needed until cancelled.
@@ -38,66 +57,17 @@ enum Attempt {
 /// `accepting` is `mcp.enabled && mcp.acceptPeers`, as the API observes it.
 pub(super) async fn run(
     center: Arc<dyn Center>,
-    mut accepting: watch::Receiver<bool>,
+    accepting: watch::Receiver<bool>,
     cancel: CancellationToken,
 ) {
-    let mut state = center.state();
-    let mut sent: Sent = None;
-    let mut backoff = RETRY;
-    loop {
-        // Release the watch borrows before awaiting the call.
-        let link = state.borrow_and_update().clone();
-        let current = *accepting.borrow_and_update();
-        let pause = match publish(center.as_ref(), &link, current, &mut sent).await {
-            Attempt::Retry => {
-                let pause = backoff;
-                backoff = (backoff * 2).min(MAX_BACKOFF);
-                pause
-            }
-            Attempt::Settled => {
-                backoff = RETRY;
-                Duration::MAX
-            }
-        };
-        tokio::select! {
-            () = cancel.cancelled() => return,
-            link = state.changed() => if link.is_err() { return },
-            local = accepting.changed() => if local.is_err() { return },
-            () = tokio::time::sleep(pause), if pause != Duration::MAX => {}
-        }
-    }
-}
-
-/// Publish `enabled` if the center supports it and has not confirmed it on this link.
-async fn publish(center: &dyn Center, link: &LinkState, enabled: bool, sent: &mut Sent) -> Attempt {
-    let Some(scope) = link.scope.clone().filter(|_| link.online) else {
-        return Attempt::Settled;
-    };
-    if !link.supports(PUBLISH_METHOD) || *sent == Some((link.link, enabled)) {
-        return Attempt::Settled;
-    }
-    match center.call(scope, PUBLISH_METHOD, body(enabled)).await {
-        Ok(_) => {
-            *sent = Some((link.link, enabled));
-            Attempt::Settled
-        }
-        // The link changed, the center dropped the method, or this link did not declare the
-        // peer feature; a later link or value change retriggers.
-        Err(CallError::Unavailable | CallError::Unsupported) => Attempt::Settled,
-        Err(CallError::Rejected(code)) if code == "forbidden" => {
-            tracing::warn!("Center refused peer publication on a link without the peer feature");
-            Attempt::Settled
-        }
-        Err(error) => {
-            tracing::warn!(%error, "Peer publication failed; retrying");
-            Attempt::Retry
-        }
-    }
-}
-
-/// The publication body.
-fn body(enabled: bool) -> Value {
-    json!({"version": PUBLICATION_VERSION, "enabled": enabled})
+    publisher::run(
+        &PUBLICATION,
+        center,
+        accepting,
+        |enabled| body(*enabled),
+        cancel,
+    )
+    .await;
 }
 
 #[cfg(test)]

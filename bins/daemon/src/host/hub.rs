@@ -5,6 +5,7 @@ mod events;
 mod markers;
 mod outbox;
 mod peers;
+mod publisher;
 mod shares;
 pub(super) mod sources;
 

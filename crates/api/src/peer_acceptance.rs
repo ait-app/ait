@@ -27,16 +27,24 @@ impl PeerAcceptance {
     /// # Errors
     /// Returns `ServiceInitialization` if the observer cannot be registered.
     pub(crate) fn start(metadata: &metadata::dispatch::State) -> Result<Self, crate::ConfigError> {
-        Self::follow(&metadata.session_events, read(metadata.daemon.as_deref()))
+        let daemon = metadata.daemon.as_deref();
+        Self::follow(&metadata.session_events, || read(daemon))
             .map_err(|_| crate::ConfigError::ServiceInitialization)
     }
 
-    /// Start from `initial` and follow committed configuration events published on `events`.
+    /// Follow committed configuration events published on `events`, starting from `initial`.
+    ///
+    /// `initial` is read only after the observer is registered, and while the watch is locked
+    /// against the observer, so a commit either is part of that read or arrives as a later event.
     ///
     /// # Errors
     /// Returns the session error if the observer cannot be registered.
-    fn follow(events: &SessionEvents, initial: bool) -> Result<Self, SessionError> {
-        let (sender, receiver) = watch::channel(initial);
+    fn follow(
+        events: &SessionEvents,
+        initial: impl FnOnce() -> bool,
+    ) -> Result<Self, SessionError> {
+        let (sender, receiver) = watch::channel(false);
+        let observer = sender.clone();
         let connection = events.connect();
         let subscription = connection.subscribe(
             EventsRequest {
@@ -45,11 +53,15 @@ impl PeerAcceptance {
             },
             Arc::new(move |_, payload: Value| {
                 let next = accepting(&payload["config"]);
-                sender.send_if_modified(|current| std::mem::replace(current, next) != next);
+                observer.send_if_modified(|current| std::mem::replace(current, next) != next);
                 Ok(())
             }),
         )?;
         subscription.activate()?;
+        sender.send_if_modified(|current| {
+            let next = initial();
+            std::mem::replace(current, next) != next
+        });
         Ok(Self {
             accepting: receiver,
             _observer: (connection, subscription),
