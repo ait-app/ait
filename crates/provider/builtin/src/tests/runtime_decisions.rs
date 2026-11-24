@@ -1,5 +1,4 @@
-//! The runtime decisions each built-in adapter declares on the port (ADR-299). The expected
-//! values are the ones the runtime hard-coded by provider id before they moved to the adapters.
+//! The current runtime decisions each built-in adapter declares on the port (ADR-299).
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -20,7 +19,7 @@ fn offline(root: &Path, transport: Option<&str>) -> provider::Providers {
 }
 
 #[test]
-fn harness_evidence_keeps_the_legacy_sources_in_report_order() {
+fn harness_evidence_keeps_declared_sources_in_report_order() {
     let root = tempfile::tempdir().unwrap();
     let providers = offline(root.path(), None);
 
@@ -80,7 +79,7 @@ fn harness_evidence_keeps_the_legacy_sources_in_report_order() {
                 "AIT_SERVER_ANTIGRAVITY_BIN",
                 "agy",
                 "AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR",
-                "Unknown".to_owned(),
+                under("HOME", "", ".gemini/antigravity-cli/log"),
             ),
             (
                 "pi",
