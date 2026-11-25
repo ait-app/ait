@@ -375,7 +375,9 @@ fn wake_turns_go_to_the_origin_conversation_or_fall_back_to_the_owner() {
     expected.sort();
     assert_eq!(targets, expected);
 
-    complete_ready(&mut state, "reported");
+    // The Bot runs one turn at a time (ADR-306), so each round completes one of the two wake
+    // turns; a wake turn left queued would hold the owner conversation's next wake back.
+    while !complete_ready(&mut state, "reported").is_empty() {}
     state
         .execute(
             "bot.channel.update.request",
@@ -387,7 +389,9 @@ fn wake_turns_go_to_the_origin_conversation_or_fall_back_to_the_owner() {
     state.notify(disabled, Utc::now()).unwrap();
     state.wake(later(10));
 
-    assert_eq!(wake_turns(&fixture).last().unwrap().conversation_id, owner);
+    let turns = wake_turns(&fixture);
+    assert_eq!(turns.len(), 3);
+    assert_eq!(turns[2].conversation_id, owner);
 }
 
 #[test]
