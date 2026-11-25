@@ -98,8 +98,15 @@ case " $* " in
 esac
 `,
   );
+  // AUR uses master regardless of the contributor's init.defaultBranch setting.
   for (const pkg of packages)
-    command(git, ["init", "--bare", "--quiet", join(dir, "remotes", `${pkg}.git`)]);
+    command(git, [
+      "init",
+      "--bare",
+      "--initial-branch=master",
+      "--quiet",
+      join(dir, "remotes", `${pkg}.git`),
+    ]);
   return {
     dir,
     run(pkg, options = {}) {
