@@ -208,7 +208,11 @@ async fn an_inbound_message_is_queued_answered_and_its_position_saved() {
         delivered.notified().await;
         loop {
             let conversations = fixture.store.conversations().unwrap();
-            let turns = fixture.store.turns(conversations[0].id).unwrap();
+            let source = conversations
+                .iter()
+                .find(|conversation| conversation.channel_id == channel.id)
+                .unwrap();
+            let turns = fixture.store.turns(source.id).unwrap();
             if turns[0].delivery == domain::bot::DeliveryStatus::Delivered {
                 break;
             }

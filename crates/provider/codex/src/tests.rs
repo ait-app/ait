@@ -3,6 +3,7 @@ use crate::testing::Fixture;
 
 mod configuration;
 mod diagnostics;
+mod input_envelope;
 mod installed;
 mod persistence;
 mod progress;

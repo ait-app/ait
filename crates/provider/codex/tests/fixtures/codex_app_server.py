@@ -31,6 +31,14 @@ steered_inputs = []
 voice_history = []
 agent_mcp = None
 
+def bot_message_body(text):
+    # Act on the message body while the recorded native input keeps Ait's source envelope.
+    if text.startswith('<ait-input kind="bot_message" ') and text.endswith('\n</ait-input>'):
+        _, separator, body = text.partition('>\n')
+        if separator:
+            return body.removesuffix('\n</ait-input>').replace('<\\/', '</')
+    return text
+
 def agent_mcp_client():
     assert urlsplit(agent_mcp["url"]).hostname in ("127.0.0.1", "::1", "localhost")
     headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
@@ -453,6 +461,7 @@ for line in sys.stdin:
         text = next((item["text"] for item in params["input"] if item["type"] == "text"), "skill-only")
         turn_text = text
         turn_content = params["input"]
+        text = bot_message_body(text)
         if text == "ait-mcp-probe":
             complete(pending, probe_agent_mcp())
             continue
@@ -470,7 +479,7 @@ for line in sys.stdin:
                     "reasoningOutputTokens":3,"totalTokens":107},"modelContextWindow":200000}})
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
-            "item": {"type": "userMessage", "id": pending + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": text}]}}})
+            "item": {"type": "userMessage", "id": pending + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": turn_text}]}}})
         if text in ("upstream-error", "upstream-error-result"):
             error = json.loads((root / "native-error.json").read_text())
             if text == "upstream-error":

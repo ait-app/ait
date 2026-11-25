@@ -170,7 +170,11 @@ async fn websocket_events_are_acknowledged_after_durable_admission_and_deduplica
                         serde_json::from_slice(reply.payload.as_ref().unwrap()).unwrap();
                     assert_eq!(result["code"], 200);
                     let conversations = store.conversations().unwrap();
-                    assert_eq!(store.turns(conversations[0].id).unwrap().len(), 1);
+                    let source = conversations
+                        .iter()
+                        .find(|conversation| conversation.channel_id == id)
+                        .unwrap();
+                    assert_eq!(store.turns(source.id).unwrap().len(), 1);
                     break;
                 }
             }

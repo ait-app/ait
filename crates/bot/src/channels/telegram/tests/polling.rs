@@ -42,7 +42,11 @@ async fn polling_acknowledges_only_after_input_and_cursor_commit() {
                         Some(11)
                     );
                     let conversations = store.conversations().unwrap();
-                    assert_eq!(store.turns(conversations[0].id).unwrap().len(), 1);
+                    let source = conversations
+                        .iter()
+                        .find(|conversation| conversation.channel_id == id)
+                        .unwrap();
+                    assert_eq!(store.turns(source.id).unwrap().len(), 1);
                     cancel.cancel();
                     Json(json!({"ok":true,"result":[]}))
                 }
