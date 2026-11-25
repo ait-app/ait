@@ -28,6 +28,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.subagents.stop.request"),
     MethodSpec::request("agent.provider_subagents.timeline.get.request"),
     MethodSpec::request("provider.diagnostic.request"),
+    MethodSpec::request("provider.mcp.list.request"),
     MethodSpec::request("provider.presets.describe.request"),
     MethodSpec::request("provider.presets.list.request"),
     MethodSpec::request("provider.presets.save.request"),

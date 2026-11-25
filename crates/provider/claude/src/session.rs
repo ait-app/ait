@@ -191,6 +191,19 @@ impl ClaudeSession {
                 return Err(error);
             }
         };
+        if provider_native::configuration::claude_keeps(&self.spec.config) {
+            // Claude has no strict mode that keeps a server: check what actually loaded.
+            let checked = match transport.request(json!({"subtype":"mcp_status"})).await {
+                Ok(status) => {
+                    provider_native::configuration::claude_mcp_check(&self.spec.config, &status)
+                }
+                Err(error) => Err(error),
+            };
+            if let Err(error) = checked {
+                let _ = transport.close().await;
+                return Err(error);
+            }
+        }
         let selected = self.spec.config.model.as_deref().unwrap_or("default");
         self.client.remember_models(&initialized)?;
         self.info.model = initialized["models"]

@@ -67,6 +67,8 @@ pub(crate) enum Operation {
     ChildStop,
     ChildTimeline,
     Diagnostic,
+    /// `provider.mcp.list.request`: the MCP servers a session in a directory would load.
+    McpServers,
     PresetDescribe,
     PresetList,
     PresetSave,
@@ -141,6 +143,7 @@ impl Operation {
             "agent.subagents.stop.request" => Ok(Self::ChildStop),
             "agent.provider_subagents.timeline.get.request" => Ok(Self::ChildTimeline),
             "provider.diagnostic.request" => Ok(Self::Diagnostic),
+            "provider.mcp.list.request" => Ok(Self::McpServers),
             "provider.presets.describe.request" => Ok(Self::PresetDescribe),
             "provider.presets.list.request" => Ok(Self::PresetList),
             "provider.presets.save.request" => Ok(Self::PresetSave),
@@ -214,6 +217,7 @@ impl Operation {
             Self::ChildStop => "agent.subagents.stop.request",
             Self::ChildTimeline => "agent.provider_subagents.timeline.get.request",
             Self::Diagnostic => "provider.diagnostic.request",
+            Self::McpServers => "provider.mcp.list.request",
             Self::PresetDescribe => "provider.presets.describe.request",
             Self::PresetList => "provider.presets.list.request",
             Self::PresetSave => "provider.presets.save.request",
@@ -303,6 +307,7 @@ impl Operation {
             | Self::Commands
             | Self::CommandsV2
             | Self::Diagnostic
+            | Self::McpServers
             | Self::PresetDescribe
             | Self::PresetList
             | Self::PresetSave
@@ -381,6 +386,7 @@ impl Operation {
             | Self::SessionPreview
             | Self::Import
             | Self::Diagnostic
+            | Self::McpServers
             | Self::PresetDescribe
             | Self::PresetList
             | Self::PresetSave

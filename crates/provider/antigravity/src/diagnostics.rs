@@ -61,6 +61,57 @@ impl Failure {
     }
 }
 
+/// Fixed protocol reasons contain no native payload, identifiers or filesystem paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub(super) enum ProtocolError {
+    #[error("AGY returned an event for a different conversation.")]
+    Conversation,
+    #[error("AGY returned an invalid step state.")]
+    StepState,
+    #[error("AGY returned a step without a valid type or index.")]
+    StepIdentity,
+    #[error("AGY updated a completed step or changed its type.")]
+    StepLifecycle,
+    #[error("AGY exceeded the stream size or step count limit.")]
+    Limit,
+    #[error("AGY returned invalid assistant text.")]
+    Text,
+    #[error("AGY returned invalid tool metadata.")]
+    Tool,
+    #[error("AGY returned an inconsistent checkpoint update.")]
+    Checkpoint,
+    #[error("AGY returned an invalid turn result.")]
+    Result,
+    #[error("AGY returned invalid token usage counters.")]
+    Usage,
+    #[error("AGY reported success before all steps completed.")]
+    Unfinished,
+    #[error("AGY returned invalid permission denial metadata.")]
+    Denials,
+    #[error("AGY returned an unexpected session event.")]
+    Event,
+}
+
+impl ProtocolError {
+    pub(super) fn source(self) -> &'static str {
+        match self {
+            Self::Conversation => "conversation",
+            Self::StepState => "step_state",
+            Self::StepIdentity => "step_identity",
+            Self::StepLifecycle => "step_lifecycle",
+            Self::Limit => "stream_limit",
+            Self::Text => "assistant_text",
+            Self::Tool => "tool_metadata",
+            Self::Checkpoint => "checkpoint",
+            Self::Result => "result",
+            Self::Usage => "usage",
+            Self::Unfinished => "unfinished_steps",
+            Self::Denials => "denied_actions",
+            Self::Event => "session_event",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub(super) struct Diagnostics(Arc<Mutex<Option<Failure>>>);
 

@@ -17,6 +17,7 @@ pub(crate) mod directory;
 /// Provider connection state. The diagnostic client label never grants additional authority.
 #[derive(Debug, Default)]
 pub struct Connection {
+    pub(crate) directory_pages: directory::pages::Pages,
     directories: BTreeMap<String, model::polling::Subscription>,
     subscriptions: BTreeMap<String, Subscription>,
     plugin: Option<String>,
@@ -73,6 +74,7 @@ impl Connection {
     pub fn release(&mut self, id: &str) {
         self.subscriptions.remove(id);
         self.directories.remove(id);
+        self.directory_pages.release(id);
     }
 
     pub(crate) fn plugin(&self) -> Option<&str> {

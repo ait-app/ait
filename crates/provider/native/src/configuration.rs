@@ -116,7 +116,10 @@ pub(super) fn grants(
         .as_array()
         .filter(|entries| entries.len() <= 1024)
         .ok_or(AgentSessionError::Rejected)?;
-    if fields.len() != 1 {
+    if fields
+        .iter()
+        .any(|(key, value)| key != "preapproved" && (key != "mcp" || !mcp_scope(value)))
+    {
         return Err(AgentSessionError::Rejected);
     }
     for entry in entries {
@@ -140,6 +143,23 @@ pub(super) fn grants(
         }
     }
     Ok(grants)
+}
+
+/// Whether `value` is a valid `toolPolicy.mcp`: `{"inherited":"none"}`, with an optional `keep`
+/// list naming inherited servers the session may still use.
+fn mcp_scope(value: &Value) -> bool {
+    value.as_object().is_some_and(|fields| {
+        fields.iter().all(|(key, value)| match key.as_str() {
+            "inherited" => value == "none",
+            "keep" => value.as_array().is_some_and(|names| {
+                names.len() <= 128
+                    && names
+                        .iter()
+                        .all(|name| name.as_str().is_some_and(identifier))
+            }),
+            _ => false,
+        }) && fields.contains_key("inherited")
+    })
 }
 
 /// Map options and transports to Codex's thread configuration overrides.
@@ -195,6 +215,160 @@ pub fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionError> {
         result.insert("model_reasoning_effort".to_owned(), json!(effort));
     }
     Ok(Value::Object(result))
+}
+
+/// Tools that reach every MCP server's resources whatever its per-server rules say.
+const CLAUDE_RESOURCE_TOOLS: [&str; 2] = ["ListMcpResourcesTool", "ReadMcpResourceTool"];
+
+/// The session's `toolPolicy.mcp`, when it limits the MCP servers it inherits.
+fn scope(config: &StoredAgentConfig) -> Option<&Value> {
+    config
+        .tool_policy
+        .as_ref()
+        .and_then(|policy| policy.get("mcp"))
+        .filter(|scope| scope["inherited"] == "none")
+}
+
+/// Inherited MCP servers a strict session keeps by name (`toolPolicy.mcp.keep`), such as the
+/// user's own connection to the service a session reports back to.
+#[must_use]
+pub fn strict_keep(config: &StoredAgentConfig) -> Vec<&str> {
+    scope(config)
+        .and_then(|scope| scope.get("keep"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
+/// The MCP servers an effective Codex configuration (`config/read`) loads, as
+/// `{name, url, type, product}`; disabled servers are left out and the product is never known.
+#[must_use]
+pub fn codex_mcp_servers(effective: &Value) -> Vec<Value> {
+    effective["config"]["mcp_servers"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter(|(_, server)| server["enabled"] != false)
+        .map(|(name, server)| {
+            let url = server["url"].as_str().filter(|url| !url.is_empty());
+            let kind = if server["command"].is_string() {
+                "stdio"
+            } else {
+                "http"
+            };
+            json!({"name": name, "url": url, "type": kind, "product": null})
+        })
+        .collect()
+}
+
+/// Whether a strict Claude session keeps inherited servers by name. Claude has no strict mode
+/// that keeps one, so such a session loads the user's configuration without claude.ai
+/// connectors (`ENABLE_CLAUDEAI_MCP_SERVERS=false`: their list can arrive after start), denies
+/// every other server by name in `disallowedTools` and is checked once it runs
+/// (`claude_mcp_check`).
+#[must_use]
+pub fn claude_keeps(config: &StoredAgentConfig) -> bool {
+    strict_mcp(config) && !strict_keep(config).is_empty()
+}
+
+/// The `disallowedTools` prefix that denies every tool of a Claude MCP server.
+#[must_use]
+pub fn claude_server_rule(name: &str) -> String {
+    let name: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    format!("mcp__{name}")
+}
+
+/// Check a running Claude session that keeps inherited servers against its `mcp_status`: each
+/// loaded server must be the session's own, a kept one, or denied by name.
+///
+/// # Errors
+///
+/// Returns [`AgentSessionError::Rejected`] when a server could be used that is none of these.
+pub fn claude_mcp_check(
+    config: &StoredAgentConfig,
+    status: &Value,
+) -> Result<(), AgentSessionError> {
+    let keep = strict_keep(config);
+    let own = config.mcp_servers.as_ref();
+    let denied: Vec<&str> = config
+        .provider_options
+        .as_ref()
+        .and_then(|options| options.get("disallowedTools"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    let servers = status["mcpServers"]
+        .as_array()
+        .ok_or(AgentSessionError::Rejected)?;
+    for server in servers {
+        let name = server["name"].as_str().ok_or(AgentSessionError::Rejected)?;
+        let allowed = keep.contains(&name)
+            || own.is_some_and(|own| own.contains_key(name))
+            || denied.contains(&claude_server_rule(name).as_str());
+        if !allowed {
+            return Err(AgentSessionError::Rejected);
+        }
+    }
+    Ok(())
+}
+
+/// Whether the session inherits no MCP servers beyond the ones it keeps by name
+/// (`toolPolicy.mcp.inherited: "none"`).
+#[must_use]
+pub fn strict_mcp(config: &StoredAgentConfig) -> bool {
+    scope(config).is_some()
+}
+
+/// Disable, for one Codex thread, every MCP server and plugin the user's effective configuration
+/// (`config/read`) contributes, keeping only the session's own servers. Codex merges thread
+/// overrides into the user's configuration, so servers can only be switched off by name.
+///
+/// # Errors
+///
+/// Returns [`AgentSessionError::Rejected`] when the user's configuration already has a server
+/// named like one of the session's: Codex would merge its keys (headers, tokens, a command)
+/// into the session's server, and a merge cannot remove them.
+pub fn codex_strict(
+    native: &mut Value,
+    effective: &Value,
+    config: &StoredAgentConfig,
+) -> Result<(), AgentSessionError> {
+    let own = config.mcp_servers.as_ref();
+    let keep = strict_keep(config);
+    let inherited = effective["config"]["mcp_servers"].as_object();
+    for name in inherited.into_iter().flat_map(Map::keys) {
+        if own.is_some_and(|own| own.contains_key(name)) {
+            return Err(AgentSessionError::Rejected);
+        }
+        if keep.contains(&name.as_str()) {
+            continue;
+        }
+        native["mcp_servers"][name] = json!({"enabled": false});
+    }
+    let plugins = effective["config"]["plugins"].as_object();
+    for (plugin, state) in plugins.into_iter().flatten() {
+        if state["enabled"] != false {
+            native["plugins"][plugin] = json!({"enabled": false});
+        }
+    }
+    // ChatGPT apps reach the thread through Codex's built-in `codex_apps` server; plugins
+    // that `config/read` does not list are switched off as a whole.
+    native["features"]["apps"] = json!(false);
+    native["features"]["plugins"] = json!(false);
+    Ok(())
 }
 
 /// Whether a permission preset permits automatic computer use approval.
@@ -302,12 +476,21 @@ pub fn claude_with_environment(
             }
         }
     }
+    let mut denied = options
+        .get("disallowedTools")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if claude_keeps(config) {
+        for tool in CLAUDE_RESOURCE_TOOLS {
+            if !denied.contains(&json!(tool)) {
+                denied.push(json!(tool));
+            }
+        }
+    }
     for (flag, values) in [
         ("--allowedTools", Some(&allowed)),
-        (
-            "--disallowedTools",
-            options.get("disallowedTools").and_then(Value::as_array),
-        ),
+        ("--disallowedTools", Some(&denied)),
     ] {
         if let Some(values) = values.filter(|values| !values.is_empty()) {
             args.push(format!(
@@ -358,6 +541,10 @@ pub fn claude_with_environment(
         .is_some_and(|settings| !settings.is_empty())
     {
         args.push(format!("--settings={settings}"));
+    }
+    if strict_mcp(config) && !claude_keeps(config) {
+        // Only this session's servers: no user, project, plugin or claude.ai connector servers.
+        args.push("--strict-mcp-config".to_owned());
     }
     Ok(args)
 }

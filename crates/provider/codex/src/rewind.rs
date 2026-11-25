@@ -59,11 +59,12 @@ async fn rewind(
     }
     let index = targets[0].0;
     let (approval, sandbox, _) = controls::policy(&spec.config, spec.confinement.is_some());
+    let native = super::native_config(transport, &spec.config, &spec.cwd).await?;
     let mut params = json!({"threadId":id,"cwd":spec.cwd,"model":spec.config.model,
         "approvalPolicy":approval,"sandbox":sandbox,"excludeTurns":false,
         "beforeTurnId":turns[index]["id"],
         "approvalsReviewer":super::workflows::reviewer(&spec.config),
-        "config":provider_native::configuration::codex(&spec.config)?});
+        "config":native});
     if let Some(prompt) = &spec.config.system_prompt {
         params["developerInstructions"] = json!(prompt);
     }

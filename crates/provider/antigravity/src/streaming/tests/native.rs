@@ -183,3 +183,61 @@ fn error_checkpoints_are_not_reported_as_completed() {
         if entry.item["type"] == "compaction" && entry.item["status"] == "failed")
     );
 }
+
+#[test]
+fn agy_1_5_16_schedule_validation_failure_preserves_the_successful_turn() {
+    let events = replay(include_str!(
+        "../../tests/fixtures/native/schedule-invalid-1.5.16.ndjson"
+    ));
+    assert!(events.iter().any(|event| matches!(event,
+        AgentTurnEvent::Timeline(entry) if entry.item["name"] == "schedule"
+            && entry.item["status"] == "failed"
+            && entry.item["error"]["message"].as_str().unwrap().contains("invalid CronExpression"))));
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, AgentTurnEvent::Completed(_)))
+            .count(),
+        1
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, AgentTurnEvent::Failed | AgentTurnEvent::Cancelled))
+    );
+    let tools: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "tool_call" => Some(entry),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tools.len(), 1);
+}
+
+#[test]
+fn agy_1_5_16_denied_command_and_followup_complete_without_duplicate_items() {
+    let events = replay(include_str!(
+        "../../tests/fixtures/native/command-denied-1.5.16.ndjson"
+    ));
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, AgentTurnEvent::Completed(_)))
+            .count(),
+        2
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, AgentTurnEvent::Failed | AgentTurnEvent::Cancelled))
+    );
+    assert!(events.iter().any(|event| matches!(event,
+        AgentTurnEvent::Usage(usage) if usage.cached_input_tokens > usage.input_tokens)));
+    let mut keys = BTreeSet::new();
+    for event in &events {
+        if let AgentTurnEvent::Timeline(entry) = event {
+            assert!(keys.insert(&entry.key), "duplicate terminal item");
+        }
+    }
+}

@@ -169,3 +169,25 @@ pub(super) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSess
         .filter(|text| !text.is_empty() && text.len() <= 1024)
         .ok_or(AgentSessionError::Failed)
 }
+
+/// The servers in an `mcp_status` answer as `{name, url, type, product}`; `type` is the
+/// transport (`claudeai-proxy` for claude.ai connectors).
+pub(super) fn mcp_servers(status: &Value) -> Vec<Value> {
+    status["mcpServers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|server| {
+            let name = server["name"].as_str()?;
+            let url = server["config"]["url"]
+                .as_str()
+                .filter(|url| !url.is_empty());
+            Some(json!({
+                "name": name,
+                "url": url,
+                "type": server["config"]["type"],
+                "product": server["serverInfo"]["name"],
+            }))
+        })
+        .collect()
+}

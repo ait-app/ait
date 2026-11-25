@@ -36,6 +36,24 @@ use domain::workspace::sandbox::WriteConfinement;
 use serde_json::{Value, json};
 use transport::Transport;
 
+/// A thread's native config. A strict session reads the effective config first (with `cwd`, so
+/// a repository's `.codex/config.toml` layers count) and turns off every MCP server, plugin and
+/// app it did not bring itself.
+async fn native_config(
+    transport: &mut Transport,
+    config: &StoredAgentConfig,
+    cwd: &str,
+) -> Result<Value, AgentSessionError> {
+    let mut native = provider_native::configuration::codex(config)?;
+    if provider_native::configuration::strict_mcp(config) {
+        let effective = transport
+            .request("config/read", json!({"cwd": cwd}))
+            .await?;
+        provider_native::configuration::codex_strict(&mut native, &effective, config)?;
+    }
+    Ok(native)
+}
+
 use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
@@ -191,7 +209,8 @@ impl CodexClient {
                 ("thread/start", json!({}))
             };
             if !history {
-                launch_params(&mut params, spec, confined)?;
+                let native = native_config(&mut transport, &spec.config, &spec.cwd).await?;
+                launch_params(&mut params, spec, confined, native);
             }
             let response = if method == "thread/resume" {
                 native_sessions::resume(&mut transport, params).await?
@@ -371,6 +390,22 @@ impl AgentClient for CodexClient {
 
     async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
         self.validate_remote(spec).await
+    }
+
+    async fn mcp_servers(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        validate(spec)?;
+        let mut transport = self.launch_transport(&spec.cwd, false)?;
+        let effective = async {
+            transport.initialize().await?;
+            transport
+                .request("config/read", json!({"cwd": spec.cwd}))
+                .await
+        }
+        .await;
+        transport.close().await?;
+        Ok(provider_native::configuration::codex_mcp_servers(
+            &effective?,
+        ))
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
@@ -788,11 +823,12 @@ impl CodexSession {
             let mut resolved_sandbox =
                 sandbox::Sandbox::load(&mut transport, &self.cwd, confined).await?;
             let (approval, sandbox, _) = controls::policy(config, confined);
+            let native = native_config(&mut transport, config, &self.cwd).await?;
             let response = native_sessions::resume(
                 &mut transport,
                 json!({"threadId":self.id,
                 "cwd":self.cwd,"model":config.model,"approvalPolicy":approval,"sandbox":sandbox,
-                "config":provider_native::configuration::codex(config)?,
+                "config":native,
                 "approvalsReviewer":workflows::reviewer(config),
                 "developerInstructions":config.system_prompt}),
             )
@@ -1314,15 +1350,8 @@ mod tests;
 /// * `params` - `thread/start` or `thread/resume` parameters to extend in place
 /// * `spec` - Session specification supplying the cwd and configuration
 /// * `confined` - Whether the session runs under write confinement
-///
-/// # Errors
-///
-/// Propagates the error returned when the configuration cannot be translated to Codex config.
-fn launch_params(
-    params: &mut Value,
-    spec: &AgentSessionSpec,
-    confined: bool,
-) -> Result<(), AgentSessionError> {
+/// * `native` - The thread's native config ([`native_config`])
+fn launch_params(params: &mut Value, spec: &AgentSessionSpec, confined: bool, native: Value) {
     params["cwd"] = json!(spec.cwd);
     let (approval, sandbox, _) = controls::policy(&spec.config, confined);
     params["approvalPolicy"] = json!(approval);
@@ -1334,8 +1363,7 @@ fn launch_params(
     if let Some(prompt) = &spec.config.system_prompt {
         params["developerInstructions"] = json!(prompt);
     }
-    params["config"] = provider_native::configuration::codex(&spec.config)?;
-    Ok(())
+    params["config"] = native;
 }
 
 fn saved<'a>(

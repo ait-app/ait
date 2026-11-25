@@ -183,6 +183,7 @@ impl ExecutionState {
             Operation::Permission => self.permission(params).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
+            Operation::McpServers => self.mcp_servers(params).await,
             Operation::PresetDescribe
             | Operation::PresetList
             | Operation::PresetSave

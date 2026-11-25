@@ -55,6 +55,17 @@ pub(super) struct Transport {
     _mcp_config: Option<tempfile::NamedTempFile>,
 }
 
+/// What a spawned Claude process is for.
+#[derive(Clone, Copy)]
+enum Purpose {
+    /// An Agent session.
+    Session,
+    /// Isolated metadata generation: no tools, no MCP servers, no hooks.
+    Metadata,
+    /// Listing the MCP servers a session would load (`AgentClient::mcp_servers`).
+    McpInventory,
+}
+
 impl Transport {
     pub(super) fn spawn(
         client: &ClaudeClient,
@@ -62,7 +73,7 @@ impl Transport {
         binding: Option<(&str, bool)>,
         output_schema: Option<&Value>,
     ) -> Result<Self, AgentSessionError> {
-        Self::spawn_with_metadata(client, spec, binding, output_schema, false)
+        Self::spawn_for(client, spec, binding, output_schema, Purpose::Session)
     }
 
     pub(super) fn spawn_metadata(
@@ -70,15 +81,26 @@ impl Transport {
         spec: &AgentSessionSpec,
         schema: &Value,
     ) -> Result<Self, AgentSessionError> {
-        Self::spawn_with_metadata(client, spec, None, Some(schema), true)
+        Self::spawn_for(client, spec, None, Some(schema), Purpose::Metadata)
     }
 
-    fn spawn_with_metadata(
+    /// Spawn Claude to list the MCP servers of a session that keeps some of them, which loads
+    /// no claude.ai connectors (`launch_command`). With connectors on, Claude reports only the
+    /// connector for a URL that a plugin or configured server also has, hiding the server such
+    /// a session would load.
+    pub(super) fn spawn_mcp_inventory(
+        client: &ClaudeClient,
+        spec: &AgentSessionSpec,
+    ) -> Result<Self, AgentSessionError> {
+        Self::spawn_for(client, spec, None, None, Purpose::McpInventory)
+    }
+
+    fn spawn_for(
         client: &ClaudeClient,
         spec: &AgentSessionSpec,
         binding: Option<(&str, bool)>,
         output_schema: Option<&Value>,
-        metadata: bool,
+        purpose: Purpose,
     ) -> Result<Self, AgentSessionError> {
         #[cfg(windows)]
         if client
@@ -92,13 +114,19 @@ impl Transport {
             return Err(AgentSessionError::Unavailable);
         }
         let (mut command, mcp_config) = launch_command(client, spec, binding)?;
-        if metadata {
-            command.args([
-                "--tools=",
-                "--strict-mcp-config",
-                "--mcp-config={\"mcpServers\":{}}",
-                "--settings={\"disableAllHooks\":true}",
-            ]);
+        match purpose {
+            Purpose::Session => {}
+            Purpose::Metadata => {
+                command.args([
+                    "--tools=",
+                    "--strict-mcp-config",
+                    "--mcp-config={\"mcpServers\":{}}",
+                    "--settings={\"disableAllHooks\":true}",
+                ]);
+            }
+            Purpose::McpInventory => {
+                command.env("ENABLE_CLAUDEAI_MCP_SERVERS", "false");
+            }
         }
         if let Some(schema) = output_schema {
             command.arg(format!("--json-schema={schema}"));
@@ -324,6 +352,15 @@ async fn write(input: &Mutex<ChildStdin>, value: &Value) -> Result<(), AgentSess
     input.flush().await.map_err(|_| AgentSessionError::Failed)
 }
 
+/// A strict session that keeps inherited servers loads no claude.ai connectors: their list can
+/// arrive after start, past the `mcp_status` check. Set last, so no explicit environment brings
+/// them back.
+fn keep_without_connectors(command: &mut Command, spec: &AgentSessionSpec) {
+    if provider_native::configuration::claude_keeps(&spec.config) {
+        command.env("ENABLE_CLAUDEAI_MCP_SERVERS", "false");
+    }
+}
+
 fn launch_command(
     client: &ClaudeClient,
     spec: &AgentSessionSpec,
@@ -394,6 +431,7 @@ fn launch_command(
         .env_remove("CLAUDECODE")
         .env("CLAUDE_CODE_ENTRYPOINT", "ait")
         .env("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING", "true");
+    keep_without_connectors(&mut command, spec);
     if let Some((id, resume)) = binding {
         command.arg(format!(
             "--{}={id}",

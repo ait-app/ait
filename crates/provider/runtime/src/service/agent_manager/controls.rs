@@ -134,6 +134,19 @@ impl AgentManager {
         Ok(json!({"provider":provider,"diagnostic":diagnostic}))
     }
 
+    /// The MCP servers a session of `spec` would load, from its provider.
+    pub(crate) async fn mcp_servers(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, ErrorCode> {
+        self.clients
+            .get(&spec.provider)
+            .ok_or(ErrorCode::UnsupportedCapability)?
+            .mcp_servers(spec)
+            .await
+            .map_err(|_| ErrorCode::AgentIo)
+    }
+
     /// Route one preset request to whichever store owns `provider`'s presets.
     pub(crate) async fn presets(
         &self,

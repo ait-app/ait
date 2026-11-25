@@ -648,6 +648,20 @@ pub trait AgentClient: Debug + Send + Sync {
         Err(AgentSessionError::Unavailable)
     }
 
+    /// List the MCP servers a session in a validated working directory would load from the
+    /// native configuration, as `{name, url, type, product}` objects (`url` is null for stdio
+    /// servers, `type` is the transport, `product` is the server's own name once it answered).
+    /// Claude lists them as a session that keeps some of them (`toolPolicy.mcp.keep`) loads them:
+    /// without claude.ai connectors.
+    /// # Errors
+    /// Returns unavailable native support or an inspection failure.
+    async fn mcp_servers(
+        &self,
+        _spec: &AgentSessionSpec,
+    ) -> Result<Vec<serde_json::Value>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
     /// Read native account quota facts, not local estimates of token consumption.
     /// # Errors
     /// Returns unsupported accounting or a native query failure.

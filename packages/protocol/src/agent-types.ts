@@ -484,8 +484,18 @@ export interface McpToolRef {
   tool: string;
 }
 
+/**
+ * Which MCP servers a session inherits from the harness's own configuration. With
+ * `inherited: "none"` it loads only its own `mcpServers`, plus inherited servers named in `keep`.
+ */
+export interface McpScope {
+  inherited: "none";
+  keep?: string[];
+}
+
 export interface ToolPolicy {
   preapproved: McpToolRef[];
+  mcp?: McpScope;
 }
 
 export interface AgentSessionConfig {

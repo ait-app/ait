@@ -56,15 +56,20 @@ pub(super) async fn runtime(
     connection: &mut crate::connection::Connection,
 ) -> Result<Option<Completion>, DispatchError> {
     let mut context = claim(pending, crate::rpc::agent_runtime::METHODS)?;
-    if context.request.method == "agent.list.request"
-        && context
-            .request
-            .params
-            .get("subscribe")
-            .is_some_and(|value| !value.is_null())
-    {
-        crate::connection::directory::subscribe(context, state, connection).await?;
-        return Ok(None);
+    let mut sync_query = None;
+    if context.request.method == "agent.list.request" {
+        let params = &context.request.params;
+        if let Some(page) = connection.directory_pages.resume(params) {
+            context.respond(page)?;
+            return Ok(None);
+        }
+        if !params["subscribe"].is_null() {
+            crate::connection::directory::subscribe(context, state, connection).await?;
+            return Ok(None);
+        }
+        if !params["sync"].is_null() {
+            sync_query = Some(params.clone());
+        }
     }
     let params = std::mem::take(&mut context.request.params);
     match super::agent_runtime::dispatch(&context.request.method, params, state).await {
@@ -74,7 +79,11 @@ pub(super) async fn runtime(
             terminal_ids: reply.terminals,
         })),
         Ok(reply) => {
-            context.respond(Ok(reply.value))?;
+            let result = match sync_query {
+                Some(params) => connection.directory_pages.first(&params, reply.value),
+                None => Ok(reply.value),
+            };
+            context.respond(result)?;
             Ok(None)
         }
         Err(error) => {

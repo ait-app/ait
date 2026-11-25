@@ -67,6 +67,18 @@ for line in sys.stdin:
                 {"value":"sonnet", "displayName":"Sonnet", "supportedEffortLevels":["low", "high"]},
                 {"value":"default", "displayName":"Default"}],
                 "commands":[{"name":"review", "description":"Review changes", "argumentHint":"file"}]}
+        elif kind == "mcp_status":
+            connector = {"name":"claude.ai Bonsai staging", "status":"connected",
+                 "config":{"type":"claudeai-proxy", "url":"https://staging.example.invalid/mcp"},
+                 "serverInfo":{"name":"bonsai", "version":"0.1.0"}, "scope":"claudeai"}
+            # Claude Code loads one server per URL: while connectors are on, a plugin server at
+            # a connector's URL stays hidden behind the connector.
+            if (cwd / "plugin-behind-connector").exists() and os.environ.get("ENABLE_CLAUDEAI_MCP_SERVERS") == "false":
+                connector = {"name":"plugin:bonsai:bonsai", "status":"connected",
+                     "config":{"type":"http", "url":"https://staging.example.invalid/mcp"},
+                     "serverInfo":{"name":"bonsai", "version":"0.1.0"}, "scope":"dynamic"}
+            result = {"mcpServers":[connector,
+                {"name":"local", "status":"pending", "config":{"type":"stdio", "command":"node"}}]}
         elif kind == "rewind_files":
             (cwd / "tracked.txt").write_text("checkpoint restored")
             result = {"canRewind":True}

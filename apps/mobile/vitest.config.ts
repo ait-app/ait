@@ -134,6 +134,8 @@ export default defineConfig({
     ],
     exclude: [
       "expo-modules-core",
+      // Expo Router also needs the web resolver for its native screens dependency.
+      "expo-router",
       "react-native-reanimated",
       "react-native-gesture-handler",
       "react-native-keyboard-controller",

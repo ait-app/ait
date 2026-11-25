@@ -40,7 +40,8 @@ export AIT_SERVER_ANTIGRAVITY_BIN="/custom/path/agy"
 
 显式路径不可用时 Provider 显示 unavailable，不切换到其他安装。
 模型列表从当前 CLI 的 `agy models` 获取；需使用支持官方 stream input/output 的较新版本。
-协议验证使用 1.3.0，模型与思考等级的分组对照 1.4.7。
+协议基础验证使用 1.3.0，模型与思考等级的分组对照 1.4.7；1.5.16 的录制回归另覆盖
+调度工具参数错误、命令拒绝和后续成功轮次，不代表所有新版工具路径均已验证。
 
 ## 执行模式与会话
 
@@ -63,7 +64,10 @@ AGY 1.2.13 的工具 `ERROR` 步骤也会保留原生错误。`denied_actions` �
 Ait 只将新增拒绝用于本轮判断；重连后重新计数，避免旧拒绝让后续成功工具显示失败。
 
 AGY 的 stderr 会持续、有界地读取，仅公开权限、登录、额度、模型/API 或协议失败的分类说明；
-原始诊断不进入 Ait 日志或快照。更详细的原生日志位于 `~/.gemini/antigravity-cli/log/`。
+原始诊断不进入 Ait 日志或快照。更详细的原生日志位于 `~/.gemini/antigravity-cli/log/`，incident 导出默认从该目录采集。
+自定义日志目录可通过 `AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR` 覆盖。协议校验失败会保留
+固定的具体说明和来源，例如 `step_lifecycle`、`unfinished_steps`、`usage` 或 `denied_actions`；
+不记录失败帧的原始内容。
 
 模型和思考等级分开选择。`agy models` 把每个模型的每个 effort 各列一条记录
 （如 `gemini-test-high` 与 `Gemini Test (High)`）；ID 以 `-<effort>` 结尾且标签以对应的

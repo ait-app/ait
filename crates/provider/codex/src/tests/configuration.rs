@@ -571,3 +571,73 @@ async fn a_ticket_worker_keeps_every_ait_tool_and_its_approval_settings() {
     assert_eq!(stored.tool_policy, None);
     assert!(!client.additive_tool_preapproval());
 }
+
+fn user_servers(fixture: &Fixture) {
+    std::fs::write(
+        fixture.cwd.join("native-config.json"),
+        json!({"mcp_servers":{
+            "bonsai_staging":{"url":"https://staging.example.invalid/mcp","enabled":true},
+            "off":{"url":"https://off.example.invalid/mcp","enabled":false},
+            "local":{"command":"node","args":["server.js"]}},
+            "plugins":{"github@openai-curated":{"enabled":true}}})
+        .to_string(),
+    )
+    .unwrap();
+}
+
+#[tokio::test]
+async fn mcp_inventory_lists_the_enabled_servers_of_the_effective_configuration() {
+    let fixture = Fixture::new();
+    user_servers(&fixture);
+
+    let mut servers = fixture.client().mcp_servers(&fixture.spec()).await.unwrap();
+
+    servers.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
+    assert_eq!(
+        servers,
+        [
+            json!({"name":"bonsai_staging","url":"https://staging.example.invalid/mcp",
+                "type":"http","product":null}),
+            json!({"name":"local","url":null,"type":"stdio","product":null}),
+        ]
+    );
+    let read = fixture
+        .requests()
+        .into_iter()
+        .find(|request| request["method"] == "config/read")
+        .unwrap();
+    assert_eq!(read["params"]["cwd"], json!(fixture.spec().cwd));
+}
+
+#[tokio::test]
+async fn a_strict_thread_switches_off_every_inherited_server_plugin_and_app() {
+    let fixture = Fixture::new();
+    user_servers(&fixture);
+    let mut spec = fixture.spec();
+    spec.config = serde_json::from_value(json!({
+        "toolPolicy":{"preapproved":[],"mcp":{"inherited":"none","keep":["bonsai_staging"]}},
+        "mcpServers":{"bonsai_run":{"type":"http","url":"http://localhost:8860/mcp"}}}))
+    .unwrap();
+
+    let mut session = fixture.client().create_session(&spec).await.unwrap();
+    session.close().await.unwrap();
+
+    let start = fixture
+        .requests()
+        .into_iter()
+        .find(|request| request["method"] == "thread/start")
+        .unwrap();
+    let config = &start["params"]["config"];
+    assert_eq!(config["mcp_servers"]["local"], json!({"enabled":false}));
+    assert_eq!(config["mcp_servers"]["off"], json!({"enabled":false}));
+    assert!(config["mcp_servers"].get("bonsai_staging").is_none());
+    assert_eq!(
+        config["mcp_servers"]["bonsai_run"]["url"],
+        "http://localhost:8860/mcp"
+    );
+    assert_eq!(
+        config["plugins"]["github@openai-curated"],
+        json!({"enabled":false})
+    );
+    assert_eq!(config["features"]["apps"], false);
+}

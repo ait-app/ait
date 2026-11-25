@@ -133,6 +133,24 @@ impl ExecutionState {
         self.manager.diagnostic(provider).await.map_err(Into::into)
     }
 
+    /// The MCP servers a `provider` session in `cwd` would load (`provider.mcp.list.request`).
+    pub(super) async fn mcp_servers(&self, params: Value) -> Result<Value, ErrorCode> {
+        only(&params, &["provider", "cwd"])?;
+        let provider = params["provider"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?;
+        let cwd = params["cwd"].as_str().ok_or(ErrorCode::InvalidMessage)?;
+        let spec = AgentSessionSpec {
+            provider: provider.to_owned(),
+            cwd: canonical(cwd)?,
+            config: domain::agent_runtime::StoredAgentConfig::default(),
+            confinement: None,
+        };
+        let servers = self.manager.mcp_servers(&spec).await?;
+        crate::rpc::timeline::bounded(json!({"provider":provider,"servers":servers,"error":null}))
+            .map_err(Into::into)
+    }
+
     /// One editor over two stores: route each preset request to its owning backend.
     pub(super) async fn presets(&self, method: &str, params: &Value) -> Result<Value, ErrorCode> {
         let provider = params["provider"]

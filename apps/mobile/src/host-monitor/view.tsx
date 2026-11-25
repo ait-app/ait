@@ -121,8 +121,18 @@ export function HostMonitorView(props: HostMonitorViewProps) {
             </View>
             <View style={styles.status}>
               <View style={[styles.dot, { backgroundColor: statusColor }]} />
-              <Text style={styles.caption}>
-                {t(state ? "hostMonitor.paused" : "hostMonitor.live")}
+              <Text
+                style={styles.caption}
+                numberOfLines={1}
+                testID={state === "offline" ? "host-monitor-state" : undefined}
+              >
+                {t(
+                  state === "offline"
+                    ? "hostMonitor.offline"
+                    : state
+                      ? "hostMonitor.paused"
+                      : "hostMonitor.live",
+                )}
               </Text>
             </View>
             <Pressable
@@ -137,7 +147,7 @@ export function HostMonitorView(props: HostMonitorViewProps) {
           {props.hosts.length > 1 ? (
             <HostSelection hosts={props.hosts} picked={props.picked} onSelect={props.onSelect} />
           ) : null}
-          {state ? (
+          {state && state !== "offline" ? (
             <View style={styles.notice} testID="host-monitor-state">
               <Text style={[styles.caption, styles.grow]}>{t(`hostMonitor.${state}`)}</Text>
               {failed && connected && supported && !restricted ? (

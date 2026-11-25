@@ -278,6 +278,18 @@ impl AgentClient for ClaudeClient {
         Ok(provider_native::configuration::executable(&self.program))
     }
 
+    async fn mcp_servers(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        config::validate_spec(spec)?;
+        let mut transport = transport::Transport::spawn_mcp_inventory(self, spec)?;
+        let status = async {
+            transport.initialize().await?;
+            transport.request(json!({"subtype":"mcp_status"})).await
+        }
+        .await;
+        transport.close().await?;
+        Ok(config::mcp_servers(&status?))
+    }
+
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
         self.native_diagnostic().await
     }

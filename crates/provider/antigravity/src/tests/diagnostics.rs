@@ -168,3 +168,72 @@ async fn native_result_error_preserves_sanitized_explanation() {
     session.close().await.unwrap();
     assert_eq!(session.failure_message().as_deref(), Some(message.as_str()));
 }
+
+#[tokio::test]
+async fn protocol_failures_keep_safe_reasons_sources_and_recover_on_the_next_prompt() {
+    for (prompt, source, explanation) in [
+        ("protocol-foreign", "conversation", "different conversation"),
+        ("protocol-state", "step_state", "invalid step state"),
+        ("protocol-text", "assistant_text", "invalid assistant text"),
+        ("protocol-tool", "tool_metadata", "invalid tool metadata"),
+        (
+            "protocol-event",
+            "session_event",
+            "unexpected session event",
+        ),
+        ("protocol-usage", "usage", "invalid token usage"),
+        (
+            "protocol-denials",
+            "denied_actions",
+            "invalid permission denial",
+        ),
+        (
+            "protocol-unfinished",
+            "unfinished_steps",
+            "before all steps completed",
+        ),
+        (
+            "protocol-duplicate",
+            "step_lifecycle",
+            "updated a completed step",
+        ),
+    ] {
+        let (_directory, client, spec) = fixture();
+        let mut session = client.create_session(&spec).await.unwrap();
+        session.start_turn(prompt, &spec.config).await.unwrap();
+        while event(session.as_mut()).await.unwrap() != AgentTurnEvent::Failed {}
+        assert_eq!(session.poll_turn().unwrap(), None);
+        let diagnostic = session.failure_diagnostic().unwrap();
+        assert_eq!(
+            diagnostic.category,
+            provider_core::ports::diagnostics::Category::Protocol
+        );
+        assert_eq!(diagnostic.source, source, "{prompt}");
+        let message = session.failure_message().unwrap();
+        assert!(message.contains(explanation), "{prompt}: {message}");
+        assert!(!message.contains("fixture-secret"));
+        assert!(!format!("{diagnostic:?}").contains("fixture-secret"));
+        session.start_turn("recovery", &spec.config).await.unwrap();
+        completed(session.as_mut()).await;
+        assert_eq!(session.failure_message(), None);
+        assert_eq!(session.failure_diagnostic(), None);
+        session.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn a_protocol_reason_remains_available_after_close() {
+    let (_directory, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("protocol-state", &spec.config)
+        .await
+        .unwrap();
+    while event(session.as_mut()).await.unwrap() != AgentTurnEvent::Failed {}
+    session.close().await.unwrap();
+    assert_eq!(
+        session.failure_message().as_deref(),
+        Some("AGY returned an invalid step state.")
+    );
+    assert_eq!(session.failure_diagnostic().unwrap().source, "step_state");
+}

@@ -518,9 +518,17 @@ const McpToolRefSchema = z
   })
   .strict();
 
+const McpScopeSchema = z
+  .object({
+    inherited: z.literal("none"),
+    keep: z.array(z.string().trim().min(1)).max(128).optional(),
+  })
+  .strict();
+
 const ToolPolicySchema = z
   .object({
     preapproved: z.array(McpToolRefSchema),
+    mcp: McpScopeSchema.optional(),
   })
   .strict();
 

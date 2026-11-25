@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
-import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE } from "@/styles/theme";
@@ -71,7 +71,9 @@ export function SidebarHelpMenuItems() {
   const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
   const version = formatVersionWithPrefix(resolveAppVersion());
-  const hosts = useHosts();
+  // The menu opens above its trigger. Keep its rows in place while presence updates arrive.
+  // Its contents mount again on the next open, picking up the latest host list.
+  const [hosts] = useState(() => groupHosts(getHostRuntimeStore().getHosts()));
 
   const openKeyboardShortcuts = useCallback(() => {
     setShortcutsDialogOpen(true);
@@ -125,7 +127,7 @@ export function SidebarHelpMenuItems() {
         >
           {t("sidebar.help.appName")}
         </DropdownMenuHint>
-        {groupHosts(hosts).map((host) => (
+        {hosts.map((host) => (
           <HostVersionHint key={host.serverId} host={host} />
         ))}
       </View>
