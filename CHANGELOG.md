@@ -1,6 +1,6 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.27 - 2026-11-25
 
 - Agents can work across the hosts of one account. `host_list` shows the account's other hosts and
   whether each can take calls, and the agent, workspace and provider tools (13 of them, from
@@ -9,6 +9,46 @@
   on `mcp.acceptPeers` (off by default); turning it on trusts every host of the account, because
   another host's agent can then run agents, in any mode, in any directory on this one. It needs an
   account service that supports peer sessions, and it does not change calls without `hostId`.
+
+- The account and help menus, the sidebar host menu and the host picker for opening a project or
+  importing a session keep the host rows they were opened with. A host that goes offline no longer
+  moves the highlight to another machine or lets Enter reach a different host, an offline host that
+  is still registered can still open its settings, and the host monitor says that the machine is
+  offline in the title bar while the last sample stays readable
+  ([#844](https://github.com/ait-app/ait/pull/844)).
+
+- The Sign in tile on the home screen opens Settings and Online service instead of the login
+  website, and it is hidden on a client without an online service account
+  ([#840](https://github.com/ait-app/ait/pull/840)).
+
+- A tool without a typed detail shows its leading argument in the collapsed header and lays out its
+  input and output by content instead of raw JSON: short values as label and value rows, code and
+  commands as code blocks, MCP results unwrapped, and images counted instead of printed
+  ([#841](https://github.com/ait-app/ait/pull/841)).
+
+- The agent directory is delivered page by page within the Hub message limit, so the first
+  synchronization of a large account no longer exceeds that limit, closes the relayed session and
+  repeats on every reconnect
+  ([#843](https://github.com/ait-app/ait/pull/843)).
+
+- A host that embeds the provider runtime can read an Agent's stored timeline rows, its subagents
+  and its events
+  ([#838](https://github.com/ait-app/ait/pull/838)).
+
+- A prompt can carry up to 192 KiB of text, so a message that is wrapped in its own context is not
+  cut short
+  ([#839](https://github.com/ait-app/ait/pull/839)).
+
+- An unattended session can be kept to the MCP servers it brings. The provider option strictMcp
+  keeps a Claude or Codex session to those servers, strictMcpKeep names the inherited servers it
+  may keep, and provider.mcp.list.request lists the servers a session in a directory would load
+  ([#836](https://github.com/ait-app/ait/pull/836)).
+
+- Antigravity keeps the reason of a protocol failure and collects the native logs of the session
+  ([#842](https://github.com/ait-app/ait/pull/842)).
+
+- The SQLite dependency is updated to 0.41 for RUSTSEC-2026-0459
+  ([#837](https://github.com/ait-app/ait/pull/837)).
 
 ## 0.2.26 - 2026-11-24
 
