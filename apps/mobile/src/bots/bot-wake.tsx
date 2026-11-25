@@ -97,7 +97,7 @@ function notificationTarget(
 }
 
 /**
- * Assistant messages of a turn as the chat shows them. A wake turn never shows the silent
+ * Assistant messages of a turn as the chat shows them. A wake or passive turn never shows the silent
  * sentinel; while it streams, text that may still become the sentinel stays hidden so it never
  * flashes before the host marks the turn silent.
  */
@@ -108,7 +108,7 @@ export function visibleBotMessages(turn: BotTurn, pending: boolean): BotTurnMess
       : turn.reply
         ? [{ id: "legacy", text: turn.reply, status: "completed" }]
         : [];
-  if (!turn.wake) return messages;
+  if (!turn.wake && !turn.passive) return messages;
   if (turn.silent) return [];
   return messages.filter((message) => {
     const text = message.text.trim();
@@ -222,12 +222,12 @@ export function BotWakeHeader({
   );
 }
 
-/** A wake turn the Bot judged not worth a message: one subdued line instead of a reply. */
-export function BotSilentNote({ turnId }: { turnId: string }) {
+/** A wake or passive turn the Bot judged not worth a message: one subdued line instead of a reply. */
+export function BotSilentNote({ turnId, passive = false }: { turnId: string; passive?: boolean }) {
   const { t } = useTranslation();
   return (
     <Text style={chatStyles.turnStatusText} testID={`bot-silent-${turnId}`}>
-      {t("bots.notifications.silent")}
+      {t(passive ? "bots.noReplyNeeded" : "bots.notifications.silent")}
     </Text>
   );
 }

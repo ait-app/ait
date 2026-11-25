@@ -14,7 +14,7 @@
 
 - 同一 Conversation 串行执行，不同发送者/线程的外部对话分开维护上下文。
 - Provider 会话从创建起隐藏，普通 Agent API 无法接管；Bot 标签页将其列为子 Agent，可按完整 ID 只读查看（[ADR-221](../decisions/bot/adr-221-read-only-bot-session-inspection.md)）；关闭界面不停止 Bot。
-- 配置在新 Conversation 或显式 reset 后生效。reset 前先完成或取消正在执行的轮次；排队中的输入随 reset 取消；旧历史保留。
+- 执行配置在共享上下文重置后生效。重置前先完成或取消正在执行的轮次；所有入口排队中的输入随重置取消；旧历史保留。
 - 状态为 `active`、`paused`（原因 `user` 或 `directory_missing`）、`retired`。暂停取消排队和执行中的输入并停止外部轮询；
   恢复要求 Workspace 目录存在，否则返回 `WorkspaceNotFound`。Workspace 目录缺失会在轮次可运行时检测，Bot 暂停为 `directory_missing`，需用户显式恢复。
 - `bot.remove` 使 Bot 退役、保留记忆，并释放其外部账号（外部 Channel 标记为已删除）；Workspace 归档同样退役并删除记忆。
@@ -27,7 +27,7 @@
 问候与普通聊天由 Bot 直接回复，不先查询工作区。需要的 Ait 工具在当前 Provider 会话中不可用时，
 Bot 会说明能力限制并继续对话，不自行搜索本地配置或绕行 HTTP 接口。
 一次执行中的每条可见 assistant 消息都会进入同一个 turn 的 `messages` 数组并在运行期间更新；同一 `messageId` 的流式片段更新原消息，不同 `messageId` 保持独立。tool call、reasoning 和其他内部记录不会进入 Bot 对话。`reply` 仍保留为旧客户端读取最新消息的兼容字段。
-重启时结果不明的运行输入标记 `uncertain`，阻止同 generation 的后续输入，需显式 reset；
+重启时结果不明的运行输入标记 `uncertain`，阻止同一 Bot 的后续执行，需显式重置共享上下文；
 不会自动重做可能产生副作用的输入。正在发送但未确认的回复也标记 `uncertain`，不盲目重发。
 当前通过持久查询读取结果，尚无 Bot 流式事件订阅。
 Bot 把工作交给 Agent 后即结束本轮，不在轮次中等待长时间的工作；交办的每项工作记为一个任务，
@@ -172,24 +172,7 @@ Bot 把结果告诉用户后用 `bot_ticket_update` 关闭任务，也可以改�
 被截断的文本为 `{"preview","chars","read"}`。列表默认 20 条、至多 50 条，文本页默认 4000 字符、至多 8000 字符，以 `nextOffset` 续读。读取不改变任何状态，
 不影响“未看过”的通知。内置指令要求 Bot 按指针读取而不是猜测，跟进任务前先读它，在 Ait 对话中被问到其他对话里的事时去查。
 
-**对话之间的隔离**（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 4 节）：每个外部发送者的对话是不同的人，由 daemon 按凭据隔离，不依赖指令：
-
-- 只有 Ait 对话（Workspace 所有者）能读 Bot 的全部对话、任务与通知，并能查看、指挥作用域内的全部 Agent。
-- 外部对话只能读自己、自己发起的任务与通知，只能查看和指挥自己任务的 Agent。这包括所有者加入该任务的 Agent，也包括这些 Agent 的子 Agent。
-- 外部对话启动的 Agent（以及它们的子 Agent）受同样的限制：它们经 MCP 也只能查看和指挥这个对话的任务的 Agent，不能借它们读别人的 Agent。
-  所有者对话启动的 Agent 不受限制。
-- 别人的任务只看到标题、状态与等待原因，不显示是哪个 Agent 在等待，也看不到它有哪些 Agent，只显示数量。
-- 别人的 Agent，以及所有者自己启动、不属于 Bot 的 Agent，都不出现在外部对话的概览与 `agent_list`、`permission_list` 中。
-  对它们的 `agent_get`、`agent_activity_read`、`agent_wait`、`agent_prompt`、`agent_update`、`agent_mode_set`、
-  `agent_cancel`、`agent_archive` 与 `bot_read agent/<id>` 都返回同一段说明，不含标题或 id。不存在的 id 也返回这段说明。
-  `agent_list` 对它们只看最新的 200 个 Agent，不给翻页游标，列表不全时 `truncated` 为真。
-- 外部对话不能用 `agent_create` 的 `ticketId` 加入别人的任务，`bot_ticket_update` 不能修改别人的任务。别人的通知与已不保留的通知一样读不到。
-
-按设计在对话之间共享、不在此隔离内的：
-
-- Workspace 记忆：它保存所有者的偏好，进入每个对话的指令，任何对话都能读写。不要把只给所有者看的内容写进记忆。
-- 定时任务与心跳、终端、Workspace 脚本。
-- 所有任务的标题与状态。
+**共享范围**（[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）：同一 Bot 的全部入口共用上下文、记忆、工单和通知。管理者可跨群、私聊和内置入口回读及跟进自己的任务。外部入口只能操作该 Bot 的任务 Agent；内置所有者对话仍可操作工作区授权范围内的其他 Agent。工作者继续受自己的工单和来源限制，不能借共享管理者读取其他任务。
 
 **工作者读任务**：属于任务的 Agent 用 `ticket_read` 读自己的任务（请求、结论、其他 Agent 及其最近汇报、汇报历史），资源为 `ticket`、`ticket/reports`、
 `ticket/report/<n>`、`ticket/request`、`ticket/outcome`，看不到其他任务、对话或通知。Claude 工作者预授权该工具。
@@ -443,7 +426,7 @@ Channel；凭据存储与清理沿用飞书规则。Lark 入口要求主机支�
 旧主机需升级后才能显示。
 
 1. 在 [Lark 开发者后台](https://open.larksuite.com/app)创建自建应用，开启机器人能力。
-2. 添加 `im:message:send_as_bot`、`im:message.p2p_msg:readonly`、`im:message.group_at_msg:readonly` 权限。
+2. 添加 `im:message:send_as_bot`、`im:message.p2p_msg:readonly`、`im:message.group_at_msg.include_bot:readonly`、`im:message.group_msg.include_bot:read` 权限。
 3. 在 Ait 中填好上述信息并添加 Channel，然后在应用的事件与回调设置中选择长连接，订阅 `im.message.receive_v1`。
 4. 发布应用版本，使用任意平台允许的账号向机器人发消息。群聊需在 Ait 开启群聊并 @ 机器人。
 
@@ -495,7 +478,7 @@ Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（携带 r
 接口通过认证 WebSocket 协商 `workspace-bots-v2`，所有方法以 `workspaceId` 寻址，客户端 JSON 不含内部 `botId`。常用流程为
 `bot.setup.request` → `bot.conversation.open.request` → `bot.message.send.request`，
 再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态；`bot.get` 在未配置时返回 `null`。
-其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect`、`bot.channel.telegram.pair.{start,status,cancel}`、`bot.channel.weixin.scan.{start,status,cancel}`、`bot.channel.qq.scan.{start,status,cancel}`、`bot.channel.qq.connect`、`bot.channel.qq.pair`、`bot.channel.imessage.pair.{start,status,cancel}` 与 `bot.channel.webhook.{create,rotate}`）、`bot.conversation.{list,reset}`、
+其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect`、`bot.channel.telegram.pair.{start,status,cancel}`、`bot.channel.weixin.scan.{start,status,cancel}`、`bot.channel.qq.scan.{start,status,cancel}`、`bot.channel.qq.connect`、`bot.channel.qq.pair`、`bot.channel.imessage.pair.{start,status,cancel}` 与 `bot.channel.webhook.{create,rotate}`）、`bot.conversation.list`、`bot.context.reset`、`bot.chat.{list,update}`、
 `bot.turn.cancel`、`bot.memory.get`，读取通知日志的 `bot.notifications.list`（可选 `unseenBy` 只返回某对话尚未在完成轮次中看到的通知），
 以及任务的 `bot.ticket.{list,get,update}`（`update` 只接受 `open`、`done`、`failed`、`cancelled` 与可选结论，访客不可调用）。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
 `bot.channel.lark.connect` 提供 Lark 手动接入。基础 Channel 类型通过 `bot.channel.types.request` 查询，
@@ -510,3 +493,11 @@ Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（携带 r
 旧版写在 `<workspace>/.ait/bots/` 的记忆文件不再读取，可手动删除。
 
 旧设计、完整 RPC 示例与历史验证见[归档](../archive/plans/bot-backend.md)，未实现能力见[计划索引](../plans/README.md)。
+
+## 按外部会话接收与共享上下文
+
+Bot 聊天中的会话设置可分别启停每个已发现的飞书群聊或私聊。群聊不勾选“监听会话里的每一条消息”时，仅处理 @；勾选后处理飞书实际推送的人员和机器人消息。私聊按直接呼叫处理。设置不改变其他群；暂停接收不取消已经接纳的工作和结果回执。
+
+飞书应用需订阅 im.message.receive_v1，并开通包含机器人消息的提及或全量群消息权限。更改飞书权限后需要发布应用；Ait 开关不会自动授予平台权限。历史上未出现接收事件的会话在首次收到事件后登记。
+
+同一 Bot 的所有群聊、私聊与内置聊天共享上下文，能跨入口跟进同一个任务。当前回复发到当前会话，任务异步进展仍回到原来源。重置会改变所有入口共用的模型上下文，历史与会话设置保留。升级前备份 workspace-bots；写入新格式后降级需要恢复完整备份。

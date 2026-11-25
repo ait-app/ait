@@ -21,6 +21,8 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
             sync_token: None,
             deleted: false,
         }],
+        contexts: std::collections::BTreeMap::new(),
+        chats: Vec::new(),
     };
     store.save_catalog(&catalog).unwrap();
     let conversation = Conversation {
@@ -60,6 +62,9 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
         wake: None,
         silent: false,
         notification_cursor: None,
+        bot_sequence: None,
+        sender_type: None,
+        passive: false,
     };
     store.save_turn(&turn).unwrap();
     fs::write(

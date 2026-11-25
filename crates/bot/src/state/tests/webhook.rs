@@ -210,7 +210,7 @@ fn closing_forgets_a_webhook_conversation_for_good() {
         provider::service::bot_execution::Action::Close { .. }
     )));
     // A restart does not bring the closed conversation back.
-    assert_eq!(fixture.store.conversations().unwrap().len(), 1);
+    assert_eq!(fixture.store.conversations().unwrap().len(), 2);
     let restarted = fixture.state();
     assert_eq!(restarted.webhook_turn(WORKSPACE, kept), Ok(()));
     assert_eq!(

@@ -58,11 +58,12 @@ export const bots = {
   conversationReadOnly:
     "Только чтение: этот разговор идёт в {{channel}}. Здесь сообщения принимает только ваш разговор в Ait.",
   session: "Сессия бота",
-  reset: "Новый разговор",
+  reset: "Reset conversation",
+  resetSharedConfirm:
+    "Reset the Bot conversation for all connected chats? Message history, memory and chat settings will be kept.",
   resetConfirm:
-    "Начать новый разговор? Существующие сообщения сохранятся, будут применены последние настройки Бота.",
-  configurationHint:
-    "Изменения модели применяются к новым разговорам. Начните новый разговор, чтобы использовать их здесь.",
+    "Reset this conversation? Existing messages will be kept and the latest Bot settings will take effect.",
+  configurationHint: "Model changes take effect after you reset the Bot conversation.",
   memory: "Память",
   memoryHint:
     "Предпочтения, которые Бот читает перед каждым ответом, например язык заголовков PR или стиль ответов.",
@@ -94,11 +95,26 @@ export const bots = {
   allowGroups: "Разрешить групповые чаты",
   channelRefHint:
     "Учётные данные берутся из переменных окружения процесса, запускающего демон. Укажите только ссылку, например env:AIT_SERVER_CREDENTIAL_TELEGRAM.",
+  receptionOff: "Off",
+  receptionMentions: "Mentions only",
+  receptionAll: "All messages",
+  receptionDirect: "On",
+  chatDisabledHint: "Messages from this chat are ignored.",
+  chatReception: "Chat reception",
+  chatReceptionHint:
+    "Each chat has its own reception settings. Chats connected to this Bot share its conversation.",
+  noExternalChats: "Chats appear here when the platform first delivers a message.",
+  groupChat: "Group chat",
+  directChat: "Direct message",
+  listenAllPermissions:
+    "Requires {{platform}} permission to receive group messages from users and bots.",
+  mentionsOnly: "Only messages that mention the Bot are processed.",
+  noReplyNeeded: "No reply needed.",
   channelEnabled: "Включён",
   channelConnected: "Подключён",
   channelIdle: "Простаивает",
   feishuScanHint:
-    "Отсканируйте QR-код в приложении Feishu. Feishu создаст бота, а Ait подключит его; писать ему сможете только вы, пока не измените это.",
+    "Scan a QR code with the Feishu app to create and connect a Bot. Configure message reception for each chat in Settings.",
   feishuScanStart: "Показать QR-код",
   feishuScanWaiting:
     "Отсканируйте этот код в приложении Feishu и подтвердите создание бота. Не закрывайте страницу до завершения.",
@@ -119,7 +135,7 @@ export const bots = {
   feishuManualStep1:
     "Создайте собственное приложение на {{developerUrl}} и включите возможность бота.",
   feishuManualStep2:
-    "В разделе разрешений добавьте im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    "В разделе разрешений добавьте im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg.include_bot:readonly, im:message.group_msg.include_bot:read.",
   feishuManualStep3: "Скопируйте сюда App ID и App Secret, затем добавьте канал.",
   feishuManualStep4:
     "Затем в разделе событий и обратных вызовов {{platform}} выберите постоянное соединение и подпишитесь на im.message.receive_v1. {{platform}} сохранит это только после подключения канала.",
@@ -365,7 +381,7 @@ export const bots = {
     needs_approval: "Требуется одобрение",
     completed: "Завершено",
     failed: "Не удалось",
-    uncertain: "Прервано: начните новый разговор, чтобы продолжить",
+    uncertain: "Interrupted. Reset the Bot conversation to continue.",
     cancelled: "Отменено",
   },
 };

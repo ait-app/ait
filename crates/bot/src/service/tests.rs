@@ -330,8 +330,8 @@ async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
         Err(ErrorCode::BotConflict)
     );
     bots.execute(
-        "bot.conversation.reset.request",
-        json!({"workspaceId":WORKSPACE,"conversationId":conversation}),
+        "bot.context.reset.request",
+        json!({"workspaceId":WORKSPACE}),
     )
     .await
     .unwrap();
@@ -369,13 +369,13 @@ async fn settle(bots: &Bots, conversation: &Value, text: &str, status: &str) -> 
 }
 
 /// Reset `conversation` once its previous turn has finished running.
-async fn reset(bots: &Bots, conversation: &Value) {
+async fn reset(bots: &Bots, _conversation: &Value) {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match bots
                 .execute(
-                    "bot.conversation.reset.request",
-                    json!({"workspaceId":WORKSPACE,"conversationId":conversation}),
+                    "bot.context.reset.request",
+                    json!({"workspaceId":WORKSPACE}),
                 )
                 .await
             {
@@ -403,7 +403,9 @@ fn sent_texts(fixture: &Fixture) -> Vec<String> {
     calls(fixture)
         .into_iter()
         .filter_map(|action| match action {
-            provider::service::bot_execution::Action::Send { text, .. } => Some(text),
+            provider::service::bot_execution::Action::Send { text, .. } => {
+                Some(crate::test_support::input_body(&text))
+            }
             _ => None,
         })
         .collect()
@@ -493,7 +495,7 @@ async fn reset_required_rotates_the_conversation_and_retries_once() {
     assert!(actions.iter().any(|action| matches!(
         action,
         provider::service::bot_execution::Action::Send { agent_id, text, .. }
-            if agent_id == created[1] && text.starts_with(PREFIX) && text.ends_with("migrate")
+            if agent_id == created[1] && crate::test_support::input_body(text).starts_with(PREFIX) && crate::test_support::input_body(text).ends_with("migrate")
     )));
     let listed = bots
         .execute(

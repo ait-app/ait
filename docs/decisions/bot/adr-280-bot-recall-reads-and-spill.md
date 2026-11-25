@@ -26,6 +26,8 @@ paths:
   以及工作者预授权列表（`worker_tools()` 多出 `ticket_read`）；扩展 [ADR-213](adr-213-single-workspace-manager-bot.md) 的
   `bot.conversation.list.request` 投影（两个可选字段）。
 
+后续修订：[ADR-305](adr-305-shared-bot-context-and-chat-reception.md)。
+
 ## 背景
 
 ADR-274 之后，Bot 能看到工单、通知与 Agent，但只有两种读法：每轮塞进上下文的有界概览（超出预算时直接丢掉文本），

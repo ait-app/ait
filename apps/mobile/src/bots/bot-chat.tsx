@@ -21,6 +21,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import { useSettings } from "@/hooks/use-settings";
 import { usePaneContext } from "@/panels/pane-context";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSubagentOpensInSheet } from "@/subagents/opens-in-sheet";
 import type { PaseoSubagentRow } from "@/subagents/select";
@@ -137,7 +138,9 @@ function BotExchange({
           occurrenceKey={`${turn.id}:${message.id}`}
         />
       ))}
-      {turn.wake && turn.silent ? <BotSilentNote turnId={turn.id} /> : null}
+      {(turn.wake || turn.passive) && turn.silent ? (
+        <BotSilentNote turnId={turn.id} passive={turn.passive === true} />
+      ) : null}
       {pending ? (
         <View style={chatStyles.turnStatus} testID={`bot-turn-status-${turn.id}`}>
           <ThemedSyncedLoader size={14} uniProps={foregroundIconColorMapping} />
@@ -231,6 +234,7 @@ export function BotChat({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const readOnly = !canManageBackgroundTasks(serverId);
+  const sharedContext = useHostFeature(serverId, "workspaceBotSharedContext");
   const compact = useIsCompactFormFactor();
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
@@ -335,21 +339,32 @@ export function BotChat({
       if (!client || !conversation.data) throw new Error(t("bots.disconnected"));
       const confirmed = await confirmDialog({
         title: t("bots.reset"),
-        message: t("bots.resetConfirm"),
+        message: sharedContext ? t("bots.resetSharedConfirm") : t("bots.resetConfirm"),
         confirmLabel: t("bots.reset"),
         cancelLabel: t("common.actions.cancel"),
       });
       if (!confirmed) return null;
       return (
-        await client.botRequest("bot.conversation.reset.request", {
-          workspaceId,
-          conversationId: conversation.data.id,
-        })
+        await (sharedContext
+          ? client.botRequest("bot.context.reset.request", { workspaceId })
+          : client.botRequest("bot.conversation.reset.request", {
+              workspaceId,
+              conversationId: conversation.data.id,
+            }))
       ).conversation;
     },
     onSuccess: (updated) => {
       if (updated) {
         queryClient.setQueryData(conversationKey, updated);
+        if (sharedContext) {
+          void queryClient.invalidateQueries({
+            queryKey: botKeys.conversations(serverId, workspaceId, bot.builtinChannelId),
+          });
+          // Reset changes generations and pending turns in every source conversation.
+          void queryClient.invalidateQueries({
+            queryKey: botKeys.histories(serverId, workspaceId),
+          });
+        }
         refresh();
       }
     },

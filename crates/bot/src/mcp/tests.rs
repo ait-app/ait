@@ -36,6 +36,8 @@ fn catalog_with(bot: Bot) -> Catalog {
     Catalog {
         bots: vec![bot],
         channels: Vec::new(),
+        contexts: std::collections::BTreeMap::new(),
+        chats: Vec::new(),
     }
 }
 
@@ -186,6 +188,8 @@ fn bot_credential_is_rejected_after_pause_remove_or_new_generation() {
     scopes.publish(&Catalog {
         bots: vec![retired, replacement.clone()],
         channels: Vec::new(),
+        contexts: std::collections::BTreeMap::new(),
+        chats: Vec::new(),
     });
     assert!(scopes.resolve(resumed.expose_secret()).is_none());
     assert!(matches!(scopes.access(&session), McpAccess::Denied));
@@ -338,4 +342,28 @@ fn credentials_are_bounded_and_absent_from_debug_output() {
             .iter()
             .all(|token| !debug.contains(token.expose_secret()))
     );
+}
+
+#[test]
+fn shared_runtime_credentials_bind_each_turn_to_its_source_and_revoke_old_tokens() {
+    let scopes = Scopes::new();
+    let bot = active_bot(WORKSPACE);
+    let owner = owner_of(&bot);
+    scopes.publish(&catalog_with(bot));
+    let labels = BTreeMap::new();
+    let first_origin = ConversationId::generate();
+    scopes.origin("shared", first_origin);
+    let first = scoped_token(scopes.access(&subject("shared", true, Some(&owner), &labels)));
+    assert!(
+        matches!(scopes.resolve(first.expose_secret()).unwrap().kind, CallerKind::Bot {conversation_id,..} if conversation_id == first_origin)
+    );
+    let second_origin = ConversationId::generate();
+    scopes.origin("shared", second_origin);
+    assert!(scopes.resolve(first.expose_secret()).is_none());
+    let second = scoped_token(scopes.access(&subject("shared", true, Some(&owner), &labels)));
+    assert!(
+        matches!(scopes.resolve(second.expose_secret()).unwrap().kind, CallerKind::Bot {conversation_id,..} if conversation_id == second_origin)
+    );
+    scopes.clear_origin("shared");
+    assert!(scopes.resolve(second.expose_secret()).is_none());
 }

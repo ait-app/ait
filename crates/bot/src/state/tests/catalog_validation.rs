@@ -369,6 +369,8 @@ fn reply_references_may_exceed_the_identifier_limit_but_stay_bounded() {
         .unwrap();
     let channel_id = fixture.channel(&channel["channel"]).id;
     let incoming = |message: &str, reply_to: String| Incoming {
+        sender_type: None,
+        passive: false,
         channel_id,
         peer: "peer".into(),
         sender: "1".into(),

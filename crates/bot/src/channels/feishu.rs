@@ -1,3 +1,4 @@
+mod content;
 mod frames;
 pub(crate) mod onboarding;
 
@@ -231,6 +232,18 @@ async fn receive(
                 let event: Value =
                     serde_json::from_slice(&payload).map_err(|_| ErrorCode::BotIo)?;
                 let acknowledged = match incoming(connection.channel, &event, options.bot_id)? {
+                    Some(incoming)
+                        if !bots
+                            .admit_chat(
+                                connection.channel.id,
+                                incoming.peer.clone(),
+                                event["event"]["message"]["chat_type"] != "p2p",
+                                !incoming.passive,
+                            )
+                            .await? =>
+                    {
+                        true
+                    }
                     Some(incoming) => connection.admit(bots, incoming).await,
                     None => true,
                 };
@@ -252,9 +265,7 @@ async fn receive(
 }
 
 fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Incoming>, ErrorCode> {
-    let (ChannelConfig::Feishu { allow_groups, .. } | ChannelConfig::Lark { allow_groups, .. }) =
-        &channel.config
-    else {
+    let (ChannelConfig::Feishu { .. } | ChannelConfig::Lark { .. }) = &channel.config else {
         return Err(ErrorCode::InvalidMessage);
     };
     if event["header"]["event_type"] != "im.message.receive_v1" {
@@ -264,29 +275,19 @@ fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Inc
     let Some(sender_id) = sender["sender_id"]["open_id"].as_str() else {
         return Ok(None);
     };
-    if sender["sender_type"] != "user" {
+    if !matches!(sender["sender_type"].as_str(), Some("user" | "bot")) || sender_id == bot_id {
         return Ok(None);
     }
     let message = &event["event"]["message"];
-    if message["message_type"] != "text" {
-        return Ok(None);
-    }
-    if message["chat_type"] != "p2p"
-        && (!allow_groups
-            || message["mentions"].as_array().is_none_or(|mentions| {
-                !mentions
-                    .iter()
-                    .any(|mention| mention["id"]["open_id"] == bot_id)
-            }))
-    {
-        return Ok(None);
-    }
+    let group = message["chat_type"] != "p2p";
+    let mentioned = message["mentions"].as_array().is_some_and(|mentions| {
+        mentions
+            .iter()
+            .any(|mention| mention["id"]["open_id"] == bot_id)
+    });
     let content: Value = serde_json::from_str(message["content"].as_str().ok_or(ErrorCode::BotIo)?)
         .map_err(|_| ErrorCode::BotIo)?;
-    let Some(text) = content["text"]
-        .as_str()
-        .filter(|text| !text.trim().is_empty() && text.len() <= 16 * 1024)
-    else {
+    let Some(text) = content::text(message["message_type"].as_str().unwrap_or(""), &content) else {
         return Ok(None);
     };
     Ok(Some(Incoming {
@@ -301,12 +302,14 @@ fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Inc
             .or_else(|| message["root_id"].as_str())
             .filter(|id| !id.is_empty())
             .map(str::to_owned),
-        message_id: event["header"]["event_id"]
+        message_id: message["message_id"]
             .as_str()
             .ok_or(ErrorCode::BotIo)?
             .to_owned(),
-        text: text.to_owned(),
+        text,
         reply_to: message["message_id"].as_str().map(str::to_owned),
+        passive: group && !mentioned,
+        sender_type: sender["sender_type"].as_str().map(str::to_owned),
     }))
 }
 

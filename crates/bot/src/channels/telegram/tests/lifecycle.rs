@@ -208,8 +208,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
     let verify = async {
         delivered.notified().await;
         loop {
-            let conversations = fixture.store.conversations().unwrap();
-            let turns = fixture.store.turns(conversations[0].id).unwrap();
+            let turns = source_turns(&fixture, &channel);
             if turns.len() == 2
                 && turns
                     .iter()
@@ -253,6 +252,8 @@ async fn telegram_accumulates_multiple_assistant_messages_in_one_reply() {
         message_id: "update-1".into(),
         text: "hello".into(),
         reply_to: Some("42".into()),
+        sender_type: None,
+        passive: false,
     })
     .await
     .unwrap();
@@ -332,6 +333,8 @@ async fn telegram_sends_markdown_images_with_native_photo_api() {
         message_id: "update-1".into(),
         text: "hello".into(),
         reply_to: Some("42".into()),
+        sender_type: None,
+        passive: false,
     })
     .await
     .unwrap();
@@ -468,4 +471,15 @@ async fn telegram_rate_limit_retries_the_same_request_and_stops_after_three_atte
         }
         server.abort();
     }
+}
+
+fn source_turns(fixture: &Fixture, channel: &Channel) -> Vec<domain::bot::Turn> {
+    let route = fixture
+        .store
+        .conversations()
+        .unwrap()
+        .into_iter()
+        .find(|c| c.channel_id == channel.id)
+        .unwrap();
+    fixture.store.turns(route.id).unwrap()
 }

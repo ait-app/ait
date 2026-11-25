@@ -661,7 +661,13 @@ async fn assert_message_reply(event: &str, data: Value, sender: &str, peer: &str
     drive_until(&bots, &channel, &platform, address, |cancel| async move {
         platform_view.delivered.notified().await;
         loop {
-            let conversations = fixture_view.store.conversations().unwrap();
+            let conversations: Vec<_> = fixture_view
+                .store
+                .conversations()
+                .unwrap()
+                .into_iter()
+                .filter(|c| c.channel_id == channel.id)
+                .collect();
             let turns = fixture_view.store.turns(conversations[0].id).unwrap();
             if turns[0].delivery == domain::bot::DeliveryStatus::Delivered {
                 break;
@@ -682,7 +688,13 @@ async fn assert_message_reply(event: &str, data: Value, sender: &str, peer: &str
     assert_eq!(sent[0].1["content"], reply);
     assert_eq!(sent[0].1["msg_id"], message_id);
     assert_eq!(sent[0].1["msg_seq"], 1);
-    let conversations = fixture.store.conversations().unwrap();
+    let conversations: Vec<_> = fixture
+        .store
+        .conversations()
+        .unwrap()
+        .into_iter()
+        .filter(|c| c.channel_id == channel.id)
+        .collect();
     assert_eq!(conversations.len(), 1);
     assert_eq!(conversations[0].sender, sender);
     assert_eq!(conversations[0].peer, peer);

@@ -62,6 +62,36 @@ async function compileInlineSchema(sourceSchema: string): Promise<GeneratedSchem
 }
 
 describe("WS outbound zod-aot validation", () => {
+  it.each(["feishu", "lark"])(
+    "accepts %s channels through the compiled websocket validator",
+    (kind) => {
+      const envelope = {
+        type: "session",
+        message: {
+          type: "bot.channel.list.response",
+          payload: {
+            requestId: "channels",
+            channels: [
+              {
+                id: "11111111-1111-4111-8111-111111111111",
+                config: {
+                  kind,
+                  appId: "cli_test",
+                  secretRef: "env:AIT_SERVER_CREDENTIAL_TEST",
+                  allowedSenders: [],
+                  allowGroups: false,
+                },
+                enabled: true,
+                cursor: null,
+                deleted: false,
+              },
+            ],
+          },
+        },
+      };
+      expect(GeneratedWSOutboundMessageSchema.safeParse(envelope)).toMatchObject({ success: true });
+    },
+  );
   it("applies defaults inside discriminated-union branches", async () => {
     const schema = await compileInlineSchema(`
 const SourceSchema = z.discriminatedUnion("type", [

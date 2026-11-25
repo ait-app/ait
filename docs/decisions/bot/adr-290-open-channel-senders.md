@@ -18,6 +18,8 @@ paths:
 
 # ADR-290：所有消息 Channel 对任意发送者开放
 
+后续修订：[ADR-305](adr-305-shared-bot-context-and-chat-reception.md)。
+
 ## 背景
 
 发送者白名单会静默丢弃群友的提及和私聊消息。只开放 QQ 群提及仍留下其他平台及普通消息的相同限制。

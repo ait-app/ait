@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
@@ -39,6 +40,7 @@ export function FeishuScanSetup({
   onEnterManually: () => void;
 }) {
   const { t } = useTranslation();
+  const perChatReception = useHostFeature(serverId, "workspaceBotChatReception");
   const client = useHostRuntimeClient(serverId);
   const [allowGroups, setAllowGroups] = useState(false);
   const [scan, setScan] = useState<{ scanId: string; url: string } | null>(null);
@@ -128,11 +130,13 @@ export function FeishuScanSetup({
   return (
     <View style={styles.permissionBlock}>
       <Text style={styles.hint}>{t("bots.feishuScanHint")}</Text>
-      <AllowGroupsCheckbox
-        checked={allowGroups}
-        disabled={start.isPending}
-        onToggle={() => setAllowGroups((checked) => !checked)}
-      />
+      {!perChatReception ? (
+        <AllowGroupsCheckbox
+          checked={allowGroups}
+          disabled={start.isPending}
+          onToggle={() => setAllowGroups((checked) => !checked)}
+        />
+      ) : null}
       {start.error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {start.error.message}

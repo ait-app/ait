@@ -576,6 +576,8 @@ describe("Rust v1 connection", () => {
       .map((spec) => spec.method)
       .filter(
         (method) =>
+          !method.startsWith("bot.chat.") &&
+          method !== "bot.context.reset.request" &&
           method !== "bot.permissions.update.request" &&
           method !== "bot.notifications.list.request" &&
           !method.startsWith("bot.ticket.") &&
@@ -593,6 +595,8 @@ describe("Rust v1 connection", () => {
     const oldInfo = old.received.find((message) => object(message).type === "status");
     expect(object(object(oldInfo).payload).features).toMatchObject({
       workspaceBots: true,
+      workspaceBotChatReception: false,
+      workspaceBotSharedContext: false,
       workspaceBotPermissions: false,
       workspaceBotNotifications: false,
       workspaceBotTickets: false,
@@ -611,6 +615,8 @@ describe("Rust v1 connection", () => {
     const info = current.received.find((message) => object(message).type === "status");
     expect(object(object(info).payload).features).toMatchObject({
       workspaceBots: true,
+      workspaceBotChatReception: true,
+      workspaceBotSharedContext: true,
       workspaceBotPermissions: true,
       workspaceBotNotifications: true,
       workspaceBotTickets: true,
@@ -625,6 +631,49 @@ describe("Rust v1 connection", () => {
       workspaceBotWebhookSetup: true,
     });
   });
+  it("requires both chat reception methods and routes new configuration off the full background connection", () => {
+    const methods = Object.keys(METHODS).filter((method) => method !== "bot.chat.update.request");
+    const h = harness(methods);
+    h.ready(undefined, ["workspace-bots-v2"]);
+    const info = h.received.find((message) => object(message).type === "status");
+    expect(object(object(info).payload).features).toMatchObject({
+      workspaceBotChatReception: false,
+      workspaceBotSharedContext: true,
+    });
+    for (const method of [
+      "bot.chat.list.request",
+      "bot.chat.update.request",
+      "bot.context.reset.request",
+    ]) {
+      expect(METHODS[method]?.channel).toBe(4);
+    }
+  });
+  it.each([
+    ["bot.chat.list.request", { workspaceId: "w" }, { chats: [] }],
+    [
+      "bot.chat.update.request",
+      { workspaceId: "w", channelId: "c", peer: "p", enabled: false, listenAllMessages: false },
+      { chat: { channelId: "c", peer: "p", enabled: false } },
+    ],
+    ["bot.context.reset.request", { workspaceId: "w" }, { conversation: { id: "context" } }],
+  ] as const)(
+    "carries %s and its response over the dedicated split connection",
+    (method, params, result) => {
+      const h = harness();
+      try {
+        h.ready(undefined, ["workspace-bots-v2"]);
+        h.send({ type: method, requestId: "configuration", ...params });
+        expect(h.last(4)).toMatchObject({ method, request_id: "configuration", params });
+        h.sockets[4].message({ type: "response", request_id: "configuration", result });
+        expect(h.received.at(-1)).toEqual({
+          type: method.replace(/\.request$/, ".response"),
+          payload: { requestId: "configuration", ...result },
+        });
+      } finally {
+        h.transport.close();
+      }
+    },
+  );
   it("does not enable Bot features for the v1-only capability", () => {
     const h = harness();
     h.ready(undefined, ["workspace-bots-v1"]);
@@ -1203,7 +1252,7 @@ describe("Rust v1 connection", () => {
     try {
       h.ready();
       expect(h.received).toHaveLength(1);
-      expect(h.base).toHaveBeenCalledTimes(4);
+      expect(h.base).toHaveBeenCalledTimes(CHANNEL_CAPABILITIES.length);
       for (const [options] of h.base.mock.calls) {
         expect(options).toMatchObject({
           url: "ait+desktop://ssh?host=build-box&daemonPort=7316",

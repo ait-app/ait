@@ -40,7 +40,10 @@ impl Executor for Native {
             Action::Close { .. } | Action::Cancel { .. } => json!({"ok":true}),
             Action::Release { .. } => json!({"released":true}),
             Action::Send { agent_id, text, .. } => {
-                self.messages.lock().unwrap().insert(agent_id, text);
+                self.messages
+                    .lock()
+                    .unwrap()
+                    .insert(agent_id, input_body(&text));
                 json!({"accepted":true})
             }
             Action::Permission { .. } => {
@@ -190,4 +193,13 @@ pub(crate) const OTHER_WORKSPACE: &str = "wks_fedcba9876543210";
 
 pub(crate) fn setup(workspace: &str) -> Value {
     json!({"workspaceId":workspace,"execution":{"provider":"test","model":null,"modeId":null,"thinking":null}})
+}
+
+/// The fake provider echoes user content, excluding the daemon's trusted delivery envelope.
+pub(crate) fn input_body(text: &str) -> String {
+    text.strip_prefix("<ait-input kind=\"bot_message\"")
+        .and_then(|text| text.split_once("\">\n"))
+        .and_then(|(_, text)| text.strip_suffix("\n</ait-input>"))
+        .unwrap_or(text)
+        .replace("<\\/", "</")
 }

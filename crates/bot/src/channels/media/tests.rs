@@ -24,6 +24,9 @@ fn turn(text: &str) -> Turn {
         wake: None,
         silent: false,
         notification_cursor: None,
+        bot_sequence: None,
+        sender_type: None,
+        passive: false,
     }
 }
 

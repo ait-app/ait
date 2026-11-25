@@ -107,11 +107,16 @@ impl State {
         if self.frozen {
             return Ok(Vec::new());
         }
+        self.initialize_contexts()?;
         let mut ready = Vec::new();
         let mut failed = Vec::new();
         let mut missing = BTreeSet::new();
         let mut blocked = BTreeSet::new();
-        for ((conversation, _), id) in &self.pending {
+        let pending = self.ordered_pending()?;
+        let mut selected_bots = BTreeSet::new();
+        for pending_turn in &pending {
+            let conversation = &pending_turn.conversation_id;
+            let id = &pending_turn.id;
             let receipt = self.receipts.get(id).ok_or(ErrorCode::BotIo)?;
             if self
                 .conversations
@@ -142,6 +147,9 @@ impl State {
                 .ok_or(ErrorCode::BotIo)?
                 .clone();
             let bot = self.bot(conversation.bot_id)?.clone();
+            if selected_bots.contains(&bot.id) || self.bot_blocked(bot.id) {
+                continue;
+            }
             if missing.contains(&bot.id) {
                 continue;
             }
@@ -160,10 +168,16 @@ impl State {
                 failed.push(*id);
                 continue;
             };
+            let context_id = *self.catalog.contexts.get(&bot.id).ok_or(ErrorCode::BotIo)?;
+            let context = self.conversation(bot.id, context_id)?;
+            let mut conversation = conversation;
+            conversation.session_id.clone_from(&context.session_id);
+            self.scopes.origin(&context.session_id, conversation.id);
+            selected_bots.insert(bot.id);
             ready.push(Run {
-                turn: self.turn(*id)?,
-                owner: self.owner(&conversation)?,
-                config: conversation.execution.clone(),
+                turn: pending_turn.clone(),
+                owner: self.owner(context)?,
+                config: context.execution.clone(),
                 conversation,
                 instructions,
                 cancel: CancellationToken::new(),
@@ -188,6 +202,17 @@ impl State {
         }
         Ok(ready)
     }
+    fn bot_blocked(&self, bot: BotId) -> bool {
+        self.running
+            .keys()
+            .any(|id| self.conversations.get(id).is_some_and(|c| c.bot_id == bot))
+            || self.uncertain.iter().any(|(id, generation)| {
+                self.conversations
+                    .get(id)
+                    .is_some_and(|c| c.bot_id == bot && c.generation == *generation)
+            })
+    }
+
     fn instructions(&self, bot: &Bot) -> Result<String, ErrorCode> {
         let memory = self
             .store
@@ -262,7 +287,12 @@ impl State {
         }
         // A wake-up the Bot judged not worth a message completes without being sent anywhere.
         if status == TurnStatus::Completed
-            && turn.wake.is_some()
+            && (turn.wake.is_some()
+                || (turn.passive
+                    && turn
+                        .messages
+                        .iter()
+                        .all(|message| message.text.trim() == crate::instructions::SILENT_REPLY)))
             && turn.reply.as_deref().map(str::trim) == Some(crate::instructions::SILENT_REPLY)
         {
             turn.silent = true;
@@ -287,6 +317,15 @@ impl State {
         Ok(())
     }
     pub(crate) fn finished(&mut self, conversation: ConversationId) {
+        if let Some(route) = self.conversations.get(&conversation)
+            && let Some(context) = self
+                .catalog
+                .contexts
+                .get(&route.bot_id)
+                .and_then(|id| self.conversations.get(id))
+        {
+            self.scopes.clear_origin(&context.session_id);
+        }
         self.running.remove(&conversation);
         // A run that ended without settling its turn never completed it.
         self.settle_observations(conversation, false);

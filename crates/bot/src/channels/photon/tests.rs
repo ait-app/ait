@@ -515,6 +515,8 @@ fn external(channel: ChannelId, sender: usize, index: usize) -> Incoming {
         message_id: format!("filler-{sender}-{index}"),
         text: "filler".to_owned(),
         reply_to: None,
+        sender_type: None,
+        passive: false,
     }
 }
 

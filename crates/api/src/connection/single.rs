@@ -353,6 +353,13 @@ fn lane(message: &Incoming) -> usize {
     {
         return 2;
     }
+    // Keep Bot configuration on the SDK's file lane and its split hello within 64 methods.
+    if matches!(
+        method.as_str(),
+        "bot.chat.list.request" | "bot.chat.update.request" | "bot.context.reset.request"
+    ) {
+        return 2;
+    }
     // Waits on external platforms or the center, which must not stall ordinary workspace requests.
     if [
         "feishu", "lark", "telegram", "weixin", "qq", "imessage", "webhook",

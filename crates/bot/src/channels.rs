@@ -124,6 +124,8 @@ where
 
 #[derive(Clone, Debug)]
 pub(crate) struct Incoming {
+    pub(crate) passive: bool,
+    pub(crate) sender_type: Option<String>,
     pub(crate) channel_id: ChannelId,
     pub(crate) peer: String,
     pub(crate) sender: String,

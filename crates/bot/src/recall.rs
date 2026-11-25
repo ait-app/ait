@@ -78,6 +78,8 @@ pub enum Origin {
 pub enum Viewer {
     /// The built-in Ait conversation of the Workspace owner: every conversation of its Bot.
     Owner(ConversationId),
+    /// Shared Bot manager context, retaining the current input's delivery origin.
+    Shared(ConversationId),
     /// Any other conversation, including one the Bot no longer has: only itself and what it
     /// originated.
     External(ConversationId),
@@ -91,7 +93,7 @@ impl Viewer {
     #[must_use]
     pub fn sees(self, origin: Option<ConversationId>) -> bool {
         match self {
-            Self::Owner(_) => true,
+            Self::Owner(_) | Self::Shared(_) => true,
             Self::External(own) => origin == Some(own),
             Self::Worker(_) => false,
         }
@@ -101,7 +103,9 @@ impl Viewer {
     #[must_use]
     pub const fn conversation(self) -> Option<ConversationId> {
         match self {
-            Self::Owner(conversation) | Self::External(conversation) => Some(conversation),
+            Self::Owner(conversation)
+            | Self::Shared(conversation)
+            | Self::External(conversation) => Some(conversation),
             Self::Worker(_) => None,
         }
     }
@@ -123,6 +127,17 @@ impl Viewer {
         let own = match self {
             Self::Owner(_) => return true,
             Self::Worker(_) => return false,
+            Self::Shared(own) => {
+                return labels[BOT_TICKET_LABEL]
+                    .as_str()
+                    .and_then(|id| id.parse().ok())
+                    .and_then(ticket_origin)
+                    .is_some()
+                    || labels[BOT_CONVERSATION_LABEL]
+                        .as_str()
+                        .and_then(|id| id.parse().ok())
+                        == Some(own);
+            }
             Self::External(own) => own,
         };
         let ticket = labels[BOT_TICKET_LABEL]

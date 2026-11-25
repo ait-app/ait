@@ -12,6 +12,7 @@ export interface SettingsSwitchProps extends SettingsRowProps {
   onValueChange(value: boolean): void;
 }
 export interface SettingsSelectProps<Value extends string = string> extends SettingsRowProps {
+  disabled?: boolean;
   value: Value;
   options: readonly { label: string; value: Value }[];
   onValueChange(value: Value): void;

@@ -156,7 +156,7 @@ pub enum ChannelConfig {
         /// Legacy compatibility field; ignored when admitting messages.
         #[serde(default)]
         allowed_senders: Vec<String>,
-        /// Whether mentioned group messages are accepted.
+        /// Legacy compatibility field; reception is configured per external chat.
         #[serde(default)]
         allow_groups: bool,
     },
@@ -169,7 +169,7 @@ pub enum ChannelConfig {
         /// Legacy compatibility field; ignored when admitting messages.
         #[serde(default)]
         allowed_senders: Vec<String>,
-        /// Whether mentioned group messages are accepted.
+        /// Legacy compatibility field; reception is configured per external chat.
         #[serde(default)]
         allow_groups: bool,
     },
@@ -350,6 +350,15 @@ pub struct Turn {
     pub generation: u64,
     /// Original input text.
     pub text: String,
+    /// Durable Bot-wide admission order; absent on legacy receipts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bot_sequence: Option<u64>,
+    /// Platform sender category, independent of the sender's opaque identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_type: Option<String>,
+    /// Unmentioned group input that may finish silently.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub passive: bool,
     /// Original platform message identity used as the reply target.
     pub reply_to: Option<String>,
     /// Committed final assistant answer.
@@ -383,10 +392,32 @@ pub struct Turn {
     pub notification_cursor: Option<u64>,
 }
 
+/// Reception policy for one external chat owned by a Channel's Bot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BotChat {
+    /// Account transport, whose Bot owns this policy.
+    pub channel_id: ChannelId,
+    /// Platform chat identity, independent of participants and threads.
+    pub peer: String,
+    /// Whether this is a group rather than a direct conversation.
+    pub group: bool,
+    /// Whether new messages enter the Bot.
+    pub enabled: bool,
+    /// Accept unmentioned group messages when platform permissions allow it.
+    pub listen_all_messages: bool,
+}
+
 /// Atomically persisted configuration catalog; histories live in separate files.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Catalog {
+    /// Shared execution route of each Bot; absent on older catalogs.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub contexts: std::collections::BTreeMap<BotId, ConversationId>,
+    /// Per-platform-chat reception policies, independent of sender and thread routes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chats: Vec<BotChat>,
     /// Workspace-owned Bots.
     pub bots: Vec<Bot>,
     /// Exclusive channel instances.

@@ -592,7 +592,7 @@ fn scan_link_keeps_feishus_code_and_adds_the_requested_permissions() {
         addons["events"]["items"]["tenant"],
         json!(["im.message.receive_v1"])
     );
-    assert_eq!(addons["scopes"]["tenant"].as_array().unwrap().len(), 3);
+    assert_eq!(addons["scopes"]["tenant"].as_array().unwrap().len(), 4);
 }
 
 #[test]

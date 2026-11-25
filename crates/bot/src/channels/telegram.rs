@@ -449,6 +449,8 @@ fn incoming(
             .to_string(),
         text: text_with_reply(text, message),
         reply_to: message["message_id"].as_i64().map(|id| id.to_string()),
+        sender_type: None,
+        passive: false,
     }))
 }
 

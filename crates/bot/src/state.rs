@@ -1,9 +1,11 @@
 mod catalog;
+mod chats;
 mod conversations;
 mod execution;
 mod follow;
 mod notifications;
 mod recall;
+mod shared;
 mod tickets;
 mod webhook;
 
@@ -83,6 +85,7 @@ pub(crate) struct State {
     activity: BTreeMap<ConversationId, (u64, String)>,
     /// The service is stopping: running turns are being cancelled by shutdown, not by a user.
     pub(crate) stopping: bool,
+    next_bot_sequence: BTreeMap<BotId, u64>,
 }
 
 impl State {
@@ -142,8 +145,19 @@ impl State {
             tickets: loaded.tickets,
             activity: BTreeMap::new(),
             stopping: false,
+            next_bot_sequence: BTreeMap::new(),
         };
         state.load_turns(now)?;
+        for (bot, id) in &state.catalog.contexts {
+            let context = state.conversation(*bot, *id)?;
+            if context.channel_id != state.bot(*bot)?.builtin_channel_id
+                || context.peer != "owner"
+                || context.sender != "owner"
+                || context.thread.is_some()
+            {
+                return Err(ErrorCode::BotIo);
+            }
+        }
         state.offer_reports(loaded.reports, now)?;
         Ok(state)
     }
@@ -188,6 +202,15 @@ impl State {
                         .contains_key(&(conversation.channel_id, turn.message_id.clone()))
                 {
                     return Err(model::bot::StorageError);
+                }
+                if let Some(sequence) = turn.bot_sequence {
+                    let next = self.next_bot_sequence.entry(conversation.bot_id).or_insert(1);
+                    *next = (*next).max(sequence.saturating_add(1));
+                }
+                if matches!(self.channel(conversation.bot_id, conversation.channel_id).map(|c| &c.config), Ok(ChannelConfig::Feishu { .. } | ChannelConfig::Lark { .. }))
+                    && let Some(message) = &turn.reply_to
+                {
+                    self.inputs.entry((conversation.channel_id, message.clone())).or_insert(turn.id);
                 }
                 self.index_turn(&turn).map_err(|_| model::bot::StorageError)?;
                 self
@@ -267,7 +290,9 @@ impl State {
                     json!({"conversations":self.conversations.values().filter(|conversation| conversation.bot_id == bot).map(|conversation| self.project_conversation(conversation)).collect::<Vec<_>>()}),
                 )
             }
-            "bot.conversation.reset.request" => self.reset(&decode(params)?),
+            "bot.context.reset.request" => self.reset_context(&decode(params)?),
+            "bot.chat.list.request" => self.list_chats(&decode(params)?),
+            "bot.chat.update.request" => self.update_chat(&decode(params)?),
             "bot.message.send.request" => self.send(decode(params)?),
             "bot.history.get.request" => self.history(&decode(params)?),
             "bot.turn.get.request" => {
@@ -467,7 +492,7 @@ impl State {
             "channelKind":self.channel_kind(conversation.channel_id),
             "peer":conversation.peer,"sender":conversation.sender,"thread":conversation.thread,
             "generation":conversation.generation,"nextSequence":conversation.next_sequence,
-            "sessionAgentId":conversation.session_id,
+            "sessionAgentId":self.catalog.contexts.get(&conversation.bot_id).and_then(|id| self.conversations.get(id)).unwrap_or(conversation).session_id,
             "lastActivityAt":self.last_activity(conversation.id)})
     }
     pub(crate) fn channels(&self) -> Vec<Channel> {
@@ -501,6 +526,9 @@ fn queued_turn(
         generation: conversation.generation,
         text,
         reply_to: None,
+        bot_sequence: None,
+        sender_type: None,
+        passive: false,
         reply: None,
         messages: Vec::new(),
         pending_permissions: Vec::new(),

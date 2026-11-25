@@ -76,6 +76,8 @@ async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
             message_id: "event-1".into(),
             text: "hello".into(),
             reply_to: None,
+            sender_type: None,
+            passive: false,
         })
         .unwrap();
     let turn_id = serde_json::from_value(input["turn"]["id"].clone()).unwrap();
@@ -136,7 +138,7 @@ async fn websocket_events_are_acknowledged_after_durable_admission_and_deduplica
         let server = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.unwrap();
             let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
-            let event = json!({"header":{"event_type":"im.message.receive_v1","event_id":"event-1"},"event":{"sender":{"sender_type":"user","sender_id":{"open_id":"ou_alice"}},"message":{"chat_type":"p2p","chat_id":"oc_chat","message_type":"text","content":"{\"text\":\"hello\"}"}}});
+            let event = json!({"header":{"event_type":"im.message.receive_v1","event_id":"event-1"},"event":{"sender":{"sender_type":"user","sender_id":{"open_id":"ou_alice"}},"message":{"message_id":"om_incoming","chat_type":"p2p","chat_id":"oc_chat","message_type":"text","content":"{\"text\":\"hello\"}"}}});
             let frame = Frame {
                 seq_id: 12,
                 log_id: 99,

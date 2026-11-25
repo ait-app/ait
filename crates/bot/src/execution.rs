@@ -26,7 +26,7 @@ const UNSAFE_SESSION: &str =
     "Bot session could not be switched to its safe mode; reset this conversation";
 
 pub(crate) async fn run(bots: Bots, executor: Arc<dyn Executor>, mut run: Run) {
-    let conversation = run.conversation.id;
+    let conversation = run.turn.conversation_id;
     let result = perform(&bots, &executor, &mut run).await;
     if result.is_err() {
         let _ = bots.progress(run.turn.id, TurnStatus::Uncertain, None,
@@ -64,7 +64,11 @@ async fn perform(
         Action::Send {
             agent_id: run.conversation.session_id.clone(),
             message_id: run.turn.id.to_string(),
-            text,
+            text: format!("<ait-input kind=\"bot_message\" source=\"{}\">\n{}\n</ait-input>",
+                serde_json::json!({"conversationId":run.turn.conversation_id,"channelId":run.conversation.channel_id,
+                    "peer":run.conversation.peer,"sender":run.conversation.sender,"thread":run.conversation.thread,
+                    "messageId":run.turn.message_id,"passive":run.turn.passive,"senderType":run.turn.sender_type}).to_string().replace('&', "&amp;").replace('\"', "&quot;").replace('<', "&lt;"),
+                text.replace("</", "<\\/")),
         },
     );
     tokio::select! {

@@ -1,5 +1,16 @@
 # Ait changelog
 
+## Unreleased
+
+- A Workspace Bot now shares its context across chats and channels. Each Feishu group can
+  independently listen to every message or respond only to mentions, and direct chats can be
+  paused separately. Bots can read messages from other bots, rich text and card bodies, stay
+  silent during unrelated group conversation, and send task updates back to their source thread.
+  Resetting the Bot context affects every entry point; upgrade storage requires a backup before
+  downgrading.
+
+- Fixed Feishu and Lark channel lists being rejected by the generated WebSocket response validator.
+
 ## 0.2.26 - 2026-11-24
 
 - The Git control at the top right of a workspace is one button that is always pressable. It

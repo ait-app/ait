@@ -68,6 +68,8 @@ fn said(state: &mut State, channel: ChannelId, sender: &str, message: &str) -> C
             message_id: message.into(),
             text: format!("{sender} asks for a fix"),
             reply_to: None,
+            sender_type: None,
+            passive: false,
         })
         .unwrap();
     serde_json::from_value(accepted["turn"]["conversationId"].clone()).unwrap()
@@ -443,7 +445,7 @@ fn shared(fixture: &Fixture) -> Shared {
 }
 
 #[test]
-fn an_external_conversation_reads_only_itself_and_what_it_started() {
+fn bot_manager_reads_across_all_of_its_sources() {
     let fixture = Fixture::new();
     let Shared {
         world:
@@ -458,75 +460,31 @@ fn an_external_conversation_reads_only_itself_and_what_it_started() {
         alice_turn,
     } = shared(&fixture);
     let as_bob = Reader::Conversation(bob);
-
     let sight = state
         .sight(WORKSPACE, Origin::Conversation(bob))
         .unwrap()
         .unwrap();
-    assert_eq!(sight.viewer, Viewer::External(bob));
-    // An external viewer gets every ticket's origin, to decide on Agents by their labels.
+    assert_eq!(sight.viewer, Viewer::Shared(bob));
     assert_eq!(sight.tickets.get(&alice_ticket), Some(&Some(alice)));
-    assert_eq!(sight.tickets.get(&owner_ticket), Some(&Some(owner)));
-    let owners = state
-        .sight(WORKSPACE, Origin::Conversation(owner))
-        .unwrap()
-        .unwrap();
-    assert_eq!(owners.viewer, Viewer::Owner(owner));
-    assert!(owners.tickets.is_empty());
-    // Bob's conversation list is Bob alone; Alice's conversation and turns are refused.
-    assert_eq!(
-        ids(&read(&state, as_bob, "conversations").unwrap()),
-        [bob.to_string()]
-    );
-    for refused in [
+    let conversations = ids(&read(&state, as_bob, "conversations").unwrap());
+    for id in [owner, alice, bob] {
+        assert!(conversations.contains(&id.to_string()));
+    }
+    for path in [
         format!("conversation/{alice}"),
         format!("turn/{}", alice_turn.id),
-        format!("turn/{}/input", alice_turn.id),
-        format!("turn/{}/message/0", alice_turn.id),
         format!("ticket/{alice_ticket}/reports"),
-        format!("ticket/{alice_ticket}/request"),
+        format!("ticket/{owner_ticket}/request"),
     ] {
-        assert_eq!(
-            read(&state, as_bob, &refused),
-            Err(ErrorCode::Forbidden),
-            "{refused}"
-        );
+        assert!(read(&state, as_bob, &path).is_ok(), "{path}");
     }
-    // Notification sequences are small counters: another conversation's entry reads as not
-    // kept, like a missing one, so Bob cannot count or time Alice's notifications.
     assert_eq!(
-        read(&state, as_bob, "notification/1"),
-        read(&state, as_bob, "notification/99")
+        read(&state, as_bob, "tickets").unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
     );
-    assert_eq!(
-        read(&state, as_bob, "notification/1"),
-        Err(ErrorCode::BotNotFound)
-    );
-    // Other people's tickets are only titles and statuses, as in the overview.
-    let tickets = read(&state, as_bob, "tickets").unwrap();
-    assert_eq!(tickets["items"].as_array().unwrap().len(), 2);
-    for item in tickets["items"].as_array().unwrap() {
-        assert_eq!(item["restricted"], true);
-        assert!(item.get("latestReport").is_none() && item.get("conversation").is_none());
-    }
-    let stub = read(&state, as_bob, &format!("ticket/{owner_ticket}")).unwrap();
-    assert_eq!(stub["restricted"], true);
-    assert_eq!(stub["title"], "Task owner");
-    let bob_view = read(&state, as_bob, "notifications").unwrap();
-    assert_eq!(bob_view["items"], json!([]));
-    let everything = [
-        read(&state, as_bob, "tickets").unwrap(),
-        read(&state, as_bob, &format!("ticket/{alice_ticket}")).unwrap(),
-        read(&state, as_bob, "conversations").unwrap(),
-    ]
-    .iter()
-    .map(Value::to_string)
-    .collect::<String>();
-    assert!(!everything.contains("secret") && !everything.contains(&alice.to_string()));
-    // A waiting stub says why, not which Agent made it wait.
-    let waiting = read(&state, as_bob, &format!("ticket/{alice_ticket}")).unwrap();
-    assert_eq!(waiting["waiting"]["reason"], "blocked");
-    assert!(!everything.contains("agent-alice"), "{everything}");
 }
 
 #[test]
@@ -559,12 +517,16 @@ fn alice_reads_her_own_work_and_the_owner_reads_everything() {
         .iter()
         .map(|item| item["kind"].as_str().unwrap())
         .collect();
-    assert_eq!(kinds, ["agent_failed", "ticket_blocked"]);
-    assert_eq!(alice_view["items"][0]["summary"], "alice's failure");
-    assert_eq!(
-        read(&state, as_alice, &format!("ticket/{owner_ticket}/reports")),
-        Err(ErrorCode::Forbidden)
+    assert_eq!(kinds.len(), 3);
+    assert!(kinds.contains(&"agent_failed") && kinds.contains(&"ticket_blocked"));
+    assert!(
+        alice_view["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["summary"] == "alice's failure")
     );
+    assert!(read(&state, as_alice, &format!("ticket/{owner_ticket}/reports")).is_ok());
 
     // The owner reads Alice's conversation and its turns.
     let me = Reader::Conversation(owner);
@@ -620,7 +582,7 @@ fn agents_lead_to_their_ticket_and_conversation_within_the_reader_rule() {
     // Bob may not read it at all: not its title or report.
     let mut as_bob = request(Reader::Conversation(bob), "agent/agent-fix");
     as_bob.agent = Some(record.clone());
-    assert_eq!(state.read(&as_bob), Err(ErrorCode::Forbidden));
+    assert_eq!(state.read(&as_bob).unwrap()["title"], "Fixer");
     // Nor an Agent the Bot did not start, such as the owner's own work.
     let unlabelled = json!({"id":"agent-mine","title":"Owner's own","status":"idle",
         "workspaceId":WORKSPACE,"labels":{}});
@@ -638,7 +600,7 @@ fn agents_lead_to_their_ticket_and_conversation_within_the_reader_rule() {
     // joined to Alice's ticket reads that ticket, so Bob may not reach it.
     bobs.agent = Some(json!({"id":"agent-bob","title":"Bob's","status":"idle",
         "workspaceId":WORKSPACE,"labels":{BOT_CONVERSATION_LABEL:bob,BOT_TICKET_LABEL:task}}));
-    assert_eq!(state.read(&bobs), Err(ErrorCode::Forbidden));
+    assert_eq!(state.read(&bobs).unwrap()["title"], "Bob's");
     // Without the caller's record the owner is told nothing is kept. Bob is told the same as
     // for someone else's Agent, also when the record is of another id (a resolved prefix or
     // title), so his answer does not confirm which ids exist.

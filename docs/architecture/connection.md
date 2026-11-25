@@ -20,7 +20,7 @@
   [ADR-108](../decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)）。
 - 单连接模式的 hello 通常回显整份 `info.capabilities`，因此能力提议预算
   `model::server::single::MAX_CAPABILITIES` 必须大于当前方法目录；超出预算按 `invalid_message`
-  拒绝握手。普通四通道连接的每通道提议上限仍为 64
+  拒绝握手。普通分拆连接的每通道提议上限仍为 64
   （[ADR-282](../decisions/daemon/adr-282-single-connection-capability-budget.md)）。
 - 请求校验顺序固定：未知名称 `method_not_found`，方向错误 `invalid_message`，未协商
   `unsupported_capability`，已声明但未安装 `not_implemented`。`server.status.unsubscribe` 沿用
@@ -179,9 +179,12 @@
   （[ADR-211](../decisions/clients/adr-211-sdk-native-daemon-protocol.md)，修订
   [ADR-044](../decisions/clients/adr-044-paseo-client-rust-transport.md)、
   [ADR-094](../decisions/clients/adr-094-canonical-ait-client-methods.md)）。
-- 直连、SSH 和本机 daemon 先以 `connection.single.v1` 建立单连接，daemon 拒绝时回退四连接并按端点
+- 直连、SSH 和本机 daemon 先以 `connection.single.v1` 建立单连接，daemon 拒绝时回退分拆连接并按端点
   记住；Hub 会话始终为单连接（[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)，
   修订 [ADR-211](../decisions/clients/adr-211-sdk-native-daemon-protocol.md) 的“直连与 SSH 保留四通道”）。
+  Bot 配置方法使用独立的第 5 条分拆连接，原有四条连接路由不变，各连接保持 64 capability 预算。
+  单连接模式仍使用四个内部 worker，Bot 配置调用进入文件 lane，socket 数量和 worker 数量不对应
+  （[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）。
 
 ## 主机资源监控
 

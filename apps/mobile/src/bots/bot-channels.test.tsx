@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BotChannels } from "./bot-channels";
@@ -9,6 +9,7 @@ const {
   botRequest,
   confirmDialog,
   randomUUID,
+  chatReception,
   feishuSetup,
   larkSetup,
   telegramSetup,
@@ -20,6 +21,7 @@ const {
   openExternalUrl,
   openSmsUrl,
 } = vi.hoisted(() => ({
+  chatReception: { current: false },
   feishuSetup: { current: false },
   larkSetup: { current: false },
   telegramSetup: { current: false },
@@ -42,6 +44,7 @@ vi.mock("@/stores/session-store", () => ({
         host: {
           serverInfo: {
             features: {
+              workspaceBotChatReception: chatReception.current,
               workspaceBotFeishuSetup: feishuSetup.current,
               workspaceBotLarkSetup: larkSetup.current,
               workspaceBotTelegramSetup: telegramSetup.current,
@@ -59,7 +62,10 @@ vi.mock("react-native-svg", () => ({
   SvgXml: ({ xml }: { xml: string }) => <span data-testid="qr-xml">{xml}</span>,
 }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl, openSmsUrl }));
-vi.mock("@/constants/platform", () => ({ getIsElectron: () => electron.current }));
+vi.mock("@/constants/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/constants/platform")>()),
+  getIsElectron: () => electron.current,
+}));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {} }));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
@@ -207,6 +213,7 @@ function submitButton() {
 }
 
 beforeEach(() => {
+  chatReception.current = false;
   feishuSetup.current = false;
   larkSetup.current = false;
   telegramSetup.current = false;
@@ -222,6 +229,7 @@ beforeEach(() => {
   botRequest.mockReset();
   botRequest.mockImplementation(async (method: string, params: Record<string, unknown>) => {
     if (method === "bot.channel.list.request") return { channels };
+    if (method === "bot.chat.list.request") return { chats: [] };
     if (method === "bot.channel.types.request")
       return {
         supported: ["builtin", "telegram", "feishu"],
@@ -335,7 +343,7 @@ describe("BotChannels", () => {
         return base?.(method, params);
       });
       renderChannels();
-      expect(await screen.findByText("bots.lark")).toBeTruthy();
+      expect(await screen.findByText("bots.lark · cli_x")).toBeTruthy();
     });
   });
 
@@ -574,8 +582,12 @@ describe("BotChannels", () => {
       webhookSetup.current = true;
       webhookResponses({});
       renderChannels();
-      expect((await screen.findByTestId(`bot-webhook-url-${WEBHOOK_ID}`)).textContent).toBe(URL);
-      fireEvent.click(screen.getByTestId(`bot-webhook-rotate-${WEBHOOK_ID}`));
+      const details = await screen.findByTestId(`bot-webhook-details-${WEBHOOK_ID}`);
+      expect(
+        within(screen.getByTestId(`bot-channel-${WEBHOOK_ID}-card`)).queryByText("bots.webhook"),
+      ).toBeNull();
+      expect(within(details).getByTestId(`bot-webhook-url-${WEBHOOK_ID}`).textContent).toBe(URL);
+      fireEvent.click(within(details).getByTestId(`bot-webhook-rotate-${WEBHOOK_ID}`));
       await waitFor(() =>
         expect(botRequest).toHaveBeenCalledWith("bot.channel.webhook.rotate.request", {
           workspaceId: "workspace",
@@ -610,6 +622,15 @@ describe("BotChannels", () => {
       fireEvent.click(await screen.findByTestId("bot-channel-add"));
       await screen.findByTestId("bot-channel-form");
     }
+
+    it("keeps chat reception controls out of account setup on shared-context hosts", async () => {
+      feishuSetup.current = true;
+      chatReception.current = true;
+      renderChannels();
+      fireEvent.click(await screen.findByTestId("bot-channel-add"));
+      await screen.findByTestId("bot-feishu-scan-start");
+      expect(screen.queryByTestId("bot-channel-allow-groups")).toBeNull();
+    });
 
     it("defaults to scanning and shows a QR code while waiting", async () => {
       scanResponses({ state: "waiting" });
@@ -1177,4 +1198,59 @@ describe("BotChannels", () => {
     expect(screen.getByTestId(`bot-channel-enabled-${ID_B}`)).toHaveProperty("disabled", true);
     await act(async () => {});
   });
+});
+
+it("does not show or poll reception settings for Telegram-only accounts", async () => {
+  chatReception.current = true;
+  const original = botRequest.getMockImplementation()!;
+  botRequest.mockImplementation((method: string, params: Record<string, unknown>) =>
+    method === "bot.channel.list.request"
+      ? Promise.resolve({
+          channels: channels.filter((channel) => channel.config.kind !== "feishu"),
+        })
+      : original(method, params),
+  );
+  renderChannels();
+  await screen.findByTestId(`bot-channel-${ID_B}`);
+  expect(screen.queryByText("bots.chatReception")).toBeNull();
+  expect(botRequest.mock.calls.some(([method]) => method === "bot.chat.list.request")).toBe(false);
+});
+it("places the reception empty state and retry inside its platform account", async () => {
+  chatReception.current = true;
+  const original = botRequest.getMockImplementation()!;
+  botRequest.mockImplementation((method: string, params: Record<string, unknown>) =>
+    method === "bot.chat.list.request"
+      ? Promise.reject(new Error("Chat read failed"))
+      : original(method, params),
+  );
+  renderChannels();
+  const account = await screen.findByTestId(`bot-channel-${ID_C}`);
+  await waitFor(() => expect(account.textContent).toContain("Chat read failed"));
+  botRequest.mockImplementation(original);
+  fireEvent.click(screen.getByTestId(`bot-chat-retry-${ID_C}`));
+  await waitFor(() => expect(account.textContent).toContain("bots.noExternalChats"));
+  expect(screen.getByTestId(`bot-channel-${ID_C}-card`)).toBeTruthy();
+});
+it("dims disabled reception dropdown triggers while the Bot is paused", async () => {
+  chatReception.current = true;
+  const original = botRequest.getMockImplementation()!;
+  botRequest.mockImplementation((method: string, params: Record<string, unknown>) =>
+    method === "bot.chat.list.request"
+      ? Promise.resolve({
+          chats: [
+            {
+              channelId: ID_C,
+              peer: "oc_paused",
+              group: true,
+              enabled: true,
+              listenAllMessages: false,
+            },
+          ],
+        })
+      : original(method, params),
+  );
+  renderChannels({ active: false });
+  const trigger = await screen.findByTestId(`bot-chat-policy-${ID_C}-oc_paused-trigger`);
+  expect(trigger.getAttribute("aria-disabled")).toBe("true");
+  expect(getComputedStyle(trigger.firstElementChild!).opacity).toBe("0.5");
 });

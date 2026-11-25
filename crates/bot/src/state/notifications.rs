@@ -311,6 +311,11 @@ impl State {
         let mut turn = super::queued_turn(&conversation, String::new(), input, now);
         let id = turn.id;
         turn.message_id = format!("notification:{id}");
+        turn.reply_to = self
+            .order
+            .range((conversation.id, 0)..=(conversation.id, u64::MAX))
+            .rev()
+            .find_map(|(_, id)| self.turn(*id).ok().and_then(|turn| turn.reply_to));
         turn.wake = Some(Wake { notifications });
         let conversation_id = conversation.id;
         // The turn is committed first: on restart its notification ids mark the entries woken,
@@ -717,6 +722,8 @@ fn owner_input(bot: &Bot) -> Incoming {
         message_id: String::new(),
         text: String::new(),
         reply_to: None,
+        sender_type: None,
+        passive: false,
     }
 }
 

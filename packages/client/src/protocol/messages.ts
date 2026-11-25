@@ -1,4 +1,6 @@
 import {
+  BOT_CHAT_RECEPTION_METHODS,
+  BOT_SHARED_CONTEXT_METHODS,
   BOT_FEISHU_SETUP_METHODS,
   BOT_LARK_SETUP_METHODS,
   BOT_IMESSAGE_SETUP_METHODS,
@@ -65,6 +67,14 @@ export function serverInfo(
       serverFeatures.has("creation-lifecycle-v1") &&
       supports(["agent.create.request", "workspace.create.request", "creation.subscribe.request"]),
     workspaceBots: serverFeatures.has("workspace-bots-v2") && BOT_METHODS.every(has),
+    workspaceBotChatReception:
+      serverFeatures.has("workspace-bots-v2") &&
+      BOT_METHODS.every(has) &&
+      BOT_CHAT_RECEPTION_METHODS.every(has),
+    workspaceBotSharedContext:
+      serverFeatures.has("workspace-bots-v2") &&
+      BOT_METHODS.every(has) &&
+      BOT_SHARED_CONTEXT_METHODS.every(has),
     workspaceBotPermissions:
       serverFeatures.has("workspace-bots-v2") &&
       BOT_METHODS.every(has) &&

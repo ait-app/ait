@@ -18,6 +18,8 @@ paths:
 
 # ADR-218：Hub feature 协商收敛在线连接
 
+- 后续修订：[ADR-305](../bot/adr-305-shared-bot-context-and-chat-reception.md) 修订 SDK 分拆连接数量：新增 Bot 配置方法使用独立连接，原四条连接路由不变，仍逐连接遵守 64 capability 上限。单连接与 Hub 的行为不变。
+
 - 修订：[ADR-154](adr-154-account-status-channel.md)、[ADR-204](adr-204-hub-only-online-business-transport.md)、[ADR-180](../daemon/adr-180-hub-serve-endpoint.md)；
   直连单连接修订 [ADR-049](adr-049-app-rust-browser-transport.md)、[ADR-211](adr-211-sdk-native-daemon-protocol.md)；
   daemon 不再建立 relay control 与下载 Relay，修订 [ADR-140](../daemon/adr-140-headless-local-api-token.md)、

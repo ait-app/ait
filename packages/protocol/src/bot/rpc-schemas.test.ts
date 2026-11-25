@@ -284,9 +284,9 @@ describe("Bot wire contract", () => {
     expect(BotConversationSchema.parse(base).channelKind).toBeUndefined();
   });
 
-  it("registers all 21 core methods and accepts their results in the shared envelope", () => {
-    expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(47);
+  it("registers all 20 core methods and accepts their results in the shared envelope", () => {
+    expect(new Set(BOT_METHODS).size).toBe(20);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(50);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",

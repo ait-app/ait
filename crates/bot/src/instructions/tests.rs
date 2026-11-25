@@ -211,8 +211,8 @@ fn compose_points_the_bot_at_bot_read_for_recall() {
         "a read pointer to pass as the resource",
         "Read a ticket with bot_read before following up on it",
         "For an agent's own transcript use agent_activity_read",
-        "you can read every conversation of this Bot",
-        "any other conversation can read only itself and the work it started",
+        "read every conversation of this Bot",
+        "from every entry point",
         "ends with a read pointer to the full notification",
     ] {
         assert!(text.contains(phrase), "missing: {phrase}");

@@ -150,6 +150,8 @@ fn external(channel: ChannelId, sender: &str, message: &str) -> Incoming {
         message_id: message.into(),
         text: "hello".into(),
         reply_to: None,
+        sender_type: None,
+        passive: false,
     }
 }
 
@@ -239,8 +241,8 @@ fn interrupted_turns_block_replay_until_explicit_reset_and_history_is_paginated(
     assert!(restarted.ready().unwrap().is_empty());
     restarted
         .execute(
-            "bot.conversation.reset.request",
-            json!({"workspaceId":WORKSPACE,"conversationId":conversation}),
+            "bot.context.reset.request",
+            json!({"workspaceId":WORKSPACE}),
         )
         .unwrap();
     restarted

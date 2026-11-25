@@ -54,10 +54,12 @@ export const bots = {
   conversationReadOnly:
     "للقراءة فقط: تجري هذه المحادثة في {{channel}}. هنا تقبل محادثتك في Ait وحدها الرسائل.",
   session: "جلسة Bot",
-  reset: "محادثة جديدة",
+  reset: "Reset conversation",
+  resetSharedConfirm:
+    "Reset the Bot conversation for all connected chats? Message history, memory and chat settings will be kept.",
   resetConfirm:
-    "هل تريد بدء محادثة جديدة؟ ستبقى الرسائل الحالية محفوظة وسيتم تطبيق أحدث إعدادات Bot.",
-  configurationHint: "تُطبَّق تغييرات النموذج على المحادثات الجديدة. ابدأ محادثة جديدة لاستخدامها هنا.",
+    "Reset this conversation? Existing messages will be kept and the latest Bot settings will take effect.",
+  configurationHint: "Model changes take effect after you reset the Bot conversation.",
   memory: "الذاكرة",
   memoryHint: "تفضيلات يقرأها Bot قبل كل رد، مثل لغة عنوان PR أو أسلوب الرد.",
   saveMemory: "حفظ الذاكرة",
@@ -86,11 +88,26 @@ export const bots = {
   allowGroups: "السماح بالدردشات الجماعية",
   channelRefHint:
     "تأتي بيانات الاعتماد من متغيرات بيئة العملية التي تشغّل الخدمة الخلفية. أدخل مرجع المتغير فقط، مثل env:AIT_SERVER_CREDENTIAL_TELEGRAM.",
+  receptionOff: "Off",
+  receptionMentions: "Mentions only",
+  receptionAll: "All messages",
+  receptionDirect: "On",
+  chatDisabledHint: "Messages from this chat are ignored.",
+  chatReception: "Chat reception",
+  chatReceptionHint:
+    "Each chat has its own reception settings. Chats connected to this Bot share its conversation.",
+  noExternalChats: "Chats appear here when the platform first delivers a message.",
+  groupChat: "Group chat",
+  directChat: "Direct message",
+  listenAllPermissions:
+    "Requires {{platform}} permission to receive group messages from users and bots.",
+  mentionsOnly: "Only messages that mention the Bot are processed.",
+  noReplyNeeded: "No reply needed.",
   channelEnabled: "مفعّلة",
   channelConnected: "متصلة",
   channelIdle: "خاملة",
   feishuScanHint:
-    "امسح رمز QR باستخدام تطبيق Feishu. سينشئ Feishu بوتًا لك وسيوصله Ait، ولن يتمكن أحد غيرك من مراسلته ما لم تغيّر ذلك.",
+    "Scan a QR code with the Feishu app to create and connect a Bot. Configure message reception for each chat in Settings.",
   feishuScanStart: "عرض رمز QR",
   feishuScanWaiting:
     "امسح هذا الرمز باستخدام تطبيق Feishu ووافق على البوت الجديد. أبقِ هذه الصفحة مفتوحة حتى الانتهاء.",
@@ -109,7 +126,7 @@ export const bots = {
     "الصق App Secret. يتحقق منه Ait مع {{platform}} ويحفظه بشكل خاص على هذا المضيف. يمكن أيضًا استخدام مرجع env:AIT_SERVER_CREDENTIAL_*.",
   feishuManualStep1: "أنشئ تطبيقًا مخصصًا على {{developerUrl}} وفعّل إمكانية البوت.",
   feishuManualStep2:
-    "ضمن الأذونات، أضف im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    "ضمن الأذونات، أضف im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg.include_bot:readonly, im:message.group_msg.include_bot:read.",
   feishuManualStep3: "انسخ App ID وApp Secret هنا ثم أضف القناة.",
   feishuManualStep4:
     "بعد ذلك، ضمن الأحداث وعمليات الاستدعاء في {{platform}}، اختر الاتصال الطويل واشترك في im.message.receive_v1. لا يمكن لـ {{platform}} حفظ ذلك إلا بعد اتصال القناة.",
@@ -345,7 +362,7 @@ export const bots = {
     needs_approval: "الموافقة مطلوبة",
     completed: "اكتمل",
     failed: "فشل",
-    uncertain: "تمت المقاطعة. ابدأ محادثة جديدة للمتابعة",
+    uncertain: "Interrupted. Reset the Bot conversation to continue.",
     cancelled: "أُلغي",
   },
 };

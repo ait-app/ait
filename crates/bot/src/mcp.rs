@@ -105,6 +105,7 @@ struct Inner {
     agents: HashMap<String, Fingerprint>,
     order: BTreeMap<u64, Fingerprint>,
     next_sequence: u64,
+    origins: HashMap<String, ConversationId>,
 }
 
 impl Inner {
@@ -186,11 +187,34 @@ impl Scopes {
             return None;
         }
         let inner = self.read();
-        let caller = &inner.credentials.get(&fingerprint(secret))?.caller;
+        let mut caller = inner.credentials.get(&fingerprint(secret))?.caller.clone();
+        if let CallerKind::Bot {
+            conversation_id,
+            session_id,
+            ..
+        } = &mut caller.kind
+            && let Some(origin) = inner.origins.get(session_id)
+        {
+            *conversation_id = *origin;
+        }
         match &caller.kind {
             CallerKind::Bot { bot_id, .. } if !inner.admits(&caller.root, *bot_id) => None,
-            CallerKind::Bot { .. } | CallerKind::Subtree { .. } => Some(caller.clone()),
+            CallerKind::Bot { .. } | CallerKind::Subtree { .. } => Some(caller),
         }
+    }
+
+    /// Bind a shared hidden session's credential to the currently executing input route.
+    pub(crate) fn origin(&self, session: &str, conversation: ConversationId) {
+        let mut inner = self.write();
+        inner.revoke(session);
+        inner.origins.insert(session.to_owned(), conversation);
+    }
+
+    /// Invalidate a completed turn's credential before another source can use the runtime.
+    pub(crate) fn clear_origin(&self, session: &str) {
+        let mut inner = self.write();
+        inner.revoke(session);
+        inner.origins.remove(session);
     }
 
     /// Current grant for root Workspace `root`; observe-only when it has no non-retired Bot.

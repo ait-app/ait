@@ -33,6 +33,8 @@ impl State {
             message_id: String::new(),
             text: String::new(),
             reply_to: None,
+            sender_type: None,
+            passive: false,
         };
         let conversation = self.route(&incoming)?;
         Ok(json!({"conversation":self.project_conversation(&conversation)}))
@@ -93,6 +95,8 @@ impl State {
             message_id: request.message_id,
             text: request.text,
             reply_to: None,
+            sender_type: None,
+            passive: false,
         })
     }
     /// Whether queued and running turns across all Bots reached the global admission limit.
@@ -103,6 +107,13 @@ impl State {
     /// `{"accepted":false}` so the channel retries later instead of dropping the message.
     /// A conversation's own backlog still refuses with `ResourceExhausted`.
     pub(crate) fn accept_channel(&mut self, incoming: Incoming) -> Result<Value, ErrorCode> {
+        if self.catalog.chats.iter().any(|chat| {
+            chat.channel_id == incoming.channel_id
+                && chat.peer == incoming.peer
+                && (!chat.enabled || (incoming.passive && !chat.listen_all_messages))
+        }) {
+            return Ok(json!({"accepted":true,"ignored":true}));
+        }
         match self.accept(incoming) {
             Err(ErrorCode::ResourceExhausted) if self.backlog_full() => {
                 Ok(json!({"accepted":false}))
@@ -142,6 +153,7 @@ impl State {
                 || conversation.sender != incoming.sender
                 || conversation.thread != incoming.thread
                 || turn.text != incoming.text
+                || turn.passive != incoming.passive
                 || turn.reply_to != incoming.reply_to
             {
                 return Err(ErrorCode::IdempotencyConflict);
@@ -166,6 +178,8 @@ impl State {
             chrono::Utc::now(),
         );
         turn.reply_to = incoming.reply_to;
+        turn.passive = incoming.passive;
+        turn.sender_type = incoming.sender_type;
         self.enqueue(conversation, &turn)?;
         Ok(json!({"turn":turn,"accepted":true,"duplicate":false}))
     }
@@ -176,13 +190,20 @@ impl State {
         mut conversation: Conversation,
         turn: &Turn,
     ) -> Result<(), ErrorCode> {
+        let mut turn = turn.clone();
+        let next = self
+            .next_bot_sequence
+            .entry(conversation.bot_id)
+            .or_insert(1);
+        turn.bot_sequence = Some(*next);
+        *next = next.checked_add(1).ok_or(ErrorCode::ResourceExhausted)?;
         conversation.next_sequence = conversation
             .next_sequence
             .checked_add(1)
             .ok_or(ErrorCode::ResourceExhausted)?;
         let channel = conversation.channel_id;
         self.save_conversation(conversation)?;
-        self.commit_turn(turn)?;
+        self.commit_turn(&turn)?;
         self.inputs
             .insert((channel, turn.message_id.clone()), turn.id);
         Ok(())
@@ -223,7 +244,20 @@ impl State {
         {
             return Err(ErrorCode::BotConflict);
         }
-        self.renew(&mut renewed)?;
+        let mut context = self.context(renewed.bot_id)?;
+        self.renew(&mut context)?;
+        self.scopes.origin(&context.session_id, renewed.id);
+        if renewed.id == context.id {
+            renewed = context;
+        } else {
+            renewed.generation = renewed
+                .generation
+                .checked_add(1)
+                .ok_or(ErrorCode::ResourceExhausted)?;
+            renewed.execution = context.execution;
+            self.save_conversation(renewed.clone())?;
+            renewed.session_id = context.session_id;
+        }
         for id in std::iter::once(running).chain(self.queued(conversation)) {
             let mut turn = self.turn(id)?;
             turn.generation = renewed.generation;
@@ -231,7 +265,7 @@ impl State {
         }
         serde_json::to_value(renewed).map_err(|_| ErrorCode::BotIo)
     }
-    fn queued(&self, conversation: ConversationId) -> Vec<BotTurnId> {
+    pub(super) fn queued(&self, conversation: ConversationId) -> Vec<BotTurnId> {
         self.pending
             .range((conversation, 0)..=(conversation, u64::MAX))
             .map(|(_, id)| *id)
@@ -239,7 +273,7 @@ impl State {
     }
     /// Close the conversation's native session and start a new generation with the Bot's
     /// current execution settings, whose first input carries the instructions again.
-    fn renew(&mut self, conversation: &mut Conversation) -> Result<(), ErrorCode> {
+    pub(super) fn renew(&mut self, conversation: &mut Conversation) -> Result<(), ErrorCode> {
         let owner = self.owner(conversation)?;
         self.session_actions.push((
             owner,
@@ -247,6 +281,7 @@ impl State {
                 agent_id: conversation.session_id.clone(),
             },
         ));
+        self.scopes.clear_origin(&conversation.session_id);
         conversation.session_id = uuid::Uuid::new_v4().to_string();
         conversation.generation = conversation
             .generation

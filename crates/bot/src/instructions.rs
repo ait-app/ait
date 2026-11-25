@@ -76,10 +76,9 @@ overview, a notification or a bot_read page can be read in turn, such as ticket/
 conversation/<id>, turn/<id>, notification/<sequence> or agent/<id>, and text cut short shows \
 its full length and a read pointer to pass as the resource. Read a ticket with bot_read before \
 following up on it or reporting on it. For an agent's own transcript use agent_activity_read. \
-In the workspace owner's Ait conversation you can read every conversation of this Bot, so when \
-the user asks what happened elsewhere, such as a task handed over in another chat, look it up \
-with bot_read conversations; any other conversation can read only itself and the work it \
-started.";
+You can read every conversation of this Bot from every entry point. When asked about work \
+started in another chat, look it up with bot_read conversations and tickets before answering. \
+Keep the current reply separate from a task's original notification destination.";
 
 const SCHEDULES: &str = "Use schedule_create to run recurring work on a cron schedule, and \
 schedule_update, schedule_pause or schedule_resume to change it.";
@@ -155,6 +154,7 @@ fn granted(permissions: &BotPermissions) -> String {
             }
         }
     }
+    text.push_str("\nAll inputs of this Bot share one context across chats and channels. Each input includes trusted source metadata; reply to the current source. For passive group input that needs no response, end with exactly NO_REPLY and no other assistant message. Existing tasks retain their original delivery destination. Cross-chat history and tasks can be read with bot_read. Delegate long-running tasks rather than waiting for them.\n");
     text
 }
 

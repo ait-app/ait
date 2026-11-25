@@ -49,7 +49,7 @@ impl<'a> Resource<'a> {
         let resource = match viewer {
             Viewer::Worker(own) if head == "ticket" => ticket_part(own, &mut parts)?,
             Viewer::Worker(_) => return None,
-            Viewer::Owner(_) | Viewer::External(_) => match head {
+            Viewer::Owner(_) | Viewer::Shared(_) | Viewer::External(_) => match head {
                 "tickets" => match parts.next() {
                     None => Self::Tickets { closed: false },
                     Some("closed") => Self::Tickets { closed: true },
@@ -106,7 +106,9 @@ impl Paths {
     fn ticket(self, id: TicketId, rest: &str) -> String {
         match self.0 {
             Viewer::Worker(_) => format!("ticket{rest}"),
-            Viewer::Owner(_) | Viewer::External(_) => format!("ticket/{id}{rest}"),
+            Viewer::Owner(_) | Viewer::Shared(_) | Viewer::External(_) => {
+                format!("ticket/{id}{rest}")
+            }
         }
     }
 }
@@ -126,6 +128,7 @@ impl State {
     /// Returns `BotNotFound` when `root` has no current Bot.
     pub(crate) fn sight(&self, root: &str, origin: Origin) -> Result<Option<Sight>, ErrorCode> {
         let bot = self.current(root)?;
+        let manager = matches!(origin, Origin::Conversation(_));
         let conversation = match origin {
             Origin::Conversation(conversation) => Some(conversation),
             Origin::Agent {
@@ -139,9 +142,12 @@ impl State {
         let Some(conversation) = conversation else {
             return Ok(None);
         };
-        let viewer = self.resolve_viewer(bot, Reader::Conversation(conversation));
+        let mut viewer = self.resolve_viewer(bot, Reader::Conversation(conversation));
+        if !manager && matches!(viewer, Viewer::Shared(_)) {
+            viewer = Viewer::External(conversation);
+        }
         let tickets = match viewer {
-            Viewer::External(_) => self
+            Viewer::External(_) | Viewer::Shared(_) => self
                 .tickets
                 .values()
                 .filter(|ticket| ticket.bot_id == bot.id)
@@ -162,6 +168,8 @@ impl State {
                 });
                 if builtin {
                     Viewer::Owner(id)
+                } else if self.conversation(bot.id, id).is_ok() {
+                    Viewer::Shared(id)
                 } else {
                     Viewer::External(id)
                 }
@@ -380,7 +388,9 @@ impl Reading<'_> {
     fn may_read(&self, ticket: &Ticket) -> bool {
         match self.viewer {
             Viewer::Worker(own) => ticket.id == own,
-            Viewer::Owner(_) | Viewer::External(_) => self.viewer.sees(ticket.conversation_id),
+            Viewer::Owner(_) | Viewer::Shared(_) | Viewer::External(_) => {
+                self.viewer.sees(ticket.conversation_id)
+            }
         }
     }
 
@@ -577,7 +587,7 @@ impl Reading<'_> {
         let record = self.read.agent.as_ref().filter(|record| record["id"] == id);
         let Some(record) = record else {
             return Err(match self.viewer {
-                Viewer::External(_) => ErrorCode::Forbidden,
+                Viewer::External(_) | Viewer::Shared(_) => ErrorCode::Forbidden,
                 Viewer::Owner(_) | Viewer::Worker(_) => ErrorCode::BotNotFound,
             });
         };

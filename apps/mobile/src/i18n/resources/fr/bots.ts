@@ -58,11 +58,12 @@ export const bots = {
   conversationReadOnly:
     "Lecture seule : cette conversation a lieu sur {{channel}}. Ici, seule votre conversation Ait accepte des messages.",
   session: "Session du Bot",
-  reset: "Nouvelle conversation",
+  reset: "Reset conversation",
+  resetSharedConfirm:
+    "Reset the Bot conversation for all connected chats? Message history, memory and chat settings will be kept.",
   resetConfirm:
-    "Démarrer une nouvelle conversation ? Les messages existants sont conservés et les derniers réglages du Bot seront appliqués.",
-  configurationHint:
-    "Les changements de modèle s’appliquent aux nouvelles conversations. Démarrez une nouvelle conversation pour les utiliser ici.",
+    "Reset this conversation? Existing messages will be kept and the latest Bot settings will take effect.",
+  configurationHint: "Model changes take effect after you reset the Bot conversation.",
   memory: "Mémoire",
   memoryHint:
     "Préférences que le Bot lit avant chaque réponse, comme la langue des titres de PR ou le style de réponse.",
@@ -94,11 +95,26 @@ export const bots = {
   allowGroups: "Autoriser les discussions de groupe",
   channelRefHint:
     "Les identifiants proviennent des variables d’environnement du processus qui démarre le daemon. Saisissez uniquement la référence, par exemple env:AIT_SERVER_CREDENTIAL_TELEGRAM.",
+  receptionOff: "Off",
+  receptionMentions: "Mentions only",
+  receptionAll: "All messages",
+  receptionDirect: "On",
+  chatDisabledHint: "Messages from this chat are ignored.",
+  chatReception: "Chat reception",
+  chatReceptionHint:
+    "Each chat has its own reception settings. Chats connected to this Bot share its conversation.",
+  noExternalChats: "Chats appear here when the platform first delivers a message.",
+  groupChat: "Group chat",
+  directChat: "Direct message",
+  listenAllPermissions:
+    "Requires {{platform}} permission to receive group messages from users and bots.",
+  mentionsOnly: "Only messages that mention the Bot are processed.",
+  noReplyNeeded: "No reply needed.",
   channelEnabled: "Activé",
   channelConnected: "Connecté",
   channelIdle: "Inactif",
   feishuScanHint:
-    "Scannez un code QR avec l'application Feishu. Feishu crée un bot pour vous et Ait le connecte ; vous seul pouvez lui écrire tant que vous ne changez pas ce réglage.",
+    "Scan a QR code with the Feishu app to create and connect a Bot. Configure message reception for each chat in Settings.",
   feishuScanStart: "Afficher le code QR",
   feishuScanWaiting:
     "Scannez ce code avec l'application Feishu et approuvez le nouveau bot. Gardez cette page ouverte jusqu'à la fin.",
@@ -119,7 +135,7 @@ export const bots = {
   feishuManualStep1:
     "Créez une application personnalisée sur {{developerUrl}} et activez la capacité Bot.",
   feishuManualStep2:
-    "Dans Autorisations, ajoutez im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    "Dans Autorisations, ajoutez im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg.include_bot:readonly, im:message.group_msg.include_bot:read.",
   feishuManualStep3: "Copiez l’App ID et l’App Secret ici, puis ajoutez le canal.",
   feishuManualStep4:
     "Ensuite, dans Événements et rappels de {{platform}}, choisissez Connexion longue et abonnez-vous à im.message.receive_v1. {{platform}} ne peut l'enregistrer qu'une fois le canal connecté.",
@@ -365,7 +381,7 @@ export const bots = {
     needs_approval: "Approbation requise",
     completed: "Terminé",
     failed: "Échec",
-    uncertain: "Interrompu : démarrez une nouvelle conversation pour continuer",
+    uncertain: "Interrupted. Reset the Bot conversation to continue.",
     cancelled: "Annulé",
   },
 };

@@ -22,6 +22,7 @@ export const botKeys = {
     workspaceId,
     builtinChannelId,
   ],
+  histories: (serverId: string, workspaceId: string) => ["bot-history", serverId, workspaceId],
   history: (serverId: string, workspaceId: string, conversationId?: string) => [
     "bot-history",
     serverId,
@@ -47,6 +48,12 @@ export const botKeys = {
     serverId,
     workspaceId,
     ticketId,
+  ],
+  chats: (serverId: string, workspaceId: string, builtinChannelId: string) => [
+    "bot-chats",
+    serverId,
+    workspaceId,
+    builtinChannelId,
   ],
   channels: (serverId: string, workspaceId: string, builtinChannelId: string) => [
     "bot-channels",

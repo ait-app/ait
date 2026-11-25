@@ -5,6 +5,7 @@ import {
   BotExecutionSchema,
   BotChannelSchema,
   BotChannelConfigSchema,
+  BotChatSchema,
   BotConversationSchema,
   BotTurnSchema,
   BotWakeScopeSchema,
@@ -256,6 +257,25 @@ export const BOT_REQUEST_SCHEMAS = [
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
     pairingId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.chat.list.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+  }),
+  z.strictObject({
+    type: z.literal("bot.chat.update.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    channelId: z.guid(),
+    peer: z.string(),
+    enabled: z.boolean(),
+    listenAllMessages: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.context.reset.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
   }),
   z.strictObject({
     type: z.literal("bot.conversation.list.request"),
@@ -578,6 +598,18 @@ export const BOT_RESPONSE_SCHEMAS = [
     payload: z.object({ requestId: z.string(), cancelled: z.boolean() }),
   }),
   z.object({
+    type: z.literal("bot.chat.list.response"),
+    payload: z.object({ requestId: z.string(), chats: z.array(BotChatSchema) }),
+  }),
+  z.object({
+    type: z.literal("bot.chat.update.response"),
+    payload: z.object({ requestId: z.string(), chat: BotChatSchema }),
+  }),
+  z.object({
+    type: z.literal("bot.context.reset.response"),
+    payload: z.object({ requestId: z.string(), conversation: BotConversationSchema }),
+  }),
+  z.object({
     type: z.literal("bot.conversation.list.response"),
     payload: z.object({ requestId: z.string(), conversations: z.array(BotConversationSchema) }),
   }),
@@ -671,6 +703,13 @@ export type BotResult<M extends BotMethod> = Extract<
   BotResponse,
   { type: BotResponseType<M> }
 >["payload"];
+/** Per-platform-chat reception settings (ADR-305). */
+export const BOT_CHAT_RECEPTION_METHODS = [
+  "bot.chat.list.request",
+  "bot.chat.update.request",
+] as const;
+/** Bot-wide shared execution and reset (ADR-305). */
+export const BOT_SHARED_CONTEXT_METHODS = ["bot.context.reset.request"] as const;
 /** Methods added after the core v2 Bot set; hosts without them keep the Bot tab. */
 export const BOT_PERMISSION_METHODS = ["bot.permissions.update.request"] as const;
 /** Notification log reads and the wake-scope setting; older hosts keep the Bot without them. */
@@ -716,6 +755,9 @@ export const BOT_WEBHOOK_SETUP_METHODS = [
   "bot.channel.webhook.rotate.request",
 ] as const;
 const OPTIONAL_BOT_METHODS: readonly string[] = [
+  "bot.conversation.reset.request",
+  ...BOT_CHAT_RECEPTION_METHODS,
+  ...BOT_SHARED_CONTEXT_METHODS,
   ...BOT_PERMISSION_METHODS,
   ...BOT_NOTIFICATION_METHODS,
   ...BOT_TICKET_METHODS,

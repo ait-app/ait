@@ -24,8 +24,8 @@ fn queue_budget_and_reset_conflicts_leave_the_active_turn_untouched() {
     let run = state.ready().unwrap().remove(0);
     assert_eq!(
         state.execute(
-            "bot.conversation.reset.request",
-            json!({"workspaceId":WORKSPACE,"conversationId":first.conversation_id})
+            "bot.context.reset.request",
+            json!({"workspaceId":WORKSPACE})
         ),
         Err(ErrorCode::BotConflict)
     );
@@ -101,8 +101,8 @@ fn reset_of_an_uncertain_conversation_cancels_its_blocked_queue() {
 
     restarted
         .execute(
-            "bot.conversation.reset.request",
-            json!({"workspaceId":WORKSPACE,"conversationId":queued.conversation_id}),
+            "bot.context.reset.request",
+            json!({"workspaceId":WORKSPACE}),
         )
         .unwrap();
 
@@ -134,7 +134,9 @@ fn workspace_retirement_closes_sessions_and_cancels_queued_turns() {
     assert!(running.cancel.is_cancelled());
     assert_eq!(state.turn(queued.id).unwrap().status, TurnStatus::Cancelled);
     assert!(
-        matches!(&state.session_actions[0].1, Action::Close { agent_id } if agent_id == &session)
+        state.session_actions.iter().any(
+            |(_, action)| matches!(action, Action::Close { agent_id } if agent_id == &session)
+        )
     );
     assert_eq!(
         state

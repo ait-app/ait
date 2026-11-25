@@ -246,3 +246,14 @@ pub(crate) struct MemoryUpdate {
 pub(crate) fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, model::ErrorCode> {
     serde_json::from_value(value).map_err(|_| model::ErrorCode::InvalidMessage)
 }
+
+/// Owner-controlled reception settings for one platform chat.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ChatUpdate {
+    pub(crate) workspace_id: String,
+    pub(crate) channel_id: ChannelId,
+    pub(crate) peer: String,
+    pub(crate) enabled: bool,
+    pub(crate) listen_all_messages: bool,
+}

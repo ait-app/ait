@@ -81,6 +81,8 @@ impl State {
             message_id: request.message_id,
             text: request.text,
             reply_to: None,
+            sender_type: None,
+            passive: false,
         })
     }
 

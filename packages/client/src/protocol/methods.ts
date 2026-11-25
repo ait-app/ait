@@ -1,4 +1,8 @@
-import { ALL_BOT_METHODS } from "@ait/protocol/bot/rpc-schemas";
+import {
+  ALL_BOT_METHODS,
+  BOT_CHAT_RECEPTION_METHODS,
+  BOT_SHARED_CONTEXT_METHODS,
+} from "@ait/protocol/bot/rpc-schemas";
 // Ait names declared by Rust capability components.
 // Verify with scripts/check-paseo-client-methods.py.
 import { RELAY_METHODS } from "./relay-methods.js";
@@ -11,8 +15,12 @@ export interface MethodSpec {
   retryAdmission?: false;
 }
 
-// Channel onboarding waits on an external platform. Rust runs it on the same lane as file work, and
-// moving it keeps the background channel within the 64 capabilities Rust accepts per connection.
+// Platform onboarding stays on the file connection. Bot chat configuration has a separate
+// split connection: all four original hellos already use the 64-capability budget.
+const BOT_CONFIGURATION_METHODS: readonly string[] = [
+  ...BOT_CHAT_RECEPTION_METHODS,
+  ...BOT_SHARED_CONTEXT_METHODS,
+];
 const EXTERNAL_PLATFORM_BOT_METHOD = /^bot\.channel\.(feishu|lark|telegram|weixin|qq|imessage)\./;
 
 export const METHODS: Readonly<Record<string, MethodSpec>> = {
@@ -65,7 +73,11 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
       {
         method,
         kind: "request" as const,
-        channel: EXTERNAL_PLATFORM_BOT_METHOD.test(method) ? 2 : 3,
+        channel: BOT_CONFIGURATION_METHODS.includes(method)
+          ? 4
+          : EXTERNAL_PLATFORM_BOT_METHOD.test(method)
+            ? 2
+            : 3,
         response: method.replace(/\.request$/, ".response"),
       },
     ]),

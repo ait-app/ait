@@ -147,6 +147,7 @@ enum Operation {
     Delivery(BotTurnId, DeliveryStatus),
     Retire(Vec<String>),
     ChannelAdmission(String),
+    ChatAdmission(ChannelId, String, bool, bool),
     AccountAvailable(String),
     CreateStored(StoredChannel, SecretString),
     SyncToken(ChannelId, String),
@@ -737,6 +738,20 @@ impl Bots {
         &self.0.scopes
     }
 
+    /// Register a platform chat and check its owner-configured reception policy.
+    pub(crate) async fn admit_chat(
+        &self,
+        channel: ChannelId,
+        peer: String,
+        group: bool,
+        mentioned: bool,
+    ) -> Result<bool, ErrorCode> {
+        Ok(self
+            .call(Operation::ChatAdmission(channel, peer, group, mentioned))
+            .await?["accepted"]
+            == true)
+    }
+
     /// Resolve once the service stops admitting work, so host feeders can end with it.
     pub async fn stopped(&self) {
         self.0.cancellation.cancelled().await;
@@ -1107,6 +1122,9 @@ fn apply(
             Ok(Value::Null)
         }
         Operation::Rotate(conversation, turn) => state.rotate(conversation, turn),
+        Operation::ChatAdmission(channel, peer, group, mentioned) => {
+            state.admit_chat(channel, peer, group, mentioned)
+        }
         Operation::DeliveryNext(channel) => {
             let pending = state.pending_delivery(channel)?;
             if let Some((turn, _)) = &pending {

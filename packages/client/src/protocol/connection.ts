@@ -31,7 +31,7 @@ const RUNTIME_METHODS: Readonly<Record<string, MethodSpec>> = {
   },
 };
 
-export const CHANNEL_CAPABILITIES = Array.from({ length: 4 }, (_, channel) => [
+export const CHANNEL_CAPABILITIES = Array.from({ length: 5 }, (_, channel) => [
   ...new Set([
     // Liveness is probed on channel 0 only. All channels retain subscription release because
     // releases must go to the connection which owns the subscription.
@@ -69,7 +69,7 @@ export interface DaemonConnection extends Omit<Transport, "send" | "onMessage"> 
 
 const ALL_CAPABILITIES = [...new Set(CHANNEL_CAPABILITIES.flat())];
 const MAX_SPLIT_ENDPOINTS = 64;
-/** Endpoints whose daemon rejected the single-connection hello; they reconnect with four sockets. */
+/** Endpoints whose daemon rejected the single-connection hello; they reconnect with split sockets. */
 const splitEndpoints = new Set<string>();
 
 function rememberSplit(url: string): void {
@@ -80,9 +80,9 @@ function rememberSplit(url: string): void {
 }
 
 /**
- * - `auto`: one socket with `connection.single.v1`, falling back to four sockets for daemons
+ * - `auto`: one socket with `connection.single.v1`, falling back to split sockets for daemons
  *   that reject it. Account relay sessions are always single.
- * - `split`: the four-socket mode only.
+ * - `split`: the split-socket mode only.
  */
 export type DaemonConnectionMode = "auto" | "split";
 
@@ -104,7 +104,7 @@ export function createDaemonConnection(
 ): DaemonConnection {
   const parsed = parseDaemonTransportUrl(url);
   const relay = parsed.protocol === "ait+desktop:" && parsed.hostname === "account-relay";
-  // Direct, SSH and local daemons try one socket first; a rejection falls back to four
+  // Direct, SSH and local daemons try one socket first; a rejection falls back to split
   // sockets once and is remembered for this endpoint. A Hub session is always single.
   let trial = !relay && mode === "auto" && !splitEndpoints.has(url);
   let single = relay || trial;
@@ -199,7 +199,7 @@ export function createDaemonConnection(
   }
 
   /**
-   * The daemon did not complete the single-connection hello: reopen with four sockets and
+   * The daemon did not complete the single-connection hello: reopen with split sockets and
    * resend the caller's hello there. The caller sees one open and one server_info.
    */
   function fallBack(rejected: boolean): void {

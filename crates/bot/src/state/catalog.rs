@@ -91,6 +91,26 @@ pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
     if builtin != bots.len() {
         return Err(ErrorCode::InvalidMessage);
     }
+    let mut chats = BTreeSet::new();
+    if catalog.chats.len() > 4096 || catalog.contexts.keys().any(|bot| !bots.contains_key(bot)) {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    for chat in &catalog.chats {
+        let channel = catalog
+            .channels
+            .iter()
+            .find(|c| c.id == chat.channel_id)
+            .ok_or(ErrorCode::InvalidMessage)?;
+        if !matches!(
+            channel.config,
+            ChannelConfig::Feishu { .. } | ChannelConfig::Lark { .. }
+        ) || !model::valid_id(&chat.peer)
+            || (!chat.group && chat.listen_all_messages)
+            || !chats.insert((chat.channel_id, chat.peer.as_str()))
+        {
+            return Err(ErrorCode::InvalidMessage);
+        }
+    }
     Ok(())
 }
 

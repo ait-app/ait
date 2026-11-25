@@ -55,11 +55,12 @@ export const bots = {
   conversationReadOnly:
     "閲覧のみ：この会話は {{channel}} で行われています。ここでメッセージを送れるのは Ait の会話だけです。",
   session: "Bot セッション",
-  reset: "新しい会話",
+  reset: "Reset conversation",
+  resetSharedConfirm:
+    "Reset the Bot conversation for all connected chats? Message history, memory and chat settings will be kept.",
   resetConfirm:
-    "新しい会話を始めますか？既存のメッセージは保持され、最新の Bot 設定が適用されます。",
-  configurationHint:
-    "モデルの変更は新しい会話に適用されます。ここで使うには新しい会話を始めてください。",
+    "Reset this conversation? Existing messages will be kept and the latest Bot settings will take effect.",
+  configurationHint: "Model changes take effect after you reset the Bot conversation.",
   memory: "メモリ",
   memoryHint: "PR タイトルの言語や返信スタイルなど、Bot が返信のたびに読み込む設定です。",
   saveMemory: "メモリを保存",
@@ -89,11 +90,26 @@ export const bots = {
   allowGroups: "グループチャットを許可",
   channelRefHint:
     "認証情報はデーモンを起動する環境変数から取得します。env:AIT_SERVER_CREDENTIAL_TELEGRAM のような変数参照のみを入力してください。",
+  receptionOff: "Off",
+  receptionMentions: "Mentions only",
+  receptionAll: "All messages",
+  receptionDirect: "On",
+  chatDisabledHint: "Messages from this chat are ignored.",
+  chatReception: "Chat reception",
+  chatReceptionHint:
+    "Each chat has its own reception settings. Chats connected to this Bot share its conversation.",
+  noExternalChats: "Chats appear here when the platform first delivers a message.",
+  groupChat: "Group chat",
+  directChat: "Direct message",
+  listenAllPermissions:
+    "Requires {{platform}} permission to receive group messages from users and bots.",
+  mentionsOnly: "Only messages that mention the Bot are processed.",
+  noReplyNeeded: "No reply needed.",
   channelEnabled: "有効",
   channelConnected: "接続済み",
   channelIdle: "待機中",
   feishuScanHint:
-    "Feishu アプリで QR コードをスキャンします。Feishu がボットを作成して Ait が接続します。変更するまでメッセージを送れるのはあなただけです。",
+    "Scan a QR code with the Feishu app to create and connect a Bot. Configure message reception for each chat in Settings.",
   feishuScanStart: "QR コードを表示",
   feishuScanWaiting:
     "Feishu アプリでこのコードをスキャンし、新しいボットを承認してください。完了するまでこのページを開いたままにしてください。",
@@ -113,7 +129,7 @@ export const bots = {
     "App Secret を貼り付けます。Ait は {{platform}} で検証し、このホストに非公開で保存します。env:AIT_SERVER_CREDENTIAL_* 参照も使えます。",
   feishuManualStep1: "{{developerUrl}} でカスタムアプリを作成し、ボット機能を有効にします。",
   feishuManualStep2:
-    "権限管理で im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly を追加します。",
+    "権限管理で im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg.include_bot:readonly, im:message.group_msg.include_bot:read を追加します。",
   feishuManualStep3: "App ID と App Secret をここに入力し、チャンネルを追加します。",
   feishuManualStep4:
     "次に {{platform}} の「イベントとコールバック」で長時間接続を選び、im.message.receive_v1 を購読します。チャンネルが接続されるまで {{platform}} はこの設定を保存できません。",
@@ -359,7 +375,7 @@ export const bots = {
     needs_approval: "承認が必要",
     completed: "完了",
     failed: "失敗",
-    uncertain: "中断されました。続けるには新しい会話を始めてください",
+    uncertain: "Interrupted. Reset the Bot conversation to continue.",
     cancelled: "キャンセル済み",
   },
 };

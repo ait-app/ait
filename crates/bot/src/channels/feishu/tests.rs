@@ -27,7 +27,12 @@ fn feishu_and_lark_scope_user_group_and_thread_before_admission() {
         assert_eq!(routed.thread.as_deref(), Some("thread-1"));
         assert_eq!(routed.reply_to.as_deref(), Some("om_original"));
         event["event"]["message"]["mentions"] = json!([]);
-        assert!(incoming(&channel, &event, "ou_bot").unwrap().is_none());
+        assert!(
+            incoming(&channel, &event, "ou_bot")
+                .unwrap()
+                .unwrap()
+                .passive
+        );
         event["event"]["message"]["chat_type"] = json!("p2p");
         assert!(incoming(&channel, &event, "ou_bot").unwrap().is_some());
         event["event"]["sender"]["sender_id"]["open_id"] = json!("ou_stranger");
@@ -57,7 +62,8 @@ fn feishu_and_lark_scope_user_group_and_thread_before_admission() {
             panic!("expected Feishu or Lark channel");
         };
         *allow_groups = false;
-        assert!(incoming(&channel, &event, "ou_bot").unwrap().is_none());
+        // The legacy account-wide flag no longer overrides per-chat reception settings.
+        assert!(incoming(&channel, &event, "ou_bot").unwrap().is_some());
         event["event"]["message"]["chat_type"] = json!("p2p");
         assert!(incoming(&channel, &event, "ou_bot").unwrap().is_some());
     }

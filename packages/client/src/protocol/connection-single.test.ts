@@ -167,7 +167,7 @@ describe("single-connection daemon transport", () => {
     }
   });
 
-  it("falls back to four sockets when an older daemon rejects the single hello", () => {
+  it("falls back to split sockets when an older daemon rejects the single hello", () => {
     const url = endpoint();
     const h = connect(url);
     try {
@@ -181,7 +181,7 @@ describe("single-connection daemon transport", () => {
         retryable: false,
       });
       expect(h.sockets[0].close).toHaveBeenCalled();
-      expect(h.base).toHaveBeenCalledTimes(5);
+      expect(h.base).toHaveBeenCalledTimes(1 + CHANNEL_CAPABILITIES.length);
       h.ready([]);
       // The caller's hello is repeated on each new socket; it does not see a second open.
       expect(h.opened).toHaveBeenCalledOnce();
@@ -202,10 +202,10 @@ describe("single-connection daemon transport", () => {
     } finally {
       h.transport.close();
     }
-    // The rejection is remembered: reconnects go straight to four sockets.
+    // The rejection is remembered: reconnects go straight to split sockets.
     const next = connect(url);
     try {
-      expect(next.base).toHaveBeenCalledTimes(4);
+      expect(next.base).toHaveBeenCalledTimes(CHANNEL_CAPABILITIES.length);
       next.ready([]);
       expect(next.sockets[0].hello()).toMatchObject({ required_capabilities: [] });
     } finally {
@@ -218,7 +218,7 @@ describe("single-connection daemon transport", () => {
     try {
       h.sockets[0].open();
       h.sockets[0].message({ type: "error", code: "invalid_message", message: "Invalid" });
-      expect(h.base).toHaveBeenCalledTimes(5);
+      expect(h.base).toHaveBeenCalledTimes(1 + CHANNEL_CAPABILITIES.length);
       h.ready([]);
       expect(h.received).toHaveLength(1);
       expect(h.errors).not.toHaveBeenCalled();
@@ -233,7 +233,7 @@ describe("single-connection daemon transport", () => {
     try {
       h.sockets[0].open();
       h.sockets[0].end();
-      expect(h.base).toHaveBeenCalledTimes(5);
+      expect(h.base).toHaveBeenCalledTimes(1 + CHANNEL_CAPABILITIES.length);
       h.ready([]);
       expect(h.received).toHaveLength(1);
       expect(h.closed).not.toHaveBeenCalled();
@@ -255,7 +255,7 @@ describe("single-connection daemon transport", () => {
       h.sockets[0].open();
       h.sockets[0].fail();
       h.sockets[0].end();
-      expect(h.base).toHaveBeenCalledTimes(5);
+      expect(h.base).toHaveBeenCalledTimes(1 + CHANNEL_CAPABILITIES.length);
       h.ready([]);
       expect(h.received).toHaveLength(1);
       expect(h.errors).not.toHaveBeenCalled();
@@ -273,7 +273,7 @@ describe("single-connection daemon transport", () => {
     first.transport.close();
     const upgraded = connect(url);
     try {
-      expect(upgraded.base).toHaveBeenCalledTimes(4);
+      expect(upgraded.base).toHaveBeenCalledTimes(CHANNEL_CAPABILITIES.length);
       upgraded.ready(["ait-rust-single-v1"]);
     } finally {
       upgraded.transport.close();
@@ -286,7 +286,7 @@ describe("single-connection daemon transport", () => {
     }
   });
 
-  it("fails normally when the daemon is unreachable or the four-socket retry fails", () => {
+  it("fails normally when the daemon is unreachable or the split-socket retry fails", () => {
     const unreachable = connect(endpoint());
     unreachable.sockets[0].end();
     expect(unreachable.base).toHaveBeenCalledOnce();
@@ -297,13 +297,13 @@ describe("single-connection daemon transport", () => {
     h.sockets[0].message({ type: "error", code: "unsupported_capability", message: "No" });
     for (const socket of h.sockets.slice(1)) socket.open();
     h.sockets[1].message({ type: "error", code: "unsupported_capability", message: "No" });
-    expect(h.base).toHaveBeenCalledTimes(5);
+    expect(h.base).toHaveBeenCalledTimes(1 + CHANNEL_CAPABILITIES.length);
     expect(h.errors).toHaveBeenCalledWith(
       expect.objectContaining({ message: "Rust handshake rejected: unsupported_capability" }),
     );
   });
 
-  it("gives the four-socket fallback its own handshake budget", () => {
+  it("gives the split-socket fallback its own handshake budget", () => {
     vi.useFakeTimers();
     const h = connect(endpoint());
     vi.advanceTimersByTime(9_000);
@@ -330,10 +330,10 @@ describe("single-connection daemon transport", () => {
     expect(h.closed).toHaveBeenCalledOnce();
   });
 
-  it("uses four sockets when the caller asks for the split mode", () => {
+  it("uses split sockets when the caller asks for the split mode", () => {
     const h = connect(endpoint(), "split");
     try {
-      expect(h.base).toHaveBeenCalledTimes(4);
+      expect(h.base).toHaveBeenCalledTimes(CHANNEL_CAPABILITIES.length);
       h.ready([]);
       expect(h.sockets[3].hello()).toMatchObject({
         capabilities: CHANNEL_CAPABILITIES[3],

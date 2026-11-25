@@ -80,12 +80,18 @@ export function SettingsSelect<Value extends string>({
   value,
   options,
   onValueChange,
+  disabled = false,
   ...row
 }: SettingsSelectProps<Value>) {
   return (
     <SettingsRow {...row}>
       <DropdownMenu>
-        <DropdownTrigger accessibilityRole="button" accessibilityLabel={row.label}>
+        <DropdownTrigger
+          accessibilityRole="button"
+          accessibilityLabel={row.label}
+          disabled={disabled}
+          testID={row.testID ? `${row.testID}-trigger` : undefined}
+        >
           <Text style={styles.value}>
             {options.find((option) => option.value === value)?.label ?? value}
           </Text>

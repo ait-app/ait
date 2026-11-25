@@ -35,18 +35,14 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 
 ## 对话与执行
 
-- Conversation 以 Channel、peer、sender、thread 区分，内置 Channel 使用固定 `owner` 对话；同一 Conversation 串行执行。
-  Conversation 创建时复制 Bot 执行配置，`bot.update` 只对新 Conversation 或 reset 后的新 generation 生效
-  （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、
-  [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)）。
-- reset 要求没有执行中的轮次（否则 `BotConflict`），取消排队输入、关闭旧隐藏会话并递增 generation；历史保留
-  （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、[Bot 手册](../operations/bots.md)）。
+- Bot 以单一原生上下文接收所有入口的输入，按持久化 Bot 顺序串行执行。Conversation 保留 Channel、peer、sender、thread，作为来源、历史与回执路由，不再各自拥有独立模型上下文。子 Agent 仍可并发。
+- 重置通过 Bot 级接口改变共享上下文，取消旧队列并保留历史与会话设置；有执行中的轮次时拒绝重置。旧单 Conversation 重置接口不再发布。迁移保留历史供回读，不重放旧输入（[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）。
 - 输入按 Channel 与 `messageId` 去重：内容、目标相同返回 `duplicate:true`，不同返回 `IdempotencyConflict`。
   轮次落盘后才返回接纳；外部消息在持久接纳后才确认或推进游标，全局积压时不确认、等待重投，
   单个 Conversation 积压时确认并丢弃该条
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)）。
 - daemon 重启时，`sending`、`running`、`needs_approval` 轮次改为 `uncertain`，正在发送的投递也改为 `uncertain`；
-  执行结果无法确认时同样记为 `uncertain`。`uncertain` 阻止同 generation 的后续输入，需显式 reset，不自动重做或重发
+  执行结果无法确认时同样记为 `uncertain`。`uncertain` 阻止同一 Bot 的后续执行，需显式重置共享上下文，不自动重做或重发
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、[Bot 手册](../operations/bots.md)）。
 - 每轮正常结束后释放（`Release`）原生会话但保留其身份，下一轮重新打开；reset 与退役改为关闭（`Close`）并归档会话
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、
@@ -85,7 +81,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   该轮次 `completed` 后才生效，以其他方式结束则丢弃；生效后关于该 Agent、目标为该对话且不晚于该时间的 `agent_*` 待唤醒条目记为
   `skipped/observed`。观察只在内存中保留，有界
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 14 节）。
-- 唤醒轮次带 `wake.notifications`，`messageId` 为 `notification:<turnId>`，无 `replyTo`，输入是 `<ait-input kind="bot_wake">` 围栏；
+- 唤醒轮次带 `wake.notifications`，`messageId` 为 `notification:<turnId>`，保留来源会话的有效回复锚点，输入是 `<ait-input kind="bot_wake">` 围栏；
   Bot 指令前缀的围栏同样是 `<ait-input kind="bot_instructions">`，时间线投影拆出来源与用户正文
   （[ADR-276](../decisions/providers/adr-276-ait-input-envelope-and-origin.md)）。
   先提交轮次再标记日志，启动时按仍排队的唤醒轮次携带的通知 id 补标记，因此重启不丢失也不重复唤醒。用户取消或 reset 的唤醒轮次不再重新唤醒；
@@ -114,7 +110,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - `bot_overview` 的 `notifications` 是调用会话尚未在完成轮次中看到的通知（`bot.notifications.list` 的 `unseenBy`），
   至多 20 条、`summary` 至多 512 字节，计入 24 KiB 预算；对话已不属于 Bot 时为 `null`
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
-- 唤醒轮次的最后一条回复恰为 `NO_REPLY` 时记为 `silent` 并直接 `delivered`，不向任何 Channel 发送；外部 Channel 对唤醒轮次发普通消息
+- 唤醒轮次或被动群监听轮次的最后一条回复恰为 `NO_REPLY` 时记为 `silent` 并直接 `delivered`，不向任何 Channel 发送；外部 Channel 对唤醒轮次发普通消息
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)）。
 - 轮次进入 `sending` 时记录 `notificationCursor`；`bot.notifications.list` 带 `unseenBy` 时只返回该对话最近完成轮次之后的通知，
   失败的轮次不推进。暂停把待唤醒通知记为 `skipped/paused`；移除与归档删除该 Bot 的通知状态
@@ -237,10 +233,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   列表项内文本预览 400 字符、单个对象页内 1200 字符、唤醒输入摘要 600 字符。长度按字符计。截断的文本为 `{"preview","chars","read"}`；
   Agent 目录不带 Agent 的结果文本，Agent 的结果与转录用 `agent_activity_read` 读取（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 1、2 节）。
 - 读取是纯读取：不写盘、不唤醒、不记录观察、不推进 `notificationCursor`；退役 Bot 不可读（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 3 节）。
-- 读取者：调用者对话在内置 Channel 上时为所有者，可读全部、可触达作用域内全部 Agent；其他对话（含 Webhook 与 Bot 已不拥有的对话）只读自己、来源为自己的工单与通知，
-  别人的工单只给存根（标题、状态、不含 Agent 的等待原因、`restricted:true`），别人的通知读作未保留，其余返回 `Forbidden`；工作者只读自己的工单，页面不含其他工单、对话或通知 id
-  （[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 4 节）。
-- Agent 触达：`bot::recall::Viewer::sees_agent` 按标签判定，`ait.bot.ticket` 是有来源对话的已知工单时由工单来源决定，否则由 `ait.bot.conversation` 决定，
+- Bot 管理者可回读同一 Bot 的所有入口、工单及通知；外部来源的管理者能触达该 Bot 工单的 Agent，内置所有者仍可触达工作区范围内所有 Agent。子树沿用来源和工单访问限制，不自动继承管理者的跨入口视野（[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）。
+- 子树 Agent 触达：`bot::recall::Viewer::sees_agent` 按标签判定，`ait.bot.ticket` 是有来源对话的已知工单时由工单来源决定，否则由 `ait.bot.conversation` 决定，
   Bot 未启动的 Agent 对外部对话不可触达。`Bots::sight(root, Origin)` 为外部对话返回 `Sight`（读取者加 Bot 全部工单的来源）；子树调用者的
   `Origin::Agent` 带它的工单与对话标签，Bot 取工单的来源对话，没有时取标签，两者都没有时返回 `None`（不受限）。`crates/api` 一次取得后套用于
   `bot_read agent/<id>`、`scope::confine` 的 Agent 目标（九个 Agent 工具，拒绝在执行前，不触发重新打开工单与观察）、`agent_list`、`permission_list`、
@@ -335,11 +329,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   飞书扫码流程仍只接入中国区应用（[ADR-272](../decisions/bot/adr-272-lark-channel.md)）。
 - QQ 群聊接收 `GROUP_AT_MESSAGE_CREATE`；开启 QQ 的群全量消息能力后，也兼容
   `GROUP_MESSAGE_CREATE`，将群内普通消息一并接纳。
-- Telegram、飞书、Lark、微信、QQ 和 iMessage 私聊向任意发送者开放；Telegram 群聊仍需提及或回复机器人，
-  飞书和 Lark 群聊仍需提及机器人，且均需 `allowGroups`。微信与 iMessage 仍只支持私聊。
-  QQ 开启 `allowGroups` 后接纳任意群成员的提及和平台全量推送中的普通群消息；关闭后拒绝全部群消息。
-  平台鉴权、机器人或自身消息过滤、原生连接验证及按发送者隔离的 Conversation 继续有效
-  （[ADR-290](../decisions/bot/adr-290-open-channel-senders.md)）。
+- Telegram、微信、QQ、iMessage 的接收规则沿用对应平台适配器。飞书与 Lark 按平台 chat_id 保存启用和全量监听策略，旧 allowGroups 字段仅保留配置兼容；私聊为直接呼叫。未被接纳的正文不进入模型上下文。飞书与 Lark 接收人员及其他机器人文字、富文本和卡片的可读正文，过滤自身消息，以 message_id 去重；平台权限决定事件是否可达（[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）。
 - QQ 入站消息 ID 超过通用关联 ID 限制时，以 `qq:` 前缀的 SHA-256 十六进制摘要作内部去重键；
   原消息 ID 完整保存在 `replyTo`，用于 QQ 被动回复。已有短 ID 的去重键保持不变。
 - Provider 回复中的 Markdown 图片会在 Telegram、飞书、Lark 与 QQ 走各自的原生图片发送接口；图片来源支持 HTTPS URL、data URL，
@@ -383,6 +373,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   workspace／project 范围访客与 Webhook 自动化不能调用 `bot.*` 工单方法
   （[ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)、
   [ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)、[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 9 节）。
+- 外部会话接收配置位于 Settings 中对应 Channel 的单层设置卡片内，使用统一设置分组、行与分割线；账号标题与说明气泡不放入卡片。群聊每行选择停用、仅提及或全部消息，私聊只选择停用或接收。未接入飞书/Lark 时不展示接收配置。查询仅在页面可交互时轮询，单个会话保存不锁住其他行。
+- `workspaceBotChatReception` 与 `workspaceBotSharedContext` 由完整方法集合协商；共享上下文重置使所有来源会话的列表与历史缓存失效。SDK 单连接保持一个 socket，兼容分拆模式将新增配置方法放在独立连接，所有 hello 均不超过 64 capability。
 - 客户端只在 Host 声明 `workspace-bots-v2` 且完整 Bot 方法可用时启用 Bot，权限设置另要求
   `bot.permissions.update.request`；整个功能仍受 `experimentalFeatures` 开关控制。每个 Workspace 至多一个 Bot 标签页，
   标签 ID 固定为 `bot`

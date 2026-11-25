@@ -25,6 +25,7 @@ export const botStyles = StyleSheet.create((theme) => ({
     borderRadius: 8,
     backgroundColor: theme.colors.surface1,
   },
+  cardBlock: { padding: theme.spacing[4] },
   permissionBlock: { gap: 8 },
   warning: { fontSize: theme.fontSize.sm, color: theme.colors.statusWarning },
   mono: {

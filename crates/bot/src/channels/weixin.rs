@@ -387,6 +387,8 @@ fn incoming(
             .as_str()
             .filter(|token| !token.is_empty())
             .map(str::to_owned),
+        sender_type: None,
+        passive: false,
     }))
 }
 

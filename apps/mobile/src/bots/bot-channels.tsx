@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import type { z } from "zod";
 import type { BotChannelSchema } from "@ait/protocol/bot/types";
+import { SettingsCard, SettingsGroup, SettingsRow, SettingsSection } from "@/components/settings";
 import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { SelectField } from "@/components/ui/select-field";
@@ -12,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { BotChatPolicyRow, useBotChats } from "./bot-chat-policies";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { FeishuManualGuide, FeishuScanSetup } from "./feishu-setup";
 import { TextLink } from "./channel-setup";
@@ -53,6 +55,7 @@ function ChannelRow({
   readOnly,
   active,
   onChanged,
+  chatList,
 }: {
   serverId: string;
   workspaceId: string;
@@ -62,6 +65,7 @@ function ChannelRow({
   readOnly: boolean;
   active: boolean;
   onChanged: () => void;
+  chatList?: ReturnType<typeof useBotChats>;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -123,43 +127,89 @@ function ChannelRow({
         channel.enabled ? t("bots.channelConnected") : t("bots.channelIdle"),
       )
     : null;
+  const config = channel.config;
+  const account = "appId" in config ? `${kind} · ${config.appId}` : kind;
+  const chats = chatList?.data?.filter((chat) => chat.channelId === channel.id);
   return (
-    <View style={styles.card} testID={`bot-channel-${channel.id}`}>
-      <View style={styles.row}>
-        <View style={styles.grow}>
-          <Text style={styles.text}>{kind}</Text>
-          {connection ? <Text style={styles.hint}>{connection}</Text> : null}
-        </View>
-        <Switch
-          value={channel.enabled}
-          onValueChange={(enabled) => toggle.mutate(enabled)}
-          disabled={readOnly || !active || !interactive || busy}
-          accessibilityLabel={t("bots.channelEnabled")}
-          testID={`bot-channel-enabled-${channel.id}`}
-        />
-        {!readOnly ? (
-          <Button
-            variant="outline"
-            disabled={!interactive || busy}
-            onPress={() => remove.mutate()}
-            testID={`bot-channel-delete-${channel.id}`}
-          >
-            {t("bots.deleteChannel")}
-          </Button>
+    <SettingsSection
+      title={account}
+      info={chatList ? t("bots.chatReceptionHint") : undefined}
+      testID={`bot-channel-${channel.id}`}
+    >
+      <SettingsCard testID={`bot-channel-${channel.id}-card`}>
+        <SettingsRow
+          label={t("bots.channelEnabled")}
+          hint={connection ?? undefined}
+          error={toggle.error?.message ?? remove.error?.message}
+        >
+          <View style={styles.row}>
+            <Switch
+              value={channel.enabled}
+              onValueChange={(enabled) => toggle.mutate(enabled)}
+              disabled={readOnly || !active || !interactive || busy}
+              accessibilityLabel={t("bots.channelEnabled")}
+              testID={`bot-channel-enabled-${channel.id}`}
+            />
+            {!readOnly ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!interactive || busy}
+                onPress={() => remove.mutate()}
+                testID={`bot-channel-delete-${channel.id}`}
+              >
+                {t("bots.deleteChannel")}
+              </Button>
+            ) : null}
+          </View>
+        </SettingsRow>
+        {channel.config.kind === "webhook" && !readOnly ? (
+          <View style={styles.cardBlock} testID={`bot-webhook-details-${channel.id}`}>
+            <WebhookDetails
+              serverId={serverId}
+              workspaceId={workspaceId}
+              channelId={channel.id}
+              url={channel.config.url}
+              disabled={!interactive || busy}
+            />
+          </View>
         ) : null}
-      </View>
-      {channel.config.kind === "webhook" && !readOnly ? (
-        <WebhookDetails
-          serverId={serverId}
-          workspaceId={workspaceId}
-          channelId={channel.id}
-          url={channel.config.url}
-          disabled={!interactive || busy}
-        />
-      ) : null}
-      {toggle.error ? <Text style={styles.error}>{toggle.error.message}</Text> : null}
-      {remove.error ? <Text style={styles.error}>{remove.error.message}</Text> : null}
-    </View>
+        {chatList?.isPending && interactive ? (
+          <SettingsRow label={t("bots.chatReception")}>
+            <BotLoadingSpinner />
+          </SettingsRow>
+        ) : null}
+        {chatList?.error ? (
+          <SettingsRow label={t("bots.chatReception")} error={chatList.error.message}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!interactive || chatList.isFetching}
+              onPress={() => {
+                void chatList.refetch();
+              }}
+              testID={`bot-chat-retry-${channel.id}`}
+            >
+              {t("bots.reload")}
+            </Button>
+          </SettingsRow>
+        ) : null}
+        {chats?.length === 0 ? (
+          <SettingsRow label={t("bots.chatReception")} hint={t("bots.noExternalChats")} />
+        ) : null}
+        {chats?.map((chat) => (
+          <BotChatPolicyRow
+            key={chat.peer}
+            serverId={serverId}
+            workspaceId={workspaceId}
+            builtinChannelId={builtinChannelId}
+            chat={chat}
+            platform={kind}
+            disabled={readOnly || !active || !interactive}
+          />
+        ))}
+      </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -180,6 +230,7 @@ function ChannelForm({
   const client = useHostRuntimeClient(serverId);
   // One id per opened form: a retry after a lost response must not create a second channel.
   const [channelId] = useState(() => randomUUID());
+  const perChatReception = useHostFeature(serverId, "workspaceBotChatReception");
   const feishuSetupSupported = useHostFeature(serverId, "workspaceBotFeishuSetup");
   const larkSetupSupported = useHostFeature(serverId, "workspaceBotLarkSetup");
   const [kind, setKind] = useState<ExternalKind>(
@@ -391,11 +442,13 @@ function ChannelForm({
         </>
       )}
       {showHint ? <Text style={styles.error}>{t("bots.channelRefHint")}</Text> : null}
-      <AllowGroupsCheckbox
-        checked={allowGroups}
-        disabled={create.isPending}
-        onToggle={() => setAllowGroups((checked) => !checked)}
-      />
+      {!(perChatReception && (kind === "feishu" || kind === "lark")) ? (
+        <AllowGroupsCheckbox
+          checked={allowGroups}
+          disabled={create.isPending}
+          onToggle={() => setAllowGroups((checked) => !checked)}
+        />
+      ) : null}
       {create.error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {create.error.message}
@@ -442,6 +495,7 @@ export function BotChannels({
   const qqSupported = useHostFeature(serverId, "workspaceBotQqSetup");
   const imessageSupported = useHostFeature(serverId, "workspaceBotImessageSetup");
   const webhookSupported = useHostFeature(serverId, "workspaceBotWebhookSetup");
+  const receptionSupported = useHostFeature(serverId, "workspaceBotChatReception");
   const enabled = interactive && Boolean(client);
   const list = useQuery({
     queryKey: botKeys.channels(serverId, workspaceId, builtinChannelId),
@@ -466,6 +520,15 @@ export function BotChannels({
   const external = (list.data ?? []).filter(
     (channel) => !channel.deleted && channel.config.kind !== "builtin",
   );
+  const hasChatChannels = external.some(
+    (channel) => channel.config.kind === "feishu" || channel.config.kind === "lark",
+  );
+  const chats = useBotChats(
+    serverId,
+    workspaceId,
+    builtinChannelId,
+    receptionSupported && enabled && !readOnly && hasChatChannels,
+  );
   // Older clients reject unknown values in `supported`, so hosts advertise these by capability.
   const kinds: ExternalKind[] = types.data
     ? [
@@ -480,10 +543,24 @@ export function BotChannels({
       ]
     : [];
   return (
-    <View style={styles.card} testID="bot-channels">
-      <Text style={styles.title}>{t("bots.channels")}</Text>
+    <SettingsGroup title={t("bots.channels")} testID="bot-channels">
       {list.isPending && enabled ? <BotLoadingSpinner /> : null}
-      {list.error ? <Text style={styles.error}>{list.error.message}</Text> : null}
+      {list.error ? (
+        <SettingsCard>
+          <SettingsRow label={t("bots.channels")} error={list.error.message}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!enabled || list.isFetching}
+              onPress={() => {
+                void list.refetch();
+              }}
+            >
+              {t("bots.reload")}
+            </Button>
+          </SettingsRow>
+        </SettingsCard>
+      ) : null}
       {!readOnly && !active ? <Text style={styles.hint}>{t("bots.resumeToEdit")}</Text> : null}
       {external.map((channel) => (
         <ChannelRow
@@ -496,6 +573,13 @@ export function BotChannels({
           readOnly={readOnly}
           active={active}
           onChanged={refresh}
+          chatList={
+            !readOnly &&
+            receptionSupported &&
+            (channel.config.kind === "feishu" || channel.config.kind === "lark")
+              ? chats
+              : undefined
+          }
         />
       ))}
       {!readOnly && adding && kinds.length > 0 ? (
@@ -520,6 +604,6 @@ export function BotChannels({
           {t("bots.addChannel")}
         </Button>
       ) : null}
-    </View>
+    </SettingsGroup>
   );
 }

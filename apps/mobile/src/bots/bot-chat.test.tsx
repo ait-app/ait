@@ -7,14 +7,18 @@ import type { BotTurn, BotView } from "@ait/protocol/bot/types";
 import { BotChat } from "./bot-chat";
 import { botKeys } from "./queries";
 
-const { botRequest, closeBotSessionTab, openPreferredWorkspaceTarget, tickets } = vi.hoisted(
-  () => ({
+const { botRequest, closeBotSessionTab, openPreferredWorkspaceTarget, tickets, sharedContext } =
+  vi.hoisted(() => ({
     tickets: { current: false },
+    sharedContext: { current: false },
     botRequest: vi.fn(),
     closeBotSessionTab: vi.fn(),
     openPreferredWorkspaceTarget: vi.fn(),
-  }),
-);
+  }));
+vi.mock("@/runtime/host-features", () => ({
+  useHostFeature: (_serverId: string, feature: string) =>
+    feature === "workspaceBotSharedContext" && sharedContext.current,
+}));
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {}, botChatStyles: {}, botTicketStyles: {} }));
@@ -278,6 +282,7 @@ beforeEach(() => {
   openPreferredWorkspaceTarget.mockReset();
   closeBotSessionTab.mockReset();
   tickets.current = false;
+  sharedContext.current = false;
 });
 afterEach(() => {
   cleanup();
@@ -577,6 +582,51 @@ describe("Bot conversation presentation", () => {
       expect(closeBotSessionTab).toHaveBeenCalledWith("host", "workspace", sessionAgentId),
     );
     expect(screen.queryByTestId(`subagent-${sessionAgentId}`)).toBeNull();
+  });
+
+  it("resets the Bot-wide context using the new capability", async () => {
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.conversation.open.request") return { conversation };
+      if (method === "bot.chat.list.request") return { chats: [] };
+      if (method === "bot.history.get.request") return { turns: [receipt], nextSequence: null };
+      if (method === "bot.context.reset.request")
+        return { conversation: { ...conversation, generation: 2, sessionAgentId: "next" } };
+      throw new Error(`Unexpected ${method}`);
+    });
+    sharedContext.current = true;
+    const externalHistory = botKeys.history("host", "workspace", "external");
+    queryClient.setQueryData(externalHistory, [{ ...receipt, status: "queued" }]);
+    renderChat({});
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    await screen.findByTestId(`subagent-${sessionAgentId}`);
+    fireEvent.click(screen.getByTestId("bot-reset"));
+    await waitFor(() =>
+      expect(botRequest).toHaveBeenCalledWith("bot.context.reset.request", {
+        workspaceId: "workspace",
+      }),
+    );
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: botKeys.conversations("host", "workspace", bot.builtinChannelId),
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["bot-history", "host", "workspace"] });
+    expect(queryClient.getQueryState(externalHistory)?.isInvalidated).toBe(true);
+    expect(screen.queryByTestId("bot-chat-policies")).toBeNull();
+  });
+
+  it("hides a passive group input's silent response", async () => {
+    withHistory([
+      {
+        ...receipt,
+        passive: true,
+        silent: true,
+        reply: "NO_REPLY",
+        messages: [{ id: "silent", text: "NO_REPLY", status: "completed" }],
+      },
+    ]);
+    renderChat({});
+    await screen.findByTestId(`bot-silent-${receipt.id}`);
+    expect(screen.queryByText("NO_REPLY")).toBeNull();
+    expect(screen.getByText("bots.noReplyNeeded")).toBeTruthy();
   });
 
   it("cancels the running turn from the composer", async () => {

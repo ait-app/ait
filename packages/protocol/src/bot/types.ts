@@ -199,6 +199,15 @@ export const BotViewSchema = z.object({
   wakeScope: BotWakeScopeSchema.optional(),
   createdAt: z.string(),
 });
+const LarkChannelConfigFields = {
+  appId: z.string(),
+  secretRef: z.string(),
+  // Legacy compatibility field; Hosts no longer filter by sender.
+  allowedSenders: z.array(z.string()).default([]),
+  // Legacy compatibility field; each platform chat owns its reception policy.
+  allowGroups: z.boolean().default(false),
+};
+
 export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("builtin") }),
   z.strictObject({
@@ -208,14 +217,9 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
     allowedSenders: z.array(z.string()).default([]),
     allowGroups: z.boolean().default(false),
   }),
-  z.strictObject({
-    kind: z.enum(["feishu", "lark"]),
-    appId: z.string(),
-    secretRef: z.string(),
-    // Legacy compatibility field; Hosts no longer filter by sender.
-    allowedSenders: z.array(z.string()).default([]),
-    allowGroups: z.boolean().default(false),
-  }),
+  // The compiled websocket validator requires a literal discriminator for each branch.
+  z.strictObject({ kind: z.literal("feishu"), ...LarkChannelConfigFields }),
+  z.strictObject({ kind: z.literal("lark"), ...LarkChannelConfigFields }),
   z.strictObject({
     kind: z.literal("weixin"),
     accountId: z.string(),
@@ -296,8 +300,11 @@ export const BotTurnSchema = z.object({
   createdAt: z.string(),
   // Present only on turns started by Workspace notifications rather than user input.
   wake: z.object({ notifications: z.array(BotNotificationSchema) }).optional(),
-  // The Bot answered a wake turn with its silent reply, so nothing was delivered.
+  // A wake or passive turn ended silently, so nothing was delivered.
   silent: z.boolean().optional(),
+  passive: z.boolean().optional(),
+  senderType: z.string().optional(),
+  botSequence: z.number().int().positive().optional(),
   notificationCursor: z.number().int().nonnegative().optional(),
 });
 
@@ -319,3 +326,13 @@ export type BotTicketPull = z.infer<typeof BotTicketPullSchema>;
 export type BotTicketReport = z.infer<typeof BotTicketReportSchema>;
 export type BotTicketSummary = z.infer<typeof BotTicketSummarySchema>;
 export type BotTicket = z.infer<typeof BotTicketSchema>;
+
+/** Reception settings for one external chat; sender and topic do not affect this identity. */
+export const BotChatSchema = z.object({
+  channelId: z.guid(),
+  peer: z.string(),
+  group: z.boolean(),
+  enabled: z.boolean(),
+  listenAllMessages: z.boolean(),
+});
+export type BotChat = z.infer<typeof BotChatSchema>;

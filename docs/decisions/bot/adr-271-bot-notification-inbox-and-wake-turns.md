@@ -35,6 +35,8 @@ paths:
 - 关系：实现[管理者重设计](../../plans/workspace-bot-manager.md)阶段 4“通知与唤醒”；扩展 [ADR-213](adr-213-single-workspace-manager-bot.md) 的生命周期与 v2 方法、
   [ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 第 3 节的保留标签与 `botScope`、[ADR-227](adr-227-bot-multi-message-output.md) 的轮次记录。
 
+后续修订：[ADR-305](adr-305-shared-bot-context-and-chat-reception.md)。
+
 ## 背景
 
 Bot 只在用户发消息时执行。它启动的 Agent 完成、失败或等待审批时没有任何东西告诉它，从 Telegram 交办的任务因此不会回报。
