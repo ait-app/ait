@@ -20,6 +20,48 @@ fn new_daemon_enables_injection_and_preserves_explicit_opt_out() {
 }
 
 #[test]
+fn accept_peers_defaults_off_and_must_be_boolean() {
+    let fresh = tempfile::tempdir().unwrap();
+    let defaults = FileDaemonConfigStore::with_defaults(fresh.path().join("config.json"));
+    assert_eq!(defaults.get().unwrap()["mcp"]["acceptPeers"], false);
+
+    let root = tempfile::tempdir().unwrap();
+    let older = store(&root);
+    let file = root.path().join("config.json");
+    assert!(older.get().unwrap()["mcp"].get("acceptPeers").is_none());
+    older.patch(&json!({"autoArchiveAfterMerge":true})).unwrap();
+    let written: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    assert!(
+        written["mcp"].get("acceptPeers").is_none(),
+        "an unrelated write does not add the key"
+    );
+
+    let before = older.get().unwrap();
+    let original = fs::read(&file).unwrap();
+    for invalid in [json!("yes"), json!(1), json!(null)] {
+        assert_eq!(
+            older.patch(&json!({"mcp":{"acceptPeers":invalid}})),
+            Err(DaemonConfigStoreError::Invalid),
+            "{invalid}"
+        );
+        assert_eq!(older.get().unwrap(), before);
+        assert_eq!(fs::read(&file).unwrap(), original);
+    }
+    let mut invalid = before.clone();
+    invalid["mcp"]["acceptPeers"] = json!("yes");
+    fs::write(&file, invalid.to_string()).unwrap();
+    assert_eq!(older.reload(), Err(DaemonConfigStoreError::Invalid));
+    assert_eq!(older.get().unwrap(), before);
+
+    let accepted = older.patch(&json!({"mcp":{"acceptPeers":true}})).unwrap();
+    assert_eq!(accepted["mcp"]["acceptPeers"], true);
+    assert_eq!(
+        accepted["mcp"]["injectIntoAgents"], false,
+        "merged, not replaced"
+    );
+}
+
+#[test]
 fn provider_model_presets_reject_invalid_direct_patches_without_touching_current_config() {
     let root = tempfile::tempdir().unwrap();
     let store = store(&root);

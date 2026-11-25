@@ -18,7 +18,7 @@ paths:
 - 修订说明（2026-11-23）：第 2 条的账号独占按未删除的 Channel 判断，已停用的 Channel 也占用其外部账号，
   见 [Bot 规格](../../architecture/bot.md#channel-与凭据)。
 
-后续修订：[ADR-305](adr-305-shared-bot-context-and-chat-reception.md)。
+后续修订：[ADR-306](adr-306-shared-bot-context-and-chat-reception.md)。
 
 ## 背景
 

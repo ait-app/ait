@@ -1,10 +1,23 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
+use std::time::Duration;
 
-use model::hub::Scope;
+use model::hub::{LinkState, Scope};
 use serde_json::json;
+use uuid::Uuid;
 
+use super::publisher::Sent;
 use super::*;
+
+/// Publish `current` if the center supports automation and has not seen it on this link.
+async fn publish(
+    center: &dyn Center,
+    link: &LinkState,
+    current: Value,
+    sent: &mut Sent,
+) -> Attempt {
+    publisher::publish(&PUBLICATION, center, link, current, sent).await
+}
 
 #[derive(Debug)]
 struct FakeCenter {

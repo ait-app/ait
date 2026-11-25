@@ -8,7 +8,7 @@ daemon 在现有监听地址提供 Streamable HTTP MCP：`http://127.0.0.1:7316/
 `mcp.enabled` 通过 `daemon.config.set.request` 修改即时生效，关闭时入口返回 404。
 已有配置中的显式 `injectIntoAgents: false` 保持关闭，不会在升级时覆盖。
 服务端边界见 [ADR-148](../decisions/daemon/adr-148-daemon-mcp.md)，自动注入见
-[ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)。
+[ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)，同账号其他主机的调用见[跨主机调用](#跨主机调用)。
 
 ## Provider 自动注入
 
@@ -161,6 +161,7 @@ Agent 编排、Workspace 隔离、终端与调度操作说明。默认允许自�
 | `terminal`             | `terminal_list`, `terminal_create`, `terminal_kill`, `terminal_capture`, `terminal_send`                                                                           |
 | `schedule`             | `schedule_create`, `schedule_list`, `schedule_get`, `schedule_update`, `schedule_pause`, `schedule_resume`, `schedule_run`, `schedule_log_read`, `schedule_delete` |
 | `heartbeat`            | `heartbeat_create`, `heartbeat_list`, `heartbeat_delete`                                                                                                           |
+| `host`                 | `host_list`（只对主机凭据的调用者，见[跨主机调用](#跨主机调用)）                                                                                                   |
 | `provider` / `profile` | `provider_list`, `provider_model_list`, `provider_get`, `profile_list`                                                                                             |
 | `permission`           | `permission_list`, `permission_respond`                                                                                                                            |
 | `notepad`              | `notepad_read`, `notepad_write`                                                                                                                                    |
@@ -182,6 +183,89 @@ daemon 在授权判定和 Schema 校验之前把旧名字解析为现在的工�
 每个旧名字的调用次数在首次及每次翻倍时写入日志（`retired MCP tool name called`），用来判断何时移除；移除不早于 2026-12-22，
 且以日志中不再出现调用为条件。用户在自己的客户端里按旧名字保存的允许清单（如 Claude 的 `mcp__ait__create_agent`）需要自行改为新名字。
 对照表见 [ADR-295](../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md#对照表)。
+
+## 跨主机调用
+
+同一账号下的多台主机可以经账号 Hub 互相调用 MCP 工具：一台主机上的 Agent 用 `host_list` 找到其他主机，再给可跨主机的工具传 `hostId`，
+在那里创建、提示并观察 Agent。边界与理由见 [ADR-305](../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md)，
+会话规则与各项上限见[连接规格](../architecture/connection.md#跨主机-peer-会话)。省略 `hostId`，或它等于本机，调用与之前逐字节相同。
+
+### 接受开关：打开即信任本账号的全部主机
+
+被调用的一方决定是否接受：配置键 `mcp.acceptPeers`（缺省 `false`，已有配置中缺失时同样为 `false`），经 `daemon.config.set.request` 修改，即时生效并重新向中心发布。
+实际接受要求 `mcp.enabled` 与 `mcp.acceptPeers` 同时为 `true`。没有“允许本机调用其他主机”的开关。
+
+```json
+{
+  "config": { "mcp": { "acceptPeers": true } }
+}
+```
+
+**打开它等于信任本账号的每一台主机。** 对端的权限与本机一个用主机凭据调用这些工具的 Agent 相同：可以读取、提示、取消、归档本机任意 Agent，
+可以用 `workspace_create` 打开本机任意目录，并以任意 `modeId`（包括无人值守模式）创建 Agent。也就是说，账号里任何一台主机被攻破，
+或它的 headless 机器凭据被盗，攻击者都可以在本机执行代码。对端不能事后提高模式（`agent_mode_set` 与 `agent_update` 不在可跨主机的工具内）。
+只在确信账号内所有主机都可信时打开。
+
+### `host_list`
+
+无参数、只读，只对主机凭据的调用者可见。Bot 会话、Bot 子树 Agent 与工单工作者的目录里没有它，它们的工具也没有 `hostId`。
+结果的 `hosts` 里本机排第一（`self: true`，总是 `available`），之后是账号的其他主机；每项的 `hostId` 就是 `hostId` 参数要用的值。
+`available` 为 `false` 时带 `reason`，按此顺序判定：`offline`（不是 `online`）、`unsupported`（它的版本不支持）、`not_accepting`（它没有打开开关）。
+`accepting` 是本机现在是否接受对端调用，读取当前配置，不是最近一次发布的值。
+
+没有 Hub 链路、中心不可达或中心不支持时，`hosts` 只有本机，并带 `note` 说明原因；中心没有列出本机时，本机仍以 `self` 返回，只有 `hostId` 与版本已知。
+中心返回的从未连接过的主机（没有节点或 `serverId`）不列出。主机列表有短暂缓存，且不会因目标未知而刷新：刚上线的主机可能稍后才出现。
+
+### 可跨主机的工具
+
+名单见 [ADR-305](../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md#2-对端调用者接收方的权限边界)；在 `tools/list` 中，输入 Schema 带 `hostId` 的就是它们。
+终端、脚本、定时任务、心跳、权限审批、记事本、Bot 与工单工具不跨主机，所以没有完成通知，也不级联：父 Agent 用带 `hostId` 的 `agent_wait`，
+归档或取消父 Agent 不影响其他主机上的子 Agent。
+
+转发成功时结果与目标主机的结果相同，`structuredContent.hostId` 给出目标主机。远程创建必须给目标主机上存在且未归档的 `workspaceId`
+（对已归档或不存在的 Workspace，目标主机拿不到它的目录，创建被拒绝），不接受 `cwd`；`workspace_create` 必须给出 `path` 或 `projectId`；
+`provider` 含模型照常必填；对端不能写 `ait.` 或 `paseo.` 前缀的标签。
+目标主机上被创建的是普通 Agent，它自己发起的跨主机调用是新的调用；但带 `hostId` 的调用不会被再转发一跳。
+
+### 失败码
+
+转发失败时结果为 `isError: true`，`structuredContent` 带 `hostId`、`code` 与 `error` 文本。
+
+| `code`               | 含义                                                                                                                                                                                                                                                                                                                            | 调用是否执行                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `hub_unavailable`    | 本机没有 Hub 链路、中心不可达、链路没有启用 `peer`，或剩余时间已不够发送；调用排队期间链路一直中断直到期限；会话以本表之外的关闭码结束（如 `replaced`）                                                                                                                                                                         | 否                                   |
+| `host_unknown`       | 账号里没有这个 `hostId`                                                                                                                                                                                                                                                                                                         | 否                                   |
+| `host_offline`       | 目标不在线，或链路在会话建立前就超时；或请求发出前目标已离开（关闭码 `peer_gone`）                                                                                                                                                                                                                                              | 否                                   |
+| `host_not_accepting` | 目标没有打开开关（包括它刚关闭、中心的发布尚未更新时由它自己拒绝）                                                                                                                                                                                                                                                              | 否                                   |
+| `host_unsupported`   | 目标的版本不支持                                                                                                                                                                                                                                                                                                                | 否                                   |
+| `capacity`           | `error` 文本说明是哪一种：繁忙（这条链路的 peer 会话数已到上限、链路在线而调用等不到会话或目标的接收窗口直到期限、中心因容量拒绝会话），稍后重试；请求超过 1 MiB 消息上限或目标的接收窗口，没有发出，原样重试同样失败，须减小请求；回复超过消息上限，调用**已经执行**，改变状态的调用不要重复，改为少要一些（如更小的 `limit`） | 繁忙、请求过大：否；回复过大：**是** |
+| `outcome_unknown`    | 请求已发出，但回复没有到达（期限、停机、会话或链路丢失）                                                                                                                                                                                                                                                                        | **可能**                             |
+| `caller_not_allowed` | 调用者 Agent 不能跨主机，原因见下文                                                                                                                                                                                                                                                                                             | 否                                   |
+| `host_rejected`      | 目标在协议层拒绝了这次调用：工具不存在或没有跨主机标记、参数不符合 Schema、参数里带了 `hostId`（`-32602`），或它此刻无法执行（`-32002`，调用未执行）；`-32603` 是目标的执行任务失败，调用可能已经开始                                                                                                                           | 否（`-32603` 除外）                  |
+
+`host_rejected` 的 `error` 是目标给出的文本，`remoteCode` 是它的错误码。目标作为普通工具结果返回的拒绝**不是** `host_rejected`：
+缺少 `workspaceId`、带了 `cwd`、`workspace_create` 没有来源、保留标签，以及工具自己的校验失败，都以目标的 `isError: true` 结果原样到达，
+只多了 `structuredContent.hostId`，没有 `code` 与 `remoteCode`。按 `structuredContent.code` 分支的调用方应把没有 `code` 的失败结果当作目标的工具错误。
+
+本机自己的 MCP 调用额度用尽时不是 `capacity`：MCP 请求本身以 JSON-RPC 错误 `-32000 "MCP request budget exhausted"` 失败，调用没有被转发。
+转发调用占用本机的调用额度，整个转发共用一个期限，期限与各项上限见[连接规格](../architecture/connection.md#跨主机-peer-会话)。
+**`outcome_unknown` 不会自动重放**：`agent_create` 可能已经执行，先用带同一个 `hostId` 的 `agent_list`／`agent_get` 检查，
+或复用原 `idempotencyKey` 重试。
+
+### 沙箱与访客限制只是尽力而为
+
+调用者 Agent 位于沙箱化 Worktree 时拒绝跨主机调用：沙箱限制的是本机的写入范围，另一台主机在它之外。访客会话创建的 Agent（带 `ait.guest.share-id` 标签）
+本来就不注入 daemon MCP，带该标签的调用者同样被拒绝。检查失败时按拒绝处理：调用者的 Workspace 已归档、不存在或读取失败，同样得到
+`caller_not_allowed`，即使它并不在沙箱里。但调用者是由 `X-Ait-Agent-Id` 指向的 Agent 判断的，这个请求头不是权限边界
+（[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 的已接受风险）：持有主机凭据的进程可以不带它，或指向别的 Agent。
+这两条限制防止误用，不能挡住恶意的本机进程。
+
+### 远程父 Agent
+
+经 `agent_create` 在目标主机上创建的 Agent，带两个由目标主机 daemon 写入的标签：`ait.parent.server-id`（调用方主机的 `serverId`）与 `ait.parent.agent-id`（调用方 Agent）。
+它们不是 `paseo.parent-agent-id`：在目标主机上该 Agent 是顶层 Agent，提醒、未读、原生推送与自动归档都按顶层处理，不触发归档级联。
+前缀 `ait.parent.` 对所有 MCP 调用者保留：主机凭据、Bot 作用域、对端与访客会话都不能写。
+客户端同时连着两台主机时，按 `(serverId, agentId)` 把它显示为调用方 Agent 的子 Agent；没有连着目标主机时不显示。
 
 ## Workspace 记事本
 

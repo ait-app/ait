@@ -261,3 +261,82 @@ async fn flow_and_revoked_errors_end_the_link() {
         assert!(!status.holds_lease());
     }
 }
+
+#[tokio::test]
+async fn a_center_without_peer_still_gets_a_link() {
+    // The center's `hub_features` predate `peer`.
+    assert!(!DECLARED.contains(&"peer"));
+    let (_relay, hub, center, _local) = connector().await;
+    let (mut socket, _) = accept(&center).await;
+    assert_eq!(next(&mut socket).await.0["f"], json!(MAIN));
+    socket
+        .send(frame(&welcome(Uuid::new_v4(), false, 0), b""))
+        .await
+        .expect("welcome");
+
+    let status = next_status(&hub, |status| status.online).await;
+    assert_eq!(status.features, MAIN);
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn a_center_declaring_peer_is_offered_it_and_may_leave_it_disabled() {
+    let mut features = declared(&DECLARED);
+    features.push("peer".to_owned());
+    let local = "127.0.0.1:9".parse().expect("local address");
+    let (_relay, hub, center, _local) = serving(local, features, None).await;
+    let (mut socket, _) = accept(&center).await;
+    assert_eq!(
+        next(&mut socket).await.0["f"],
+        json!(["lease", "credit", "download", "peer"])
+    );
+    // A welcome enabling only the required features still runs the link.
+    socket
+        .send(frame(&welcome(Uuid::new_v4(), false, 0), b""))
+        .await
+        .expect("welcome");
+    let status = next_status(&hub, |status| status.online).await;
+    assert_eq!(status.features, MAIN);
+
+    // Peer sessions the center opens are served; their calls are answered by the API.
+    let s = Uuid::new_v4();
+    let identity = json!({"host_id":Uuid::new_v4(),"server_id":Uuid::new_v4(),"name":"Studio"});
+    socket
+        .send(frame(
+            &json!({"t":"open","seq":1,"s":s,"from":Uuid::new_v4(),"k":"peer","peer":identity}),
+            br#"{"v":1}"#,
+        ))
+        .await
+        .expect("peer open");
+    assert_eq!(
+        next(&mut socket).await,
+        (json!({"t":"accept","seq":1,"s":s}), br#"{"v":1}"#.to_vec())
+    );
+
+    // Calls to sibling Hosts need `peer` enabled: no `open` is sent, which would end the link.
+    let request = model::peer::Request {
+        tool: "agent_list".to_owned(),
+        arguments: json!({}),
+        caller: None,
+    };
+    assert_eq!(
+        model::peer::Peers::call(&hub, Uuid::new_v4(), request, Duration::from_secs(60)).await,
+        Err(model::peer::Error::Unavailable)
+    );
+    let later = Uuid::new_v4();
+    socket
+        .send(frame(
+            &json!({"t":"open","seq":2,"s":later,"from":Uuid::new_v4(),"k":"peer","peer":identity}),
+            br#"{"v":1}"#,
+        ))
+        .await
+        .expect("peer open");
+    assert_eq!(
+        next(&mut socket).await,
+        (
+            json!({"t":"accept","seq":2,"s":later}),
+            br#"{"v":1}"#.to_vec()
+        )
+    );
+    hub.stop().await;
+}

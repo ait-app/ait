@@ -13,6 +13,7 @@ function row(
   return {
     kind: "paseo",
     id: overrides.id,
+    serverId: "server-1",
     provider: overrides.provider ?? "codex",
     title: overrides.title ?? `Agent ${overrides.id}`,
     description: null,
@@ -103,6 +104,7 @@ describe("countFinishedSubagents", () => {
       {
         kind: "provider",
         id: "native-running",
+        serverId: "server-1",
         parentAgentId: "parent",
         provider: "claude",
         title: "running",
@@ -115,6 +117,7 @@ describe("countFinishedSubagents", () => {
       {
         kind: "provider",
         id: "native-failed",
+        serverId: "server-1",
         parentAgentId: "parent",
         provider: "claude",
         title: "failed",
@@ -200,6 +203,7 @@ describe("buildSubagentRowPresentationData for provider rows", () => {
     return {
       kind: "provider",
       id: overrides.id ?? "toolu_1",
+      serverId: "server-1",
       parentAgentId: "parent",
       provider: "claude",
       title: "title" in overrides ? (overrides.title ?? null) : "general-purpose",
@@ -254,6 +258,7 @@ describe("provider-owned row subtitles", () => {
     return {
       kind: "provider",
       id: "toolu_1",
+      serverId: "server-1",
       parentAgentId: "parent",
       provider: "claude",
       title: "general-purpose",

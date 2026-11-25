@@ -14,7 +14,8 @@ import type { WorkspaceTabPresentation } from "@/screens/workspace/workspace-tab
 import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
 import { useAgentFactsLine } from "@/panels/agent-facts-line";
 import { getPanelManifest } from "@/panels/panel-manifest";
-import type { SubagentRow } from "./select";
+import { useHosts } from "@/runtime/host-runtime";
+import { localSubagentRows, type SubagentRow } from "./select";
 import { NativeSubagentControls } from "./native-controls";
 import type { ArchiveFinishedStatus } from "./use-archive-finished";
 import {
@@ -27,16 +28,18 @@ const ThemedArchive = withUnistyles(Archive);
 const ThemedUnlink = withUnistyles(Unlink);
 
 export interface SubagentsTrackProps {
+  /** The parent's host. A row on another host carries its own `serverId`, which its actions use. */
   serverId: string;
   rows: SubagentRow[];
-  onOpenSubagent: (id: string) => void;
+  onOpenSubagent: (id: string, serverId: string) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   /**
    * Whether opening this row shows it in a sheet. A sheet stacks over the list and uncovers it on
    * close, so the list stays open; a tab replaces the list's pane, so choosing it ends the list.
    */
   opensInSheet: (row: SubagentRow) => boolean;
-  onArchiveSubagent: (id: string) => void;
+  onArchiveSubagent: (id: string, serverId: string) => void;
+  /** Archives finished children on the parent's host only. */
   onArchiveFinished?: () => void;
   archiveFinishedStatus?: ArchiveFinishedStatus;
   onDetachSubagent?: (id: string) => void;
@@ -46,14 +49,14 @@ const IDLE_ARCHIVE_FINISHED_STATUS: ArchiveFinishedStatus = { kind: "idle" };
 
 const ROW_ICON_SIZE = 14;
 
-function buildRowPresentation(row: SubagentRow, serverId: string): WorkspaceTabPresentation {
+function buildRowPresentation(row: SubagentRow): WorkspaceTabPresentation {
   const data = buildSubagentRowPresentationData(row);
   return {
     ...data,
     tooltip: data.label,
     modified: false,
     showCloseButton: getPanelManifest(data.kind).showCloseButton,
-    icon: getProviderIcon(row.provider, serverId),
+    icon: getProviderIcon(row.provider, row.serverId),
   };
 }
 
@@ -77,7 +80,7 @@ export function SubagentsTrack({
   }
 
   const pill = buildSubagentPillPresentation(t, rows);
-  const finishedCount = countFinishedSubagents(rows);
+  const finishedCount = countFinishedSubagents(localSubagentRows(rows, serverId));
   const showArchiveFinished = finishedCount > 0 || isArchivingFinished || isArchiveFinishedFailed;
 
   return (
@@ -98,12 +101,14 @@ export function SubagentsTrack({
       ) : null}
       {rows.map((row) => (
         <SubagentsTrackRow
-          key={row.id}
+          // Ids are unique per host; a child on another host may share one with a local row.
+          key={`${row.serverId}\0${row.id}`}
           row={row}
           serverId={serverId}
           onOpenSubagent={onOpenSubagent}
           onOpenProviderSubagent={onOpenProviderSubagent}
-          opensInSheet={opensInSheet(row)}
+          // A child on another host opens on that host, away from this list.
+          opensInSheet={row.serverId === serverId && opensInSheet(row)}
           onArchiveSubagent={onArchiveSubagent}
           onDetachSubagent={onDetachSubagent}
         />
@@ -173,10 +178,10 @@ function ArchiveFinishedRow({
 interface SubagentsTrackRowProps {
   serverId: string;
   row: SubagentRow;
-  onOpenSubagent: (id: string) => void;
+  onOpenSubagent: (id: string, serverId: string) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   opensInSheet: boolean;
-  onArchiveSubagent: (id: string) => void;
+  onArchiveSubagent: (id: string, serverId: string) => void;
   onDetachSubagent?: (id: string) => void;
 }
 
@@ -191,19 +196,23 @@ function SubagentsTrackRow({
 }: SubagentsTrackRowProps): ReactElement {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  const presentation = useMemo(() => buildRowPresentation(row, serverId), [row, serverId]);
+  const presentation = useMemo(() => buildRowPresentation(row), [row]);
+  // Detaching rewrites the parent label on the parent's host, which a child elsewhere lacks.
+  const remote = row.serverId !== serverId;
+  const canDetach =
+    !remote && row.kind === "paseo" && onDetachSubagent !== undefined && row.canDetach !== false;
   const displayLabel =
     presentation.titleState === "loading" ? t("common.states.loading") : presentation.label;
   const handlePress = useCallback(() => {
     if (row.kind === "provider") {
       onOpenProviderSubagent(row.parentAgentId, row.id);
     } else {
-      onOpenSubagent(row.id);
+      onOpenSubagent(row.id, row.serverId);
     }
   }, [onOpenProviderSubagent, onOpenSubagent, row]);
   const handleArchivePress = useCallback(() => {
-    onArchiveSubagent(row.id);
-  }, [onArchiveSubagent, row.id]);
+    onArchiveSubagent(row.id, row.serverId);
+  }, [onArchiveSubagent, row.id, row.serverId]);
   const handleDetachPress = useCallback(() => {
     onDetachSubagent?.(row.id);
   }, [onDetachSubagent, row.id]);
@@ -217,23 +226,21 @@ function SubagentsTrackRow({
           <Text style={styles.rowTitle} numberOfLines={1}>
             {displayLabel}
           </Text>
+          {remote ? <SubagentHost rowId={row.id} serverId={row.serverId} /> : null}
           {row.kind === "paseo" ? (
-            <PaseoSubagentFacts serverId={serverId} agentId={row.id} />
+            <PaseoSubagentFacts serverId={row.serverId} agentId={row.id} />
           ) : (
             <SubagentFacts rowId={row.id} text={presentation.subtitle} />
           )}
         </View>
-        <NativeSubagentControls serverId={serverId} row={row} compact={isCompact} />
-        {row.kind === "paseo" &&
-        (row.canArchive !== false || (onDetachSubagent && row.canDetach !== false)) ? (
+        <NativeSubagentControls serverId={row.serverId} row={row} compact={isCompact} />
+        {row.kind === "paseo" && (row.canArchive !== false || canDetach) ? (
           <SubagentRowActions
             rowId={row.id}
             displayLabel={displayLabel}
             compact={isCompact}
             visible={actionsAlwaysVisible || active}
-            onDetachPress={
-              onDetachSubagent && row.canDetach !== false ? handleDetachPress : undefined
-            }
+            onDetachPress={canDetach ? handleDetachPress : undefined}
             onArchivePress={row.canArchive !== false ? handleArchivePress : undefined}
           />
         ) : null}
@@ -241,16 +248,16 @@ function SubagentsTrackRow({
     ),
     [
       actionsAlwaysVisible,
+      canDetach,
       displayLabel,
       handleArchivePress,
       handleDetachPress,
       isCompact,
-      onDetachSubagent,
       presentation,
+      remote,
       row,
       row.kind,
       row.id,
-      serverId,
     ],
   );
 
@@ -263,6 +270,16 @@ function SubagentsTrackRow({
     >
       {renderRow}
     </ComposerTrackRow>
+  );
+}
+
+/** The host a child created from another host runs on, by the name the app shows for it. */
+function SubagentHost({ rowId, serverId }: { rowId: string; serverId: string }) {
+  const label = useHosts().find((host) => host.serverId === serverId)?.label ?? serverId;
+  return (
+    <Text style={styles.rowFacts} numberOfLines={1} testID={`subagents-track-row-host-${rowId}`}>
+      {label}
+    </Text>
   );
 }
 

@@ -29,7 +29,7 @@ fn catalog_has_unique_registered_methods_and_closed_schemas() {
 #[test]
 fn negotiates_supported_versions_and_latest_for_unknown_clients() {
     for version in VERSIONS.iter().copied().chain(["future"]) {
-        let result = initialize(&json!({"protocolVersion":version,"capabilities":{},"clientInfo":{"name":"test","version":"1"}})).unwrap();
+        let result = initialize(&json!({"protocolVersion":version,"capabilities":{},"clientInfo":{"name":"test","version":"1"}}), None).unwrap();
         assert_eq!(
             result["protocolVersion"],
             if version == "future" {
@@ -41,8 +41,8 @@ fn negotiates_supported_versions_and_latest_for_unknown_clients() {
         assert_eq!(result["serverInfo"]["name"], "ait-daemon");
         assert_eq!(result["capabilities"], json!({"tools":{}}));
     }
-    assert!(initialize(&json!({})).is_err());
-    assert!(initialize(&json!({"protocolVersion":"2025-03-26"})).is_err());
+    assert!(initialize(&json!({}), None).is_err());
+    assert!(initialize(&json!({"protocolVersion":"2025-03-26"}), None).is_err());
 }
 
 #[test]
@@ -153,8 +153,9 @@ fn every_catalog_tool_has_an_explicit_access_class() {
 
 #[test]
 fn names_lead_with_a_known_domain_and_end_with_a_known_verb() {
-    const DOMAINS: [&str; 12] = [
+    const DOMAINS: [&str; 13] = [
         "agent",
+        "host",
         "workspace",
         "script",
         "terminal",

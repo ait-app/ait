@@ -14,6 +14,7 @@ use domain::schedule::{Schedule, Target};
 use filesystem::git::local::provisioning::LocalDirectorySource;
 use metadata::directory::service::directory::{Directory, DirectoryDependencies};
 use model::bot::Store;
+use model::peer::Peers;
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use persistence::storage::bot::FileStore;
 use persistence::storage::project_config::LocalProjectConfigStore;
@@ -373,6 +374,12 @@ fn provider(base: &std::path::Path, registries: &Registries) -> provider::Servic
 
 impl Scoped {
     pub(super) async fn start() -> Self {
+        Self::start_as("stable", None).await
+    }
+
+    /// Start with `server_id` as this daemon's id and, when given, `peers` answering for the
+    /// account's sibling Hosts in place of the Hub link.
+    pub(super) async fn start_as(server_id: &str, peers: Option<Arc<dyn Peers>>) -> Self {
         let root = tempfile::tempdir().unwrap();
         // Canonical paths keep macOS temporary directories under `/var` consistent.
         let base = root.path().canonicalize().unwrap();
@@ -429,9 +436,9 @@ impl Scoped {
             Box::new(Pty),
         );
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let api = Api::new(
+        let mut api = Api::new(
             listener.local_addr().unwrap(),
-            "stable".to_owned(),
+            server_id.to_owned(),
             "instance".to_owned(),
             TOKEN.into(),
             Services {
@@ -447,6 +454,9 @@ impl Scoped {
         .unwrap()
         .with_agent_mcp_token(AGENT_MCP_TOKEN.into())
         .unwrap();
+        if let Some(peers) = peers {
+            api = api.with_peers(peers);
+        }
         Self {
             fixture: Fixture::serve(listener, api),
             scopes,

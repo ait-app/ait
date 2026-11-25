@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { AgentSnapshotPayload } from "@ait/protocol/messages";
-import { PARENT_AGENT_ID_LABEL } from "@ait/protocol/agent-labels";
+import {
+  PARENT_AGENT_ID_LABEL,
+  PARENT_SERVER_ID_LABEL,
+  REMOTE_PARENT_AGENT_ID_LABEL,
+} from "@ait/protocol/agent-labels";
 import { normalizeAgentSnapshot, projectAgentSnapshot } from "./agent-snapshots";
 
 function createSnapshot(
@@ -165,5 +169,23 @@ describe("normalizeAgentSnapshot", () => {
     expect(missing.parentAgentId).toBeNull();
     expect(empty.parentAgentId).toBeNull();
     expect(nonString.parentAgentId).toBeNull();
+  });
+
+  it("derives the remote parent from both cross-host labels and nothing else", () => {
+    const remote = normalizeAgentSnapshot(
+      createSnapshot({
+        labels: { [PARENT_SERVER_ID_LABEL]: "host-a", [REMOTE_PARENT_AGENT_ID_LABEL]: "X" },
+      }),
+      "host-b",
+    );
+    const partial = normalizeAgentSnapshot(
+      createSnapshot({ labels: { [REMOTE_PARENT_AGENT_ID_LABEL]: "X" } }),
+      "host-b",
+    );
+
+    expect(remote.remoteParent).toEqual({ serverId: "host-a", agentId: "X" });
+    expect(remote.parentAgentId).toBeNull();
+    expect(partial.remoteParent).toBeNull();
+    expect(normalizeAgentSnapshot(createSnapshot(), "host-b").remoteParent).toBeNull();
   });
 });

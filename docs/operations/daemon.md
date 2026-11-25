@@ -52,6 +52,12 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 其余 `AIT_SERVER_*`（监听、数据目录、日志、token 等）仍被剥离，由桌面显式注入自身配置；
 非 `AIT_SERVER_` 前缀的环境不受影响。独立启动的 daemon 直接读取进程环境，不经过该白名单。
 
+### MCP 配置与跨主机接受
+
+`mcp.acceptPeers` 经 `daemon.config.set.request` 修改，即时生效。它缺省为 `false`：打开后同账号其他主机上的 Agent 可以调用本机的部分 MCP 工具，
+等于信任账号内的每一台主机，并且要求 `mcp.enabled` 同时为 `true`。daemon 在每条新的 Hub 链路上以及每次变化后向中心发布是否接受。含义、风险与排查见
+[MCP 手册](mcp.md#跨主机调用)。
+
 ### Hub 事件与中心原生通知
 
 发布 Hub serve 后，daemon 根据 `welcome.center_methods` 自动上报已提交事件及

@@ -152,6 +152,24 @@ async fn draining_or_dropped_apis_refuse_sessions() {
         bridge.connect(Admission::Owner).await,
         Err(Refused)
     ));
+    let from = Identity {
+        host_id: uuid::Uuid::new_v4(),
+        server_id: uuid::Uuid::new_v4(),
+        name: "Workstation".to_owned(),
+    };
+    let call = Request {
+        tool: "agent_list".to_owned(),
+        arguments: json!({}),
+        caller: None,
+    };
+    assert_eq!(
+        bridge.peer(&from, call).await,
+        Err(PeerRefusal::Failed {
+            code: -32_002,
+            message: "Server is draining".to_owned()
+        }),
+        "a call from a sibling Host outliving the API is refused without ending its session"
+    );
 }
 
 #[test]

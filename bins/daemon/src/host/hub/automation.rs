@@ -6,20 +6,23 @@
 //! never receives one.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use bot::service::WebhookBot;
 use model::automation::{MAX_BOTS, PUBLICATION_VERSION, PUBLISH_METHOD};
-use model::hub::{CallError, Center, LinkState};
+use model::hub::{CallError, Center};
 use serde_json::{Value, json};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
-use super::{COALESCE, MAX_BACKOFF, RETRY};
+use super::COALESCE;
+use super::publisher::{self, Attempt, Publication};
 
-/// What the center last accepted, and on which logical link.
-type Sent = Option<(Option<Uuid>, Value)>;
+const PUBLICATION: Publication = Publication {
+    name: "Automation",
+    method: PUBLISH_METHOD,
+    coalesce: Some(COALESCE),
+    classify,
+};
 
 /// The publication body: reachable Bots, and whether any is active.
 fn publication(bots: &[WebhookBot]) -> Value {
@@ -30,82 +33,21 @@ fn publication(bots: &[WebhookBot]) -> Value {
     })
 }
 
-/// How one publication attempt ended.
-#[derive(Debug, PartialEq, Eq)]
-enum Attempt {
-    /// Nothing to do, or the center confirmed the publication.
-    Settled,
-    /// Retry after a pause.
-    Retry,
+/// The link changed or the center dropped the method: state changes retrigger.
+fn classify(error: &CallError, _link_gone: bool) -> Attempt {
+    match error {
+        CallError::Unavailable | CallError::Unsupported => Attempt::Settled,
+        CallError::Capacity | CallError::Protocol | CallError::Rejected(_) => Attempt::Retry,
+    }
 }
 
 /// Publish whenever needed until cancelled.
 pub(super) async fn run(
     center: Arc<dyn Center>,
-    mut bots: watch::Receiver<Vec<WebhookBot>>,
+    bots: watch::Receiver<Vec<WebhookBot>>,
     cancel: CancellationToken,
 ) {
-    let mut state = center.state();
-    let mut sent: Sent = None;
-    let mut backoff = RETRY;
-    loop {
-        // Release the watch borrows before awaiting the call.
-        let link = state.borrow_and_update().clone();
-        let current = publication(&bots.borrow_and_update());
-        let pause = match publish(center.as_ref(), &link, current, &mut sent).await {
-            Attempt::Retry => {
-                let pause = backoff;
-                backoff = (backoff * 2).min(MAX_BACKOFF);
-                pause
-            }
-            Attempt::Settled => {
-                backoff = RETRY;
-                Duration::MAX
-            }
-        };
-        tokio::select! {
-            () = cancel.cancelled() => return,
-            link = state.changed() => if link.is_err() { return },
-            local = bots.changed() => {
-                if local.is_err() {
-                    return;
-                }
-                tokio::time::sleep(COALESCE).await;
-            }
-            () = tokio::time::sleep(pause), if pause != Duration::MAX => {}
-        }
-    }
-}
-
-/// Publish `current` if the center supports automation and has not seen it on this link.
-async fn publish(
-    center: &dyn Center,
-    link: &LinkState,
-    current: Value,
-    sent: &mut Sent,
-) -> Attempt {
-    let Some(scope) = link.scope.clone().filter(|_| link.online) else {
-        return Attempt::Settled;
-    };
-    if !link.supports(PUBLISH_METHOD)
-        || sent
-            .as_ref()
-            .is_some_and(|(on, published)| *on == link.link && *published == current)
-    {
-        return Attempt::Settled;
-    }
-    match center.call(scope, PUBLISH_METHOD, current.clone()).await {
-        Ok(_) => {
-            *sent = Some((link.link, current));
-            Attempt::Settled
-        }
-        // The link changed or the center dropped the method; state changes retrigger.
-        Err(CallError::Unavailable | CallError::Unsupported) => Attempt::Settled,
-        Err(error) => {
-            tracing::warn!(%error, "Automation publication failed; retrying");
-            Attempt::Retry
-        }
-    }
+    publisher::run(&PUBLICATION, center, bots, |bots| publication(bots), cancel).await;
 }
 
 #[cfg(test)]

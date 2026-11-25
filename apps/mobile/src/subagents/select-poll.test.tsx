@@ -8,6 +8,7 @@ import { refreshUnifiedSubagents } from "./unified";
 
 vi.mock("@/hooks/use-archive-agent", () => ({
   usePendingArchiveAgentIds: () => new Set(),
+  usePendingArchiveAgents: () => ({}),
 }));
 vi.mock("./unified", () => ({
   refreshUnifiedSubagents: vi.fn(async () => undefined),

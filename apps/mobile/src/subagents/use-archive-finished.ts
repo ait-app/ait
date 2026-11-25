@@ -8,7 +8,7 @@ import {
   type ArchiveFinishedSubagents,
 } from "./archive-finished";
 import { useProviderSubagentStore } from "./provider-store";
-import type { SubagentRow } from "./select";
+import { localSubagentRows, type SubagentRow } from "./select";
 
 export type { ArchiveFinishedStatus } from "./archive-finished";
 
@@ -46,9 +46,10 @@ export function useArchiveFinishedSubagents({
     archiveFinished.getState,
   );
 
+  // Children on other hosts are left to their own host; this archives only the parent's.
   useEffect(() => {
-    archiveFinished.setRows(rows);
-  }, [archiveFinished, rows]);
+    archiveFinished.setRows(localSubagentRows(rows, serverId));
+  }, [archiveFinished, rows, serverId]);
 
   return { ...state, archiveFinished: archiveFinished.archiveFinished };
 }

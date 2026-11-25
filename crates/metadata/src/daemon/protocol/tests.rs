@@ -140,6 +140,35 @@ fn config_defaults_and_passthrough_match_paseo_mutable_shape() {
 }
 
 #[test]
+fn accept_peers_defaults_off_and_must_be_boolean() {
+    let defaults = serde_json::to_value(DaemonConfig::default()).unwrap();
+    assert_eq!(defaults["mcp"]["acceptPeers"], false);
+
+    let mut older = defaults.clone();
+    older["mcp"].as_object_mut().unwrap().remove("acceptPeers");
+    let parsed: DaemonConfig = serde_json::from_value(older.clone()).unwrap();
+    parsed.validate().unwrap();
+    assert_eq!(
+        serde_json::to_value(&parsed).unwrap(),
+        older,
+        "a configuration without the key is returned without it"
+    );
+    let mut invalid = defaults;
+    invalid["mcp"]["acceptPeers"] = json!("yes");
+    assert!(serde_json::from_value::<DaemonConfig>(invalid).is_err());
+
+    for value in [json!("yes"), json!(1), json!(null)] {
+        let patch: DaemonConfigPatch =
+            serde_json::from_value(json!({"mcp":{"acceptPeers":value}})).unwrap();
+        assert!(patch.validate().is_err(), "{value}");
+    }
+    serde_json::from_value::<DaemonConfigPatch>(json!({"mcp":{"acceptPeers":true}}))
+        .unwrap()
+        .validate()
+        .unwrap();
+}
+
+#[test]
 fn patch_accepts_unknown_fields_but_rejects_invalid_known_shapes() {
     let patch: DaemonConfigPatch = serde_json::from_value(json!({
         "relay":{"enabled":true},

@@ -8,8 +8,11 @@ use super::*;
 
 mod confinement;
 mod follow;
+mod hosts;
 mod notepad;
 mod notifications;
+mod peer;
+mod peer_acceptance;
 mod recall;
 mod schedules;
 mod support;

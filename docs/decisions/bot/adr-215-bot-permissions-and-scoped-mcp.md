@@ -27,7 +27,7 @@ paths:
   修订 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md)（向导与设置增加权限）。
 - 计划：[阶段 3 实施计划](../../archive/plans/workspace-bot-manager-phase-3.md)、[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)。
 
-后续修订：[ADR-305](adr-305-shared-bot-context-and-chat-reception.md)。
+后续修订：[ADR-306](adr-306-shared-bot-context-and-chat-reception.md)。
 
 ## 背景
 

@@ -10,6 +10,7 @@ function paseo(id: string, status: PaseoSubagentRow["status"] = "idle"): PaseoSu
   return {
     kind: "paseo",
     id,
+    serverId: "server-1",
     provider: "codex",
     title: id,
     description: null,
@@ -55,6 +56,7 @@ function provider(
   return {
     kind: "provider",
     id,
+    serverId: "server-1",
     parentAgentId: "parent",
     provider: "codex",
     title: id,

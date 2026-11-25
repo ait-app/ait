@@ -2,13 +2,16 @@
 //!
 //! Each session is one business connection with the admission, protocol and
 //! guest confinement of an authenticated local WebSocket upgrade, carried over
-//! channels instead of a loopback socket.
+//! channels instead of a loopback socket. Calls from sibling Hosts run through
+//! the MCP layer's rules for peers.
 
 use std::sync::{Arc, Weak};
 
 use axum::extract::ws::{Message, Utf8Bytes};
 use futures_util::{SinkExt, StreamExt, stream};
-use relay::hub::bridge::{Admission, Connection, Frame, LocalApi, Refused};
+use model::peer::{Identity, Request};
+use relay::hub::bridge::{Admission, Connection, Frame, LocalApi, PeerRefusal, Refused};
+use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 
@@ -67,6 +70,14 @@ impl LocalApi for InProcess {
             Box::pin(serve_frames(sink, frames, state, role, None)).await;
         });
         Ok(Connection { sender, receiver })
+    }
+
+    async fn peer(&self, from: &Identity, request: Request) -> Result<Value, PeerRefusal> {
+        let state = self.shared.upgrade().ok_or_else(|| PeerRefusal::Failed {
+            code: crate::mcp::peer::BUSY,
+            message: crate::mcp::DRAINING.to_owned(),
+        })?;
+        crate::mcp::peer::serve(&state, from, request).await
     }
 }
 

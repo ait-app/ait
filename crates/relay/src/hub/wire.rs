@@ -2,6 +2,7 @@
 //!
 //! Each frame is one WebSocket Binary message: `header_len:u16 BE | JSON header | payload`.
 
+use model::peer::Identity;
 use model::share::Visitor;
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Bytes;
@@ -20,21 +21,28 @@ pub(super) const FEATURES: [&str; 4] = ["lease", "credit", "download", BULK];
 pub(super) const BULK: &str = "bulk";
 /// The whole `hello.f` of a bulk link; the center requires both.
 pub(super) const BULK_FEATURES: [&str; 2] = ["credit", "download"];
+/// Optional feature for sessions between sibling Hosts of one account, and
+/// the session kind (`k`) they use. A link runs whether or not it is enabled.
+pub(super) const PEER: &str = "peer";
 
 /// `hello.f` of a main link. `bulk` is declared only when the owner can obtain
-/// bulk tickets (`bulk_lane`), since the link must open a bulk link on request.
-pub(super) fn offer(bulk_lane: bool) -> Vec<&'static str> {
+/// bulk tickets (`bulk_lane`), since the link must open a bulk link on request;
+/// `peer` only when the center declared it (`peer`).
+pub(super) fn offer(bulk_lane: bool, peer: bool) -> Vec<&'static str> {
     FEATURES
         .into_iter()
         .filter(|feature| bulk_lane || *feature != BULK)
+        .chain(peer.then_some(PEER))
         .collect()
 }
 
-/// The first feature of `offer` missing from `enabled`, if any.
+/// The first required feature of `offer` missing from `enabled`, if any;
+/// the optional `peer` is never missing.
 pub(super) fn missing(offer: &[&'static str], enabled: &[String]) -> Option<&'static str> {
     offer
         .iter()
         .copied()
+        .filter(|feature| *feature != PEER)
         .find(|feature| !enabled.iter().any(|name| name == feature))
 }
 
@@ -44,6 +52,13 @@ pub(super) fn missing(offer: &[&'static str], enabled: &[String]) -> Option<&'st
 pub(super) enum PayloadKind {
     Text,
     Binary,
+}
+
+/// Destination of a session this Host opens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub(super) struct Target {
+    /// The node whose main serve link receives the session.
+    pub(super) node: Uuid,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -59,6 +74,8 @@ pub(super) enum SessionKind {
     #[default]
     Rpc,
     Download,
+    /// A session from a sibling Host of the account (feature `peer`).
+    Peer,
     /// A kind this Host does not implement; refused as `unsupported`.
     #[serde(other)]
     Unsupported,
@@ -82,6 +99,17 @@ pub(super) enum Outbound {
         seq: u64,
         id: Uuid,
         method: &'static str,
+    },
+    /// A session this Host opens to `to`; `w` is this Host's receive window
+    /// when the session is flow-controlled.
+    #[serde(rename = "open")]
+    Open {
+        seq: u64,
+        s: Uuid,
+        to: Target,
+        k: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        w: Option<u32>,
     },
     /// `w` (this Host's receive window) only answers an `open` that carried one.
     #[serde(rename = "accept")]
@@ -129,9 +157,10 @@ pub(super) enum Inbound {
     Reply { seq: u64, id: Uuid },
     #[serde(rename = "error")]
     Error { code: String },
-    /// `visitor` marks a guest session confined to one shared resource, and
-    /// `service` one the center opened for itself; `w`, the opener's receive
-    /// window, is present only on flow-controlled sessions.
+    /// `visitor` marks a guest session confined to one shared resource,
+    /// `service` one the center opened for itself, and `peer` the calling Host
+    /// of a `k:"peer"` session; `w`, the opener's receive window, is present
+    /// only on flow-controlled sessions.
     #[serde(rename = "open")]
     Open {
         seq: u64,
@@ -143,12 +172,29 @@ pub(super) enum Inbound {
         #[serde(default)]
         k: SessionKind,
         #[serde(default)]
+        peer: Option<Identity>,
+        #[serde(default)]
+        w: Option<u32>,
+    },
+    /// The target accepted a session this Host opened; `w` is its receive
+    /// window when the session is flow-controlled.
+    #[serde(rename = "accept")]
+    Accept {
+        seq: u64,
+        s: Uuid,
+        #[serde(default)]
         w: Option<u32>,
     },
     #[serde(rename = "msg")]
     Msg { seq: u64, s: Uuid, pt: PayloadKind },
+    /// `code` says why the center or the other end closed the session.
     #[serde(rename = "close")]
-    Close { seq: u64, s: Uuid },
+    Close {
+        seq: u64,
+        s: Uuid,
+        #[serde(default)]
+        code: Option<String>,
+    },
     /// Center-initiated outcome of the published shares; sent only after this
     /// Host called `hub.shares.publish` on the link.
     #[serde(rename = "share_status")]
@@ -181,6 +227,7 @@ impl Inbound {
     pub(super) const fn seq(&self) -> Option<u64> {
         match self {
             Self::Open { seq, .. }
+            | Self::Accept { seq, .. }
             | Self::Msg { seq, .. }
             | Self::Close { seq, .. }
             | Self::Reply { seq, .. }

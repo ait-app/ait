@@ -172,7 +172,7 @@ Bot 把结果告诉用户后用 `bot_ticket_update` 关闭任务，也可以改�
 被截断的文本为 `{"preview","chars","read"}`。列表默认 20 条、至多 50 条，文本页默认 4000 字符、至多 8000 字符，以 `nextOffset` 续读。读取不改变任何状态，
 不影响“未看过”的通知。内置指令要求 Bot 按指针读取而不是猜测，跟进任务前先读它，在 Ait 对话中被问到其他对话里的事时去查。
 
-**共享范围**（[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）：同一 Bot 的全部入口共用上下文、记忆、工单和通知。管理者可跨群、私聊和内置入口回读及跟进自己的任务。外部入口只能操作该 Bot 的任务 Agent；内置所有者对话仍可操作工作区授权范围内的其他 Agent。工作者继续受自己的工单和来源限制，不能借共享管理者读取其他任务。
+**共享范围**（[ADR-306](../decisions/bot/adr-306-shared-bot-context-and-chat-reception.md)）：同一 Bot 的全部入口共用上下文、记忆、工单和通知。管理者可跨群、私聊和内置入口回读及跟进自己的任务。外部入口只能操作该 Bot 的任务 Agent；内置所有者对话仍可操作工作区授权范围内的其他 Agent。工作者继续受自己的工单和来源限制，不能借共享管理者读取其他任务。
 
 **工作者读任务**：属于任务的 Agent 用 `ticket_read` 读自己的任务（请求、结论、其他 Agent 及其最近汇报、汇报历史），资源为 `ticket`、`ticket/reports`、
 `ticket/report/<n>`、`ticket/request`、`ticket/outcome`，看不到其他任务、对话或通知。Claude 工作者预授权该工具。

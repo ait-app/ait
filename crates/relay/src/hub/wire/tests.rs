@@ -10,6 +10,12 @@ fn raw(header: &str, payload: &[u8]) -> Bytes {
     frame.into()
 }
 
+/// The JSON header of an encoded frame.
+fn header(frame: &Bytes) -> serde_json::Value {
+    let length = usize::from(u16::from_be_bytes([frame[0], frame[1]]));
+    serde_json::from_slice(&frame[2..2 + length]).expect("json header")
+}
+
 #[test]
 fn decodes_center_frames_and_tolerates_new_header_fields() {
     let s = Uuid::new_v4();
@@ -91,7 +97,15 @@ fn decodes_guest_opens_and_share_status() {
         b"",
     ))
     .expect("owner open");
-    assert!(matches!(owner, Inbound::Open { visitor: None, .. }));
+    assert!(matches!(
+        owner,
+        Inbound::Open {
+            visitor: None,
+            k: SessionKind::Rpc,
+            peer: None,
+            ..
+        }
+    ));
 
     let (status, payload) = decode(&raw(r#"{"t":"share_status","seq":5}"#, b"{}")).expect("status");
     assert!(matches!(status, Inbound::ShareStatus { seq: 5 }));
@@ -101,19 +115,23 @@ fn decodes_guest_opens_and_share_status() {
 
 #[test]
 fn main_links_offer_every_feature_and_bulk_only_with_a_bulk_lane() {
-    assert_eq!(offer(true), ["lease", "credit", "download", "bulk"]);
+    assert_eq!(offer(true, false), ["lease", "credit", "download", "bulk"]);
     // Without bulk tickets the main link never asks for a bulk link.
-    assert_eq!(offer(false), ["lease", "credit", "download"]);
+    assert_eq!(offer(false, false), ["lease", "credit", "download"]);
+    assert_eq!(
+        offer(true, true),
+        ["lease", "credit", "download", "bulk", "peer"]
+    );
 }
 
 #[test]
 fn finds_the_first_offered_feature_a_center_lacks() {
     let all = ["lease", "credit", "download", "bulk", "hosts"].map(str::to_owned);
-    assert_eq!(missing(&offer(true), &all), None);
+    assert_eq!(missing(&offer(true, false), &all), None);
     assert_eq!(missing(&BULK_FEATURES, &all), None);
     let partial = ["lease", "download", "future"].map(str::to_owned);
-    assert_eq!(missing(&offer(false), &partial), Some("credit"));
-    assert_eq!(missing(&offer(true), &[]), Some("lease"));
+    assert_eq!(missing(&offer(false, false), &partial), Some("credit"));
+    assert_eq!(missing(&offer(true, false), &[]), Some("lease"));
 }
 
 #[test]
@@ -172,10 +190,6 @@ fn decodes_feature_fields_and_frames() {
 #[test]
 fn encodes_feature_fields_only_when_present() {
     let s = Uuid::new_v4();
-    let header = |frame: &Bytes| -> serde_json::Value {
-        let length = usize::from(u16::from_be_bytes([frame[0], frame[1]]));
-        serde_json::from_slice(&frame[2..2 + length]).expect("json header")
-    };
     let plain = encode(&Outbound::Accept { seq: 1, s, w: None }, b"").expect("accept");
     assert_eq!(
         header(&plain),
@@ -196,4 +210,112 @@ fn encodes_feature_fields_only_when_present() {
         header(&credit),
         serde_json::json!({"t":"credit","s":s,"c":9})
     );
+}
+
+#[test]
+fn peer_is_offered_only_when_the_center_declares_it() {
+    assert!(!offer(true, false).contains(&"peer"));
+    assert!(offer(true, true).contains(&"peer"));
+    // `peer` is optional: a welcome that leaves it disabled still runs the link.
+    let without_peer = ["lease", "credit", "download"].map(str::to_owned);
+    assert_eq!(missing(&offer(false, true), &without_peer), None);
+    assert!(!FEATURES.contains(&PEER));
+}
+
+#[test]
+fn peer_frames_round_trip() {
+    let s = Uuid::new_v4();
+    let (host_id, server_id) = (Uuid::new_v4(), Uuid::new_v4());
+    let (open, payload) = decode(&raw(
+        &format!(
+            r#"{{"t":"open","seq":2,"s":"{s}","from":"{s}","k":"peer","peer":{{"host_id":"{host_id}","server_id":"{server_id}","name":"Studio"}}}}"#
+        ),
+        br#"{"v":1}"#,
+    ))
+    .expect("peer open");
+    let Inbound::Open {
+        seq: 2,
+        k: SessionKind::Peer,
+        peer: Some(identity),
+        visitor: None,
+        service: None,
+        w: None,
+        ..
+    } = open
+    else {
+        std::panic!("expected a peer open, got {open:?}");
+    };
+    assert_eq!(
+        identity,
+        Identity {
+            host_id,
+            server_id,
+            name: "Studio".to_owned(),
+        }
+    );
+    assert_eq!(payload.as_ref(), br#"{"v":1}"#);
+
+    let (accept, payload) = decode(&raw(
+        &format!(r#"{{"t":"accept","seq":4,"s":"{s}"}}"#),
+        br#"{"v":1}"#,
+    ))
+    .expect("accept");
+    assert!(matches!(accept, Inbound::Accept { seq: 4, s: id, w: None } if id == s));
+    assert_eq!(accept.seq(), Some(4));
+    assert_eq!(payload.as_ref(), br#"{"v":1}"#);
+    let (windowed, _) = decode(&raw(
+        &format!(r#"{{"t":"accept","seq":5,"s":"{s}","w":65536}}"#),
+        b"",
+    ))
+    .expect("windowed accept");
+    assert!(matches!(
+        windowed,
+        Inbound::Accept {
+            w: Some(65_536),
+            ..
+        }
+    ));
+
+    let (refused, _) = decode(&raw(
+        &format!(r#"{{"t":"close","seq":6,"s":"{s}","code":"peer_disabled"}}"#),
+        b"",
+    ))
+    .expect("close with code");
+    assert!(matches!(
+        &refused,
+        Inbound::Close { seq: 6, s: id, code: Some(code) } if *id == s && code == "peer_disabled"
+    ));
+    let (closed, _) =
+        decode(&raw(&format!(r#"{{"t":"close","seq":7,"s":"{s}"}}"#), b"")).expect("close");
+    assert!(matches!(closed, Inbound::Close { code: None, .. }));
+
+    let node = Uuid::new_v4();
+    let frame = encode(
+        &Outbound::Open {
+            seq: 8,
+            s,
+            to: Target { node },
+            k: PEER,
+            w: None,
+        },
+        br#"{"v":1}"#,
+    )
+    .expect("open");
+    assert_eq!(
+        header(&frame),
+        serde_json::json!({"t":"open","seq":8,"s":s,"to":{"node":node},"k":"peer"})
+    );
+    assert!(frame.ends_with(br#"{"v":1}"#));
+    let windowed = encode(
+        &Outbound::Open {
+            seq: 9,
+            s,
+            to: Target { node },
+            k: PEER,
+            w: Some(65_536),
+        },
+        b"",
+    )
+    .expect("windowed open");
+    assert_eq!(header(&windowed)["w"], 65_536);
 }

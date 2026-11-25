@@ -466,6 +466,11 @@ export const settings = {
         hint: "Les agents pourront gérer les arbres de travail, les agents et les planifications",
         accessibilityLabel: "Injecter les outils Ait",
       },
+      acceptPeers: {
+        title: "Autoriser les agents de vos autres hôtes à utiliser cet hôte",
+        hint: "Lorsque cette option est activée, les agents de n'importe quel hôte de ce compte peuvent créer et contrôler des agents ici. Activez-la uniquement si vous faites confiance à tous ces hôtes.",
+        accessibilityLabel: "Autoriser les agents de vos autres hôtes à utiliser cet hôte",
+      },
       systemPrompt: {
         title: "Invite système",
         hint: "Ajoute une invite système à tous les agents",

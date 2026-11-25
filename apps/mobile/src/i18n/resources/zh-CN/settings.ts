@@ -483,6 +483,11 @@ export const settings = {
         hint: "智能体将能够管理工作树、智能体和计划",
         accessibilityLabel: "注入 Ait 工具",
       },
+      acceptPeers: {
+        title: "允许其他主机的 Agent 调用本机",
+        hint: "打开后，本账号下任何主机上的 Agent 都可以在本机创建和操作 Agent，相当于信任这些主机。",
+        accessibilityLabel: "允许其他主机的 Agent 调用本机",
+      },
       systemPrompt: {
         title: "系统提示词",
         hint: "为所有智能体添加系统提示词",

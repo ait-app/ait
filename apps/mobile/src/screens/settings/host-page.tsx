@@ -80,6 +80,7 @@ import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { showAlert } from "@/utils/show-alert";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import { AcceptPeersCard } from "./accept-peers-card";
 import { BrowserToolsOptInCard } from "./browser-tools-card";
 import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
 
@@ -277,6 +278,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
           <InjectPaseoToolsCard serverId={serverId} />
+          <AcceptPeersCard serverId={serverId} />
           <BrowserToolsOptInCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>

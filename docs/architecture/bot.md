@@ -36,7 +36,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 ## 对话与执行
 
 - Bot 以单一原生上下文接收所有入口的输入，按持久化 Bot 顺序串行执行。Conversation 保留 Channel、peer、sender、thread，作为来源、历史与回执路由，不再各自拥有独立模型上下文。子 Agent 仍可并发。
-- 重置通过 Bot 级接口改变共享上下文，取消旧队列并保留历史与会话设置；有执行中的轮次时拒绝重置。旧单 Conversation 重置接口不再发布。迁移保留历史供回读，不重放旧输入（[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）。
+- 重置通过 Bot 级接口改变共享上下文，取消旧队列并保留历史与会话设置；有执行中的轮次时拒绝重置。旧单 Conversation 重置接口不再发布。迁移保留历史供回读，不重放旧输入（[ADR-306](../decisions/bot/adr-306-shared-bot-context-and-chat-reception.md)）。
 - 输入按 Channel 与 `messageId` 去重：内容、目标相同返回 `duplicate:true`，不同返回 `IdempotencyConflict`。
   轮次落盘后才返回接纳；外部消息在持久接纳后才确认或推进游标，全局积压时不确认、等待重投，
   单个 Conversation 积压时确认并丢弃该条
@@ -233,7 +233,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   列表项内文本预览 400 字符、单个对象页内 1200 字符、唤醒输入摘要 600 字符。长度按字符计。截断的文本为 `{"preview","chars","read"}`；
   Agent 目录不带 Agent 的结果文本，Agent 的结果与转录用 `agent_activity_read` 读取（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 1、2 节）。
 - 读取是纯读取：不写盘、不唤醒、不记录观察、不推进 `notificationCursor`；退役 Bot 不可读（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 3 节）。
-- Bot 管理者可回读同一 Bot 的所有入口、工单及通知；外部来源的管理者能触达该 Bot 工单的 Agent，内置所有者仍可触达工作区范围内所有 Agent。子树沿用来源和工单访问限制，不自动继承管理者的跨入口视野（[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）。
+- Bot 管理者可回读同一 Bot 的所有入口、工单及通知；外部来源的管理者能触达该 Bot 工单的 Agent，内置所有者仍可触达工作区范围内所有 Agent。子树沿用来源和工单访问限制，不自动继承管理者的跨入口视野（[ADR-306](../decisions/bot/adr-306-shared-bot-context-and-chat-reception.md)）。
 - 子树 Agent 触达：`bot::recall::Viewer::sees_agent` 按标签判定，`ait.bot.ticket` 是有来源对话的已知工单时由工单来源决定，否则由 `ait.bot.conversation` 决定，
   Bot 未启动的 Agent 对外部对话不可触达。`Bots::sight(root, Origin)` 为外部对话返回 `Sight`（读取者加 Bot 全部工单的来源）；子树调用者的
   `Origin::Agent` 带它的工单与对话标签，Bot 取工单的来源对话，没有时取标签，两者都没有时返回 `None`（不受限）。`crates/api` 一次取得后套用于
@@ -329,7 +329,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   飞书扫码流程仍只接入中国区应用（[ADR-272](../decisions/bot/adr-272-lark-channel.md)）。
 - QQ 群聊接收 `GROUP_AT_MESSAGE_CREATE`；开启 QQ 的群全量消息能力后，也兼容
   `GROUP_MESSAGE_CREATE`，将群内普通消息一并接纳。
-- Telegram、微信、QQ、iMessage 的接收规则沿用对应平台适配器。飞书与 Lark 按平台 chat_id 保存启用和全量监听策略，旧 allowGroups 字段仅保留配置兼容；私聊为直接呼叫。未被接纳的正文不进入模型上下文。飞书与 Lark 接收人员及其他机器人文字、富文本和卡片的可读正文，过滤自身消息，以 message_id 去重；平台权限决定事件是否可达（[ADR-305](../decisions/bot/adr-305-shared-bot-context-and-chat-reception.md)）。
+- Telegram、微信、QQ、iMessage 的接收规则沿用对应平台适配器。飞书与 Lark 按平台 chat_id 保存启用和全量监听策略，旧 allowGroups 字段仅保留配置兼容；私聊为直接呼叫。未被接纳的正文不进入模型上下文。飞书与 Lark 接收人员及其他机器人文字、富文本和卡片的可读正文，过滤自身消息，以 message_id 去重；平台权限决定事件是否可达（[ADR-306](../decisions/bot/adr-306-shared-bot-context-and-chat-reception.md)）。
 - QQ 入站消息 ID 超过通用关联 ID 限制时，以 `qq:` 前缀的 SHA-256 十六进制摘要作内部去重键；
   原消息 ID 完整保存在 `replyTo`，用于 QQ 被动回复。已有短 ID 的去重键保持不变。
 - Provider 回复中的 Markdown 图片会在 Telegram、飞书、Lark 与 QQ 走各自的原生图片发送接口；图片来源支持 HTTPS URL、data URL，

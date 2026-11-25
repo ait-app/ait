@@ -18,7 +18,7 @@ paths:
 
 # ADR-290：所有消息 Channel 对任意发送者开放
 
-后续修订：[ADR-305](adr-305-shared-bot-context-and-chat-reception.md)。
+后续修订：[ADR-306](adr-306-shared-bot-context-and-chat-reception.md)。
 
 ## 背景
 

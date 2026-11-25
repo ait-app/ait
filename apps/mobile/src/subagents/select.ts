@@ -1,8 +1,10 @@
 import { useEffect, useMemo } from "react";
-import { usePendingArchiveAgentIds } from "@/hooks/use-archive-agent";
+import { usePendingArchiveAgentIds, usePendingArchiveAgents } from "@/hooks/use-archive-agent";
+import { toArchiveKey, type ArchiveAgentPendingState } from "@/data/archive-agent-pending";
 import equal from "fast-deep-equal";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useSessionStore, type Agent } from "@/stores/session-store";
+import { isSharedResourceServerId } from "@/runtime/host-runtime";
 import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
 import type { ProviderSubagentDescriptorPayload } from "@ait/protocol/messages";
 import { markObservedSubagentsStale, refreshUnifiedSubagents } from "./unified";
@@ -10,6 +12,8 @@ import { markObservedSubagentsStale, refreshUnifiedSubagents } from "./unified";
 export interface PaseoSubagentRow {
   kind: "paseo";
   id: Agent["id"];
+  /** The host the child runs on: the parent's, or another one for a child created across hosts. */
+  serverId: string;
   provider: Agent["provider"];
   title: Agent["title"];
   /** Optional native task metadata; the normal Agent title includes any user rename. */
@@ -27,6 +31,8 @@ export interface PaseoSubagentRow {
 export interface ProviderSubagentRow {
   kind: "provider";
   id: string;
+  /** Provider-native children always run on their parent's host. */
+  serverId: string;
   parentAgentId: string;
   provider: ProviderSubagentDescriptorPayload["provider"];
   // `title` is the subagent type ("Explore", "general-purpose") and repeats across a fan-out;
@@ -55,11 +61,13 @@ interface SelectSubagentsParams {
 
 const EMPTY_SUBAGENT_ROWS: SubagentRow[] = [];
 const EMPTY_PROVIDER_SUBAGENT_ROWS: ProviderSubagentRow[] = [];
+const NO_PENDING_ARCHIVES: ArchiveAgentPendingState = {};
 
-function toSubagentRow(agent: Agent): SubagentRow {
+function toSubagentRow(agent: Agent, serverId: string): SubagentRow {
   return {
     kind: "paseo",
     id: agent.id,
+    serverId,
     provider: agent.provider,
     title: agent.title,
     description: agent.observation?.description ?? null,
@@ -78,18 +86,30 @@ function toSubagentRow(agent: Agent): SubagentRow {
   };
 }
 
+/** Rows that run on the parent's own host; bulk actions on the parent's host touch only these. */
+export function localSubagentRows<Row extends SubagentRow>(
+  rows: readonly Row[],
+  serverId: string,
+): Row[] {
+  return rows.filter((row) => row.serverId === serverId);
+}
+
+/**
+ * Children of `params.parentAgentId` on `params.serverId`: the parent host's own children, plus
+ * agents on every other connected host whose remote parent is exactly that `(serverId, agentId)`.
+ * Only the account's own hosts group across hosts: another account's shared host neither adopts
+ * nor lends children. `pendingArchiveIds` are the parent host's; `pendingArchives` covers the
+ * other hosts.
+ */
 export function selectSubagentsForParent(
   state: SessionStoreSnapshot,
   params: SelectSubagentsParams,
   pendingArchiveIds: ReadonlySet<string>,
+  pendingArchives: ArchiveAgentPendingState = NO_PENDING_ARCHIVES,
 ): SubagentRow[] {
-  const agents = state.sessions[params.serverId]?.agents;
-  if (!agents || agents.size === 0) {
-    return EMPTY_SUBAGENT_ROWS;
-  }
-
   const rows: SubagentRow[] = [];
-  for (const agent of agents.values()) {
+  const agents = state.sessions[params.serverId]?.agents;
+  for (const agent of agents?.values() ?? []) {
     if (
       agent.archivedAt ||
       pendingArchiveIds.has(agent.id) ||
@@ -97,7 +117,26 @@ export function selectSubagentsForParent(
     ) {
       continue;
     }
-    rows.push(toSubagentRow(agent));
+    rows.push(toSubagentRow(agent, params.serverId));
+  }
+
+  const otherHosts = isSharedResourceServerId(params.serverId)
+    ? []
+    : Object.entries(state.sessions);
+  for (const [serverId, session] of otherHosts) {
+    if (serverId === params.serverId || isSharedResourceServerId(serverId)) continue;
+    for (const agent of session.agents.values()) {
+      const remoteParent = agent.remoteParent;
+      if (
+        remoteParent?.serverId !== params.serverId ||
+        remoteParent.agentId !== params.parentAgentId ||
+        agent.archivedAt ||
+        pendingArchives[toArchiveKey({ serverId, agentId: agent.id })]
+      ) {
+        continue;
+      }
+      rows.push(toSubagentRow(agent, serverId));
+    }
   }
 
   if (rows.length === 0) {
@@ -108,24 +147,40 @@ export function selectSubagentsForParent(
   return rows;
 }
 
+function sameAgentMaps(
+  sessions: SessionStoreSnapshot["sessions"],
+  previous: ReadonlyMap<string, Map<string, Agent>>,
+): boolean {
+  let count = 0;
+  for (const serverId in sessions) {
+    count += 1;
+    if (previous.get(serverId) !== sessions[serverId]?.agents) return false;
+  }
+  return count === previous.size;
+}
+
 // Session-store selectors run on every store update, including every stream tick, which
-// leaves the agent map untouched. Reuse the previous rows until the map changes, and keep
+// leaves the agent maps untouched. Children may run on any connected host, so reuse the
+// previous rows until any host's map changes (a check per host, not per agent), and keep
 // them when a recompute yields equal rows so the hook's equality check stays O(1).
 export function createSubagentsForParentSelector(
   params: SelectSubagentsParams,
   pendingArchiveIds: ReadonlySet<string>,
+  pendingArchives: ArchiveAgentPendingState = NO_PENDING_ARCHIVES,
 ): (state: SessionStoreSnapshot) => SubagentRow[] {
-  let previousAgents: Map<string, Agent> | undefined;
+  const previousAgents = new Map<string, Map<string, Agent>>();
   let previousRows: SubagentRow[] | null = null;
 
   return (state) => {
-    const agents = state.sessions[params.serverId]?.agents;
-    if (previousRows && agents === previousAgents) {
+    if (previousRows && sameAgentMaps(state.sessions, previousAgents)) {
       return previousRows;
     }
 
-    const rows = selectSubagentsForParent(state, params, pendingArchiveIds);
-    previousAgents = agents;
+    const rows = selectSubagentsForParent(state, params, pendingArchiveIds, pendingArchives);
+    previousAgents.clear();
+    for (const [serverId, session] of Object.entries(state.sessions)) {
+      previousAgents.set(serverId, session.agents);
+    }
     if (!previousRows || !equal(previousRows, rows)) {
       previousRows = rows;
     }
@@ -154,6 +209,7 @@ export function selectProviderSubagentsForParent(
     rows.push({
       kind: "provider",
       id: subagent.id,
+      serverId: params.serverId,
       parentAgentId: subagent.parentAgentId,
       provider: subagent.provider,
       title: subagent.title,
@@ -171,9 +227,15 @@ export function selectProviderSubagentsForParent(
 export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRow[] {
   const { serverId, parentAgentId } = params;
   const pendingArchiveIds = usePendingArchiveAgentIds(serverId);
+  const pendingArchives = usePendingArchiveAgents();
   const selectPaseoRows = useMemo(
-    () => createSubagentsForParentSelector({ serverId, parentAgentId }, pendingArchiveIds),
-    [serverId, parentAgentId, pendingArchiveIds],
+    () =>
+      createSubagentsForParentSelector(
+        { serverId, parentAgentId },
+        pendingArchiveIds,
+        pendingArchives,
+      ),
+    [serverId, parentAgentId, pendingArchiveIds, pendingArchives],
   );
   const paseoRows = useStoreWithEqualityFn(useSessionStore, selectPaseoRows, equal);
   const unified = useSessionStore(

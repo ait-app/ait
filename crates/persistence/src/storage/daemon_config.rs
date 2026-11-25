@@ -40,7 +40,7 @@ impl FileDaemonConfigStore {
             path,
             serde_json::json!({
                 "relay":{"enabled":false},
-                "mcp":{"enabled":true,"injectIntoAgents":true},
+                "mcp":{"enabled":true,"injectIntoAgents":true,"acceptPeers":false},
                 "browserTools":{"enabled":false},
                 "providers":{},
                 "metadataGeneration":{"providers":[]},
@@ -187,6 +187,7 @@ fn validate_config(value: &Value) -> Result<(), DaemonConfigStoreError> {
     let mcp = object_field(config, "mcp")?;
     boolean_field(mcp, "injectIntoAgents", true)?;
     boolean_field(mcp, "enabled", false)?;
+    boolean_field(mcp, "acceptPeers", false)?;
     let browser = object_field(config, "browserTools")?;
     boolean_field(browser, "enabled", true)?;
     let providers = object_field(config, "providers")?;

@@ -2,6 +2,7 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createSubagentsForParentSelector,
+  localSubagentRows,
   selectProviderSubagentsForParent,
   selectSubagentsForParent,
 } from "./select";
@@ -9,11 +10,15 @@ import { createWorkspaceAgentVisibilitySelector } from "@/workspace-tabs/agent-v
 import { useProviderSubagentStore } from "./provider-store";
 import { markObservedSubagentsStale } from "./unified";
 import { useSessionStore, type Agent } from "@/stores/session-store";
+import { toArchiveKey } from "@/data/archive-agent-pending";
 import { parseServerInfoStatusPayload } from "@ait/protocol/messages";
 import { serverInfo } from "@ait/client/internal/protocol/messages";
 import { object } from "@ait/client/internal/protocol/types";
+import { sharedResourceServerId } from "@/runtime/host-runtime";
 
 const SERVER_ID = "server-1";
+const REMOTE_SERVER_ID = "server-2";
+const SHARED_SERVER_ID = sharedResourceServerId("share-1");
 const AGENT_TIMESTAMP = new Date("2026-03-08T10:00:00.000Z");
 const EMPTY_PENDING_ARCHIVE_IDS = new Set<string>();
 
@@ -67,8 +72,30 @@ function setAgents(agents: Agent[]): void {
     .setAgents(SERVER_ID, new Map(agents.map((agent) => [agent.id, agent])));
 }
 
+function setRemoteAgents(agents: Agent[]): void {
+  useSessionStore.getState().initializeSession(REMOTE_SERVER_ID, null as unknown as DaemonClient);
+  useSessionStore
+    .getState()
+    .setAgents(
+      REMOTE_SERVER_ID,
+      new Map(agents.map((agent) => [agent.id, { ...agent, serverId: REMOTE_SERVER_ID }])),
+    );
+}
+
+function setSharedAgents(agents: Agent[]): void {
+  useSessionStore.getState().initializeSession(SHARED_SERVER_ID, null as unknown as DaemonClient);
+  useSessionStore
+    .getState()
+    .setAgents(
+      SHARED_SERVER_ID,
+      new Map(agents.map((agent) => [agent.id, { ...agent, serverId: SHARED_SERVER_ID }])),
+    );
+}
+
 afterEach(() => {
   useSessionStore.getState().clearSession(SERVER_ID);
+  useSessionStore.getState().clearSession(REMOTE_SERVER_ID);
+  useSessionStore.getState().clearSession(SHARED_SERVER_ID);
   useProviderSubagentStore.setState({
     descriptors: new Map(),
     timelines: new Map(),
@@ -427,6 +454,7 @@ describe("selectSubagentsForParent", () => {
       {
         kind: "paseo",
         id: "child",
+        serverId: SERVER_ID,
         provider: "claude",
         title: "Review child",
         description: null,
@@ -444,6 +472,7 @@ describe("selectSubagentsForParent", () => {
       "kind",
       "provider",
       "requiresAttention",
+      "serverId",
       "status",
       "subtitle",
       "title",
@@ -552,6 +581,134 @@ describe("selectSubagentsForParent", () => {
   });
 });
 
+describe("remote subagents", () => {
+  const remoteParent = { serverId: SERVER_ID, agentId: "X" };
+
+  it("lists children on another connected host under their remote parent", () => {
+    setAgents([
+      makeAgent({ id: "X" }),
+      makeAgent({
+        id: "local-child",
+        parentAgentId: "X",
+        createdAt: new Date("2026-03-08T10:01:00.000Z"),
+      }),
+    ]);
+    setRemoteAgents([
+      makeAgent({ id: "c", remoteParent, createdAt: new Date("2026-03-08T10:02:00.000Z") }),
+      makeAgent({ id: "unrelated" }),
+    ]);
+
+    const rows = selectSubagentsForParent(
+      useSessionStore.getState(),
+      { serverId: SERVER_ID, parentAgentId: "X" },
+      EMPTY_PENDING_ARCHIVE_IDS,
+    );
+
+    expect(rows.map((row) => [row.id, row.serverId])).toEqual([
+      ["local-child", SERVER_ID],
+      ["c", REMOTE_SERVER_ID],
+    ]);
+    expect(localSubagentRows(rows, SERVER_ID).map((row) => row.id)).toEqual(["local-child"]);
+  });
+
+  it("does not adopt a remote child under a local agent with the same id", () => {
+    setAgents([makeAgent({ id: "X" })]);
+    setRemoteAgents([makeAgent({ id: "X" }), makeAgent({ id: "c", remoteParent })]);
+
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId: REMOTE_SERVER_ID, parentAgentId: "X" },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ),
+    ).toEqual([]);
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId: SERVER_ID, parentAgentId: "X" },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ).map((row) => row.id),
+    ).toEqual(["c"]);
+  });
+
+  it("groups across hosts only among the account's own hosts, never with a shared host", () => {
+    setAgents([makeAgent({ id: "X" })]);
+    setSharedAgents([
+      makeAgent({ id: "Y" }),
+      makeAgent({ id: "shared-child", remoteParent }),
+      makeAgent({ id: "shared-local", parentAgentId: "Y" }),
+    ]);
+    setRemoteAgents([
+      makeAgent({ id: "own-child", remoteParent: { serverId: SHARED_SERVER_ID, agentId: "Y" } }),
+    ]);
+    const childrenOf = (serverId: string, parentAgentId: string) =>
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId, parentAgentId },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ).map((row) => [row.id, row.serverId]);
+
+    // A child on a shared host is never nested under a parent on another host.
+    expect(childrenOf(SERVER_ID, "X")).toEqual([]);
+    // A parent on a shared host adopts no child from another host, only its own children.
+    expect(childrenOf(SHARED_SERVER_ID, "Y")).toEqual([["shared-local", SHARED_SERVER_ID]]);
+  });
+
+  it("hides archived remote children and those whose archive is pending on their own host", () => {
+    setAgents([makeAgent({ id: "X" }), makeAgent({ id: "c-pending" })]);
+    setRemoteAgents([
+      makeAgent({ id: "c-archived", remoteParent, archivedAt: AGENT_TIMESTAMP }),
+      makeAgent({ id: "c-pending", remoteParent }),
+      makeAgent({ id: "c-kept", remoteParent }),
+    ]);
+
+    const rows = selectSubagentsForParent(
+      useSessionStore.getState(),
+      { serverId: SERVER_ID, parentAgentId: "X" },
+      // The parent host's pending ids name a different agent with the same id.
+      new Set(["c-kept"]),
+      { [toArchiveKey({ serverId: REMOTE_SERVER_ID, agentId: "c-pending" })]: true },
+    );
+
+    expect(rows.map((row) => row.id)).toEqual(["c-kept"]);
+  });
+
+  it("keeps the rows until an agent map on any host changes", () => {
+    setAgents([makeAgent({ id: "X" })]);
+    const remoteAgents = new Map([["unrelated", makeAgent({ id: "unrelated" })]]);
+    useSessionStore.getState().initializeSession(REMOTE_SERVER_ID, null as unknown as DaemonClient);
+    useSessionStore.getState().setAgents(REMOTE_SERVER_ID, remoteAgents);
+    const select = createSubagentsForParentSelector(
+      { serverId: SERVER_ID, parentAgentId: "X" },
+      EMPTY_PENDING_ARCHIVE_IDS,
+    );
+    const before = select(useSessionStore.getState());
+    expect(before).toEqual([]);
+
+    useSessionStore.getState().setAgentStreamState(REMOTE_SERVER_ID, "unrelated", {
+      head: [{ kind: "assistant_message", id: "m", text: "tick", timestamp: AGENT_TIMESTAMP }],
+    });
+    expect(select(useSessionStore.getState())).toBe(before);
+
+    useSessionStore
+      .getState()
+      .setAgents(REMOTE_SERVER_ID, (current) =>
+        new Map(current).set("unrelated", makeAgent({ id: "unrelated", status: "running" })),
+      );
+    expect(select(useSessionStore.getState())).toBe(before);
+
+    useSessionStore
+      .getState()
+      .setAgents(REMOTE_SERVER_ID, (current) =>
+        new Map(current).set("c", makeAgent({ id: "c", serverId: REMOTE_SERVER_ID, remoteParent })),
+      );
+    expect(select(useSessionStore.getState()).map((row) => row.id)).toEqual(["c"]);
+
+    useSessionStore.getState().clearSession(REMOTE_SERVER_ID);
+    expect(select(useSessionStore.getState())).toEqual([]);
+  });
+});
+
 describe("createSubagentsForParentSelector", () => {
   class IterationCountingMap<K, V> extends Map<K, V> {
     iterations = 0;
@@ -657,6 +814,50 @@ describe("createSubagentsForParentSelector", () => {
 
     expect(rows.map((row) => row.id)).toEqual(["child-a"]);
   });
+  it("keeps a non-empty row array across stream ticks and unrelated changes on another host", () => {
+    const localAgents = new IterationCountingMap<string, Agent>(
+      [makeAgent({ id: "parent" }), makeAgent({ id: "child", parentAgentId: "parent" })].map(
+        (agent) => [agent.id, agent],
+      ),
+    );
+    const remoteAgents = new IterationCountingMap<string, Agent>([
+      ["unrelated", makeAgent({ id: "unrelated", serverId: REMOTE_SERVER_ID })],
+    ]);
+    useSessionStore.getState().initializeSession(SERVER_ID, null as unknown as DaemonClient);
+    useSessionStore.getState().setAgents(SERVER_ID, localAgents);
+    useSessionStore.getState().initializeSession(REMOTE_SERVER_ID, null as unknown as DaemonClient);
+    useSessionStore.getState().setAgents(REMOTE_SERVER_ID, remoteAgents);
+    const select = createSubagentsForParentSelector(params, EMPTY_PENDING_ARCHIVE_IDS);
+    const before = select(useSessionStore.getState());
+    expect(before.map((row) => row.id)).toEqual(["child"]);
+    const localIterations = localAgents.iterations;
+    const remoteIterations = remoteAgents.iterations;
+
+    for (let tick = 0; tick < 10; tick += 1) {
+      streamTick(`token ${tick}`);
+      useSessionStore.getState().setAgentStreamState(REMOTE_SERVER_ID, "unrelated", {
+        head: [
+          { kind: "assistant_message", id: "m", text: `tick ${tick}`, timestamp: AGENT_TIMESTAMP },
+        ],
+      });
+      expect(select(useSessionStore.getState())).toBe(before);
+    }
+    expect(useSessionStore.getState().sessions[SERVER_ID]?.agents).toBe(localAgents);
+    expect(useSessionStore.getState().sessions[REMOTE_SERVER_ID]?.agents).toBe(remoteAgents);
+    expect(localAgents.iterations).toBe(localIterations);
+    expect(remoteAgents.iterations).toBe(remoteIterations);
+
+    useSessionStore
+      .getState()
+      .setAgents(REMOTE_SERVER_ID, (current) =>
+        new Map(current).set(
+          "unrelated",
+          makeAgent({ id: "unrelated", serverId: REMOTE_SERVER_ID, status: "running" }),
+        ),
+      );
+    expect(select(useSessionStore.getState())).toBe(before);
+  });
+
   it("does no agent map walks for 100 stream commits with unchanged source maps", () => {
     const agents = new IterationCountingMap<string, Agent>(
       Array.from({ length: 200 }, (_, i) => {

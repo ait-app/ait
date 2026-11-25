@@ -71,7 +71,12 @@ export const AgentTracks = memo(function AgentTracks({
     [openInSidePane, tabId, workspaceKey],
   );
   const handleOpenSubagent = useCallback(
-    (subagentId: string) => {
+    (subagentId: string, subagentServerId: string) => {
+      // A subagent on another host lives in that host's workspace.
+      if (subagentServerId !== serverId) {
+        navigateToAgent({ serverId: subagentServerId, agentId: subagentId });
+        return;
+      }
       const session = useSessionStore.getState().sessions[serverId];
       const agent = session?.agents.get(subagentId) ?? session?.agentDetails.get(subagentId);
       // A subagent in another workspace lives in that workspace's tabs.

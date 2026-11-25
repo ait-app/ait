@@ -12,6 +12,7 @@ mod guest;
 mod listener;
 pub mod managed_relay;
 mod mcp;
+mod peer_acceptance;
 mod publication;
 mod shares;
 mod terminal_activity;
@@ -99,6 +100,10 @@ struct Shared {
     workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
     shares: Arc<shares::Shares>,
     automation: Arc<automation::Automation>,
+    peer_acceptance: peer_acceptance::PeerAcceptance,
+    /// The account's sibling Hosts, for `host_list` and MCP calls routed with `hostId`: the Hub
+    /// serve link (`relay.hub()`) unless a test replaces it.
+    peers: Arc<dyn model::peer::Peers>,
 }
 
 impl std::ops::Deref for Shared {
@@ -216,6 +221,21 @@ fn runtime_info(
     }))
 }
 
+/// Create the Hub serve link of the API on `address`; the Bot service's webhook channels request
+/// their endpoints over it.
+fn serve_link(
+    address: SocketAddr,
+    server_id: &str,
+    instance_id: &str,
+    bots: Option<&bot::service::Bots>,
+) -> relay::Connector {
+    let relay = relay::Connector::new(address, server_id.to_owned(), instance_id.to_owned());
+    if let Some(bots) = bots {
+        bots.attach_center(Arc::new(relay.hub().clone()));
+    }
+    relay
+}
+
 fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), ConfigError> {
     use secrecy::ExposeSecret;
     if address.port() == 0 {
@@ -278,6 +298,16 @@ impl Api {
     pub fn restore_guests(&self) -> impl Future<Output = ()> + Send + 'static {
         let shares = self.shared.shares.clone();
         async move { shares.restore_guests().await }
+    }
+
+    /// Observe whether this Host accepts calls from Agents on sibling Hosts of the account, for
+    /// the daemon's publication to the account center.
+    ///
+    /// The value is `mcp.enabled && mcp.acceptPeers`, read once at startup and updated by every
+    /// committed daemon configuration change (`daemon.config.set.request` or a reload).
+    #[must_use]
+    pub fn peer_acceptance(&self) -> tokio::sync::watch::Receiver<bool> {
+        self.shared.peer_acceptance.receiver()
     }
 
     /// Return the Host's share settings for the daemon's publication loop.
@@ -356,11 +386,7 @@ impl Api {
         services: Services,
     ) -> Result<Self, ConfigError> {
         validate_listener(address, &token)?;
-        let relay = relay::Connector::new(address, server_id.clone(), instance_id.clone());
-        if let Some(bots) = &services.bot {
-            // Webhook channels request their endpoints over this Host's serve link.
-            bots.attach_center(Arc::new(relay.hub().clone()));
-        }
+        let relay = serve_link(address, &server_id, &instance_id, services.bot.as_ref());
         let runtime = runtime_info(address, server_id, instance_id, &services);
         let services = composition::Parts::from(services);
         let session_events = services
@@ -370,10 +396,9 @@ impl Api {
             .unwrap_or_default();
         compose_automation_events(services.workspace_automation.as_ref(), &session_events)?;
         let creations = creation_receipts(&services);
-        let worktrees = services.worktrees;
         let (directory, has_git_fetch) = compose_directory(
             services.directory,
-            worktrees.as_ref(),
+            services.worktrees.as_ref(),
             services.git_fetch,
             &runtime,
             &session_events,
@@ -389,7 +414,7 @@ impl Api {
             workspace_notepads: services.workspace_notepads.map(shared_service),
             workspace_automation: services.workspace_automation,
             workspace_state: services.workspace_state.map(shared_service),
-            worktrees,
+            worktrees: services.worktrees,
             workspace_recovery: services.workspace_recovery.map(shared_service),
             github_projects: services.github_projects.map(shared_service),
             session_events,
@@ -421,6 +446,7 @@ impl Api {
             address,
             &metadata.session_events,
         );
+        let peers = Arc::new(relay.hub().clone());
         let api = Self {
             shared: Arc::new(Shared {
                 _push_delivery: metadata::push::delivery::start(&metadata),
@@ -442,6 +468,8 @@ impl Api {
                 workspace_names: services.workspace_names,
                 shares: Arc::new(shares::Shares::new(&terminal, &provider)),
                 automation: Arc::default(),
+                peer_acceptance: peer_acceptance::PeerAcceptance::start(&metadata)?,
+                peers,
                 runtime,
                 metadata,
                 filesystem,

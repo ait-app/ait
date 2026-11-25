@@ -257,6 +257,11 @@ export function usePendingArchiveAgentIds(serverId: string): ReadonlySet<string>
   );
 }
 
+/** Pending archives on every host, keyed by `toArchiveKey`. */
+export function usePendingArchiveAgents(): ArchiveAgentPendingState {
+  return useArchiveAgentPendingQuery().data;
+}
+
 export function useArchiveAgent() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();

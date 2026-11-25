@@ -235,3 +235,14 @@ pub(crate) mod bots {
         .unwrap()
     }
 }
+
+impl Api {
+    /// Reach the account's sibling Hosts through `peers` instead of the Hub link, for
+    /// `host_list` and calls routed with `hostId`. Configure before sharing or serving the API.
+    pub(crate) fn with_peers(mut self, peers: Arc<dyn model::peer::Peers>) -> Self {
+        Arc::get_mut(&mut self.shared)
+            .expect("peers are replaced before the API is shared")
+            .peers = peers;
+        self
+    }
+}

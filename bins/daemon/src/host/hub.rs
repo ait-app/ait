@@ -4,6 +4,8 @@ mod automation;
 mod events;
 mod markers;
 mod outbox;
+mod peers;
+mod publisher;
 mod shares;
 pub(super) mod sources;
 
@@ -177,6 +179,14 @@ pub(super) async fn start(
             drop(automation_lifetime);
         });
     }
+    let peers_center = application.center.clone();
+    let peers_accepting = api.peer_acceptance();
+    let peers_cancel = cancel.clone();
+    let peers_lifetime = lifetime.clone();
+    tasks.spawn(async move {
+        peers::run(peers_center, peers_accepting, peers_cancel).await;
+        drop(peers_lifetime);
+    });
     tasks.spawn(async move {
         application.deliver().await;
         drop(lifetime);

@@ -69,6 +69,43 @@ archives it while retaining its history. `workspace_archive` retires its Agents,
 terminals and can remove an owned worktree. Apply lifecycle actions to the resources and scope
 requested by the user.
 
+## Work across hosts
+
+Other hosts of the user's account can run Agents for you, but only when the live `tools/list` shows
+`host_list` and a `hostId` argument. Omitting `hostId` always means the calling host.
+
+1. Call `host_list` first. Use only hosts with `available: true`; `reason` says why another is not
+   (`offline`, `not_accepting`, `unsupported`). Its `hostId` is the value to pass.
+2. Agents on another host live in an existing Workspace of that host. List its workspaces with
+   `workspace_list` passing the same `hostId`; ids of the calling host mean nothing there. Create
+   one with `workspace_create` and `hostId` only from a `path` or `projectId` that exists on that
+   host, plus `isolation`. `provider_list`, `provider_model_list` and `profile_list` also take
+   `hostId` because providers and models differ per host.
+3. Call `agent_create` with `hostId`, that `workspaceId`, an explicit `provider/model`, never
+   `cwd`, and an `idempotencyKey` unique to your task (all callers of that host share keys). Pass
+   that `hostId` to `agent_wait`, `agent_get`, `agent_activity_read`, `agent_prompt`, `agent_cancel`
+   and `agent_archive`. No finish notice or archive cascade crosses hosts: wait on it yourself.
+4. A forwarding failure is a tool result with `isError` and `structuredContent.code`:
+   - `host_unknown`, `host_offline`, `host_unsupported`, `hub_unavailable`: the call did not run.
+     Call `host_list` again, then pick another host or tell the user; do not loop.
+   - `host_not_accepting`: the call did not run; the user must turn accepting on at that host.
+     Tell the user, do not retry. `caller_not_allowed`: this Agent runs in a sandboxed worktree or
+     was created by a guest session and may never call other hosts, though it still sees `host_list`.
+   - `capacity`: the text says which case. "Retry later": busy, the call did not run; back off.
+     "The request exceeds": not sent; send less, unchanged it fails again. "The call ran": its
+     reply was too large; ask for less (a lower `limit`), do not repeat a call that changes things.
+   - `outcome_unknown`: the call may have run. Repeat reads; check a change with `agent_list` there,
+     or retry it with the same `idempotencyKey` (`agent_create`) or `messageId` (`agent_prompt`).
+   - `host_rejected`: the target refused the call; read `error` and `remoteCode`. On `-32002` it was
+     busy or stopping and did not run: retry later. Otherwise do not retry unchanged.
+
+   A failure without `code` is the target host's own tool error (no `workspaceId`, a `cwd`, an
+   archived workspace, `workspace_create` without a source, a reserved label): fix the arguments.
+
+Everything not listed here (terminals, scripts, schedules, heartbeats, permissions, the notepad)
+stays on the calling host. Opening a workspace on another host runs code there with the account's
+trust, so do it only for work the user asked for.
+
 ## Share notes through the workspace notepad
 
 Every workspace has exactly one notepad: a Markdown file the host keeps outside the checkout, which

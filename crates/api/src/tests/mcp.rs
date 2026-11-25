@@ -20,7 +20,14 @@ async fn agent_mcp_credential_is_private_and_limited_to_its_route() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let value: Value = response.json().await.unwrap();
-    assert_eq!(value["result"]["tools"], json!([]));
+    // Without installed services only `host_list`, which needs none, is offered.
+    let tools: Vec<_> = value["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(tools, ["host_list"]);
     for path in ["/v1/server/info", "/v1/ws"] {
         assert_eq!(
             client
@@ -108,7 +115,11 @@ async fn mcp_stateless_lifecycle_errors_and_authentication() {
     .await
     .unwrap();
     assert_eq!(listed["id"], 7);
-    assert_eq!(listed["result"]["tools"], json!([]));
+    assert_eq!(
+        listed["result"]["tools"][0]["name"], "host_list",
+        "{listed}"
+    );
+    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 1);
     for (method, params, code) in [
         ("unknown", json!({}), -32601),
         ("tools/call", json!({"name":"agent_create"}), -32602),

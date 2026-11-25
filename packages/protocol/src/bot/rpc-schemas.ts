@@ -703,12 +703,12 @@ export type BotResult<M extends BotMethod> = Extract<
   BotResponse,
   { type: BotResponseType<M> }
 >["payload"];
-/** Per-platform-chat reception settings (ADR-305). */
+/** Per-platform-chat reception settings (ADR-306). */
 export const BOT_CHAT_RECEPTION_METHODS = [
   "bot.chat.list.request",
   "bot.chat.update.request",
 ] as const;
-/** Bot-wide shared execution and reset (ADR-305). */
+/** Bot-wide shared execution and reset (ADR-306). */
 export const BOT_SHARED_CONTEXT_METHODS = ["bot.context.reset.request"] as const;
 /** Methods added after the core v2 Bot set; hosts without them keep the Bot tab. */
 export const BOT_PERMISSION_METHODS = ["bot.permissions.update.request"] as const;

@@ -18,12 +18,13 @@ paths:
 
 # ADR-218：Hub feature 协商收敛在线连接
 
-- 后续修订：[ADR-305](../bot/adr-305-shared-bot-context-and-chat-reception.md) 修订 SDK 分拆连接数量：新增 Bot 配置方法使用独立连接，原四条连接路由不变，仍逐连接遵守 64 capability 上限。单连接与 Hub 的行为不变。
+- 后续修订：[ADR-306](../bot/adr-306-shared-bot-context-and-chat-reception.md) 修订 SDK 分拆连接数量：新增 Bot 配置方法使用独立连接，原四条连接路由不变，仍逐连接遵守 64 capability 上限。单连接与 Hub 的行为不变。
 
 - 修订：[ADR-154](adr-154-account-status-channel.md)、[ADR-204](adr-204-hub-only-online-business-transport.md)、[ADR-180](../daemon/adr-180-hub-serve-endpoint.md)；
   直连单连接修订 [ADR-049](adr-049-app-rust-browser-transport.md)、[ADR-211](adr-211-sdk-native-daemon-protocol.md)；
   daemon 不再建立 relay control 与下载 Relay，修订 [ADR-140](../daemon/adr-140-headless-local-api-token.md)、
   [ADR-200](../daemon/adr-200-headless-independent-transports.md)、[ADR-201](../daemon/adr-201-daemon-owned-publication.md)（前述关系于 2026-11-23 补登记）
+- 后续修订：[ADR-305](../daemon/adr-305-cross-host-mcp-peer-sessions.md) 增加可选 feature `peer`：只在中心声明时由 main serve 链路声明，不属于“必须声明”的六项，旧中心上链路照常建立。
 
 `ait-hub-v1` 保持帧格式和版本号，新增六个由中心声明、双方协商的 feature：`lease`、`hosts`、`state`、`credit`、`download`、`bulk`。中心在 `register` 和 `hub-tickets` 响应中返回 `hub_features`，新中心始终声明全部六项。新客户端（桌面、手机、网页和 daemon）只连接新中心：`hello.f` 固定带上自己实现的全部 feature（main link 为 `lease`、`hosts`、`state`、`credit`、`download`，bulk link 只含 `credit`、`download`），resume 保持相同集合；`register` 或 `hub-tickets` 响应缺少 `hub_features` 或其中任一 feature、或 `welcome.f` 不含所有已声明的 feature 时，客户端明确报错（提示账号服务版本过低，需要更新服务），不静默降级，也不保留对旧中心的任何回退路径。
 

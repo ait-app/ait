@@ -3,6 +3,7 @@ import { useShallow } from "zustand/shallow";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import {
   getHostRuntimeStore,
+  isSharedResourceHost,
   useHosts,
   useHostRuntimeConnectionStatuses,
 } from "@/runtime/host-runtime";
@@ -23,6 +24,7 @@ export function useTaskBoardModel() {
     const inputs: TaskBoardHost[] = hosts.map((host, index) => ({
       serverId: host.serverId,
       label: host.label,
+      shared: isSharedResourceHost(host),
       agents: agentMaps[index] ?? new Map(),
       workspaces: workspaceMaps[index] ?? new Map(),
     }));

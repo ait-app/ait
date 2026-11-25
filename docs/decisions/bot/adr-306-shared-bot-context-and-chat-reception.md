@@ -1,5 +1,5 @@
 ---
-id: ADR-305
+id: ADR-306
 status: accepted
 date: 2026-11-25
 amends:
@@ -18,7 +18,7 @@ paths:
   - apps/mobile/src/bots
 ---
 
-# ADR-305：Bot 共享执行上下文与外部会话接收策略
+# ADR-306：Bot 共享执行上下文与外部会话接收策略
 
 ## 背景
 

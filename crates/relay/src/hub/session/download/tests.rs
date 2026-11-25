@@ -24,6 +24,7 @@ fn start(
         local: local(address, None),
         visitor,
         automation: false,
+        peer: None,
         inbound: inbound_rx,
         output: output_tx,
         credit,

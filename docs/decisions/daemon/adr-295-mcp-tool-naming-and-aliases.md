@@ -15,6 +15,8 @@ paths:
 
 # ADR-295：MCP 工具按“域在前”命名，旧名字作为别名保留
 
+- 后续修订：[ADR-305](adr-305-cross-host-mcp-peer-sessions.md) 在域列表中增加 `host`（`host_list`，只对主机凭据的调用者）。
+
 ## 背景
 
 [ADR-148](adr-148-daemon-mcp.md) 的 40 个工具沿用 Paseo 的“动词\_名词”（`create_agent`），之后加入的 Bot、工单与脚本运行工具

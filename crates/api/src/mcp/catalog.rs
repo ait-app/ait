@@ -72,11 +72,18 @@ pub(super) struct Tool {
     /// Whether the tool archives, kills or deletes something.
     #[serde(default)]
     destructive: bool,
+    /// Whether sibling Hosts of the account may call it, and host callers may route it to them.
+    #[serde(default)]
+    pub(super) peer: bool,
 }
 
 /// Arguments only Bot sessions may pass, by tool; every other caller's schema omits them, so
 /// validation refuses them (ADR-274: only the Bot names the ticket a new Agent joins).
 const BOT_ARGUMENTS: [(&str, &str); 1] = [("agent_create", "ticketId")];
+
+/// Argument naming the Host, by its `serverId`, that runs a call of a tool marked for peers;
+/// only host callers are offered it.
+pub(super) const HOST_ARGUMENT: &str = "hostId";
 
 impl Tool {
     /// Return public MCP metadata for `scope`'s caller without exposing internal RPC method
@@ -90,17 +97,34 @@ impl Tool {
         })
     }
 
+    /// Whether `scope`'s caller may run this tool on another Host: only host callers, and only
+    /// for tools marked for peers.
+    pub(super) const fn routable(&self, scope: Option<&Scope>) -> bool {
+        scope.is_none() && self.peer
+    }
+
     /// The input schema `scope`'s caller sees and is validated against: without arguments
-    /// reserved for Bot sessions unless the caller is one.
+    /// reserved for Bot sessions unless the caller is one, and, for host callers of a tool
+    /// marked for peers, with the optional `hostId` that runs it on another Host.
     pub(super) fn schema(&self, scope: Option<&Scope>) -> Cow<'_, Value> {
         let bot = scope.is_some_and(|scope| scope.caller.kind.holder() == Holder::Bot);
-        if bot || !BOT_ARGUMENTS.iter().any(|(tool, _)| *tool == self.name) {
+        let withheld = !bot && BOT_ARGUMENTS.iter().any(|(tool, _)| *tool == self.name);
+        let routable = self.routable(scope);
+        if !withheld && !routable {
             return Cow::Borrowed(&self.input_schema);
         }
         let mut schema = self.input_schema.clone();
         if let Some(properties) = schema["properties"].as_object_mut() {
+            // Bot sessions returned above (`withheld` and `routable` are both false for them),
+            // so every caller here is one the Bot-only arguments are withheld from.
             for (_, argument) in BOT_ARGUMENTS.iter().filter(|(tool, _)| *tool == self.name) {
                 properties.remove(*argument);
+            }
+            if routable {
+                properties.insert(
+                    HOST_ARGUMENT.to_owned(),
+                    json!({"type":"string","minLength":1}),
+                );
             }
         }
         Cow::Owned(schema)
@@ -145,6 +169,11 @@ pub(super) fn granted<'a>(
             |scope| scope.allows(&tool.name),
         )
     })
+}
+
+/// Find installed tool `name` marked for calls from sibling Hosts, by its current name only.
+pub(super) fn for_peers(state: &Shared, name: &str) -> Option<&'static Tool> {
+    installed(state).find(|tool| tool.peer && tool.name == name)
 }
 
 #[cfg(test)]
