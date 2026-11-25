@@ -20,6 +20,46 @@ Linux 独立归档不包含 `bwrap`。使用沙箱化 Worktree 前需通过系�
 
 下文命令使用归档中的 `aitd`；从源码构建时，将 `aitd` 替换为 `./target/release/daemon`。
 
+## Arch Linux / AUR
+
+在 x86_64 Arch 上，`aitd-bin` 和 `aitd-git` 二选一（例如 `paru -S aitd-bin`）。
+前者使用正式版独立 daemon 归档，只有 `aitd` 和许可证，不包含 Electron 或前端；
+后者跟踪 `main`，仅用 Cargo 编译 daemon，不运行 npm。两者由 pacman 管理
+`/usr/bin/aitd`、许可证和 `/usr/lib/systemd/user/aitd.service`，可以与 `ait-bin` 或
+`ait-git` 桌面包并存；桌面内置 daemon 仍由桌面应用管理。
+
+安装和升级不会自动启用、启动或重启服务。完成下文授权后手动启用：
+
+```sh
+systemctl --user enable --now aitd.service
+systemctl --user status aitd.service
+journalctl --user -u aitd.service -f
+# 升级软件包后，让运行中的进程使用新版：
+systemctl --user restart aitd.service
+# 停用：
+systemctl --user disable --now aitd.service
+```
+
+需要开机后不登录也运行时，以该用户执行 `loginctl enable-linger "$USER"`（可能需要管理员授权），
+再启用用户服务。服务工作目录为用户主目录，读取可选的 `~/.config/ait/daemon.env`；
+数据目录和监听地址沿用 daemon 默认值，也可在该文件设置 `AIT_SERVER_DATA_DIR`、
+`AIT_SERVER_LISTEN`。环境文件使用 `KEY=value`，不加 `export`，路径填写绝对路径；
+不要依赖 shell 的 `$HOME` 或 `~` 展开。含凭据时设为仅用户可读。
+CLI 不自动读取这个服务环境文件；执行 login/status 时要传入同一数据目录。
+卸载前先停用服务；卸载包不会删除主目录下的数据、凭据或环境文件。
+
+### 从桌面包或旧 ait-daemon.service 迁移
+
+1. 在桌面设置关闭「管理内置守护进程」，停止原来使用同一数据目录的 daemon。
+   如果已有自定义服务，执行 `systemctl --user disable --now ait-daemon.service`。
+2. 记录旧服务的 `--data-dir`、监听地址、环境文件和 drop-in；保留原数据目录及凭据。
+   把旧命令行中的设置转为 `~/.config/ait/daemon.env` 中的环境变量，例如
+   `AIT_SERVER_DATA_DIR=/home/你的用户名/.ait-server-desktop` 与 `AIT_SERVER_LISTEN=127.0.0.1:7316`。
+   原有环境文件可继续使用；自定义 drop-in 需检查后迁移到新服务，不能直接假定生效。
+3. 检查桌面自启动对旧服务的 `Wants=`/`After=` 等引用，按需改为 `aitd.service`，避免旧服务被再次拉起。
+4. 安装一种独立 daemon 包，再执行 `systemctl --user enable --now aitd.service`，查看日志确认启动。
+   桌面端通过已有直连或在线服务连接它。不要同时启动共享数据目录的两个实例，否则会争抢 `instance.lock`。
+
 ## 登录与运行
 
 以运行服务的相同账号和数据目录完成一次授权。默认数据目录为 `~/.ait`（已有 `~/.ait-server-desktop` 或 `~/.ait-server` 时依次沿用），可通过

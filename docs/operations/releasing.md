@@ -148,43 +148,58 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
 
 ## Arch Linux / AUR
 
-[`packaging/aur/`](../../packaging/aur/) 保存两个 AUR 包的配方，由
-[`aur-publish.sh`](../../scripts/aur-publish.sh) 发布。`ait-bin` 由
-[`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 自动发布，`ait-git` 由维护者手动发布：
+[`packaging/aur/`](../../packaging/aur/) 保存四个 x86_64 AUR 配方，由
+[`aur-publish.sh`](../../scripts/aur-publish.sh) 生成候选、构建和发布：
 
-- `ait-bin`：使用对应 GitHub Release 的 `Ait-linux-x86_64.AppImage`。正式版 Release 发布（`release: published`，
-  跳过 beta 和 dev build）后自动把 `pkgver` 设为该版本、`pkgrel` 重置为 `1`，校验值取自 Release 的
-  `SHA256SUMS`，`ait.desktop` 的校验值按文件重新计算。仓库内 `pkgver`、`pkgrel` 和校验值以 AUR 为准，
-  无需手动修改。只在正式版 Release 发布或手动运行时执行，推送 tag 时 Release 仍是草稿，不触发；
-  合并到 `main` 和 PR 都不运行。同版本修改配方后手动运行工作流，会先完整构建验证，再自动递增
-  `pkgrel` 推送；不会发布比 AUR 更旧的版本。
-- `ait-git`：从 `main` 源码构建，版本号由 `pkgver()` 在用户构建时生成，用户通过 AUR helper 的
-  `--devel` 获取新提交。AUR 规定不能提交只改 `pkgver` 的 VCS 包更新，因此只有配方本身变化时才更新，
-  由维护者在本机用自己的 AUR SSH key 运行 `build`（完整编译验证）后再 `publish`。
+| 包         | 内容                                                     | 发布方式                 |
+| ---------- | -------------------------------------------------------- | ------------------------ |
+| `ait-bin`  | 正式版 `Ait-linux-x86_64.AppImage` 桌面应用              | 正式版发布或手动工作流   |
+| `aitd-bin` | 正式版 `Ait-VERSION-daemon-linux-x64.tar.gz` 独立 daemon | 正式版发布或手动工作流   |
+| `ait-git`  | `main` 的 daemon 与 Electron 桌面                        | 维护者本地完整构建后发布 |
+| `aitd-git` | `main` 的 daemon，仅 Cargo 构建                          | 维护者本地完整构建后发布 |
 
-`ait-bin` 每次更新在 [`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 中分两个 job 执行：
+两个 daemon 包提供 `aitd`，彼此冲突，可与桌面包并存。归档中的 `Ait-` 是发布文件命名，
+不是前端依赖；daemon 包只安装 `/usr/bin/aitd`、许可证和用户服务。
+[`packaging/systemd/aitd.service`](../../packaging/systemd/aitd.service) 是共享服务源，
+发布脚本复制到候选目录并计算校验值。安装不启用或重启服务，使用与迁移步骤见
+[无人值守运行说明](headless-daemon.md#arch-linux--aur)。
 
-1. 构建：在 `archlinux:base-devel` 容器中完整运行 `makepkg`。构建会执行上游 npm/Cargo 依赖的代码，
-   因此此 job 不接触 AUR 私钥。
-2. 发布：构建成功后在另一台 runner 上运行，不构建，沿用构建 job 解析出的版本，只生成 `.SRCINFO`，提交并推送到 AUR。
+`-bin` 的校验值取自同版 `SHA256SUMS`，并由 makepkg 校验归档。
+新版本重置 `pkgrel=1`，同版本配方变化递增 `pkgrel`，无变化跳过，拒绝降级发布。
+`aitd-bin` 初始配方对应已发布的 v0.2.27。不要直接在主仓库的 daemon 配方目录运行
+makepkg：先通过下面的脚本组装含共享服务的候选目录。
 
-`.SRCINFO` 不提交到本仓库。也可手动运行工作流，`tag` 留空时使用最新正式版。
+两个 `-git` 包统一使用 `YYYYMMDD.g<8位哈希>`，程序显示 `git-YYYY-MM-DD-<8位哈希>`。
+现有 `ait-git` 远端旧配方的 `0.2.6.r874.g253cb2e` 可正常升级到日期格式，不增加 `epoch`。
+只有配方变化时才更新 AUR，不为每次源码提交发布；用户重新构建或通过 AUR helper 的
+`--devel` 检查源码更新。`--locked` 保持 Cargo.lock 约束；`!lto` 关闭 Arch makepkg 注入的
+LTO 标志，避免原生依赖的 GCC LTO 对象与 Rust 的 lld 不兼容，不修改 Cargo release 优化配置。
 
-AUR 私钥只保存在 GitHub environment `aur` 的 secret `AUR_SSH_PRIVATE_KEY` 中，不设仓库级 secret。
-该 environment 只允许 `main` 分支和 `v*` 标签部署，其他分支上修改过的工作流取不到私钥；
-fork PR 本就没有 secret。对应公钥需加入 AUR 维护者账户（My Account → SSH Public Key）。
-本地运行（`AUR_PUSH=1` 时才推送；`publish` 只在配方或版本有变化时提交）：
+[`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 在正式版 Release 已公开后
+自动处理两个 `-bin` 包（跳过 beta/dev）；手动运行可选单包或 `all`，`tag` 留空取最新正式版。
+版本只解析一次，各包分别完整构建成功后才进入发布。构建 job 没有 AUR 密钥，发布 job
+使用独立 runner 和 `aur` environment，不运行 prepare/build 或上游 npm/Cargo 代码。
+`-git` 包不接入自动发布，必须由维护者本地完整构建。
+
+AUR 私钥只保存在 GitHub environment `aur` 的 `AUR_SSH_PRIVATE_KEY` 中，不设仓库级 secret。
+该 environment 只允许 `main` 和 `v*` 标签；公钥加入 AUR 维护者账户。
+脚本支持首次空 AUR Git 仓库；网络、认证错误或已有仓库缺失元数据会明确失败，不当成新包。
+`.SRCINFO` 在候选中生成，不提交主仓库。使用 `AUR_WORKDIR` 保留候选和包供评审；
+同一目录再次运行会重建 `candidate/` 和 `aur/`，构建与发布请使用不同目录。
 
 ```bash
-AIT_RELEASE_VERSION=X.Y.Z  # 替换为已经发布的正式版本
-scripts/aur-publish.sh build ait-bin "$AIT_RELEASE_VERSION"
-scripts/aur-publish.sh publish ait-bin "$AIT_RELEASE_VERSION"
-scripts/aur-publish.sh build ait-git
-AUR_PUSH=1 scripts/aur-publish.sh publish ait-git
+# 普通用户执行，makepkg --syncdeps 需要 sudo；不要在构建环境放 AUR 私钥。
+AUR_WORKDIR=/var/tmp/aitd-bin-build scripts/aur-publish.sh build aitd-bin 0.2.27
+AUR_WORKDIR=/var/tmp/aitd-bin-candidate scripts/aur-publish.sh publish aitd-bin 0.2.27
+AUR_WORKDIR=/var/tmp/aitd-git-build scripts/aur-publish.sh build aitd-git
+AUR_WORKDIR=/var/tmp/aitd-git-candidate scripts/aur-publish.sh publish aitd-git
+# 同样支持 build/publish ait-bin VERSION 和 build/publish ait-git。
+# 完整构建及候选评审完成后，显式推送；默认只在本地提交：
+AUR_PUSH=1 scripts/aur-publish.sh publish aitd-git
 ```
 
-安装后可在应用菜单打开 Ait，或运行 `ait`；同时注册 `ait://` 链接。
-此安装方式由 pacman / AUR helper 管理升级，不使用 AppImage 自动更新。
+本地提交沿用维护者 Git 身份，CI 显式传入发布机器人身份。
+安装包由 pacman / AUR helper 管理升级；daemon 升级后需手动重启服务。
 
 ## 每日发布判断
 

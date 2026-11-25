@@ -20,7 +20,14 @@ dependencies. Rustup users automatically use upstream's `rust-toolchain.toml`;
 users of Arch's `rust` package need a sufficiently recent compiler. Use the
 system Node.js or another current version that meets the build dependencies.
 
-The package version is `YYYYMMDD.g<short hash>`; the app and daemon display `git-YYYY-MM-DD-<short hash>`.
+The package version is `YYYYMMDD.g<8-digit hash>`; the app and daemon display `git-YYYY-MM-DD-<8-digit hash>`.
 Run `makepkg -si` again, or enable development-package updates in your AUR
 helper, to fetch and build later commits. AUR itself stores the build recipe;
 each installation compiles on the user's machine.
+
+This desktop package can coexist with `aitd-bin` or `aitd-git`, which install the
+independent `/usr/bin/aitd` command. Disable desktop management of the built-in
+daemon before running a standalone service against the same data directory.
+The date-based package version upgrades from the old `0.2.6.r874.g253cb2e`
+recipe without an epoch. Only recipe changes are published to AUR; new upstream
+commits are picked up by rebuilding.

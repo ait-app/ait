@@ -218,6 +218,15 @@ function classifyUi(changed, exists) {
       needs.touched = needs.wide = true;
       continue;
     }
+    if (
+      file.startsWith("packaging/aur/") ||
+      file.startsWith("packaging/systemd/") ||
+      file === ".github/workflows/publish-aur.yml"
+    ) {
+      needs.touched = true;
+      needs.scriptTests.add("scripts/aur-publish.test.mjs");
+      continue;
+    }
     if (UI_RELEASE.test(file)) needs.touched = needs.release = true;
     if (/^crates\/provider\/[a-z-]+\/tests\/fixtures\//.test(file)) {
       needs.touched = true;

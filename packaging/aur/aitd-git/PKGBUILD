@@ -1,0 +1,49 @@
+# Maintainer: Ait contributors <https://github.com/ait-app/ait>
+
+pkgname=aitd-git
+pkgver=20261125.g8540cfdd
+pkgrel=1
+pkgdesc='Ait headless daemon (Git main)'
+arch=('x86_64')
+url='https://github.com/ait-app/ait'
+license=('Apache-2.0')
+depends=('glibc' 'libgcc' 'libstdc++' 'bash' 'git' 'ca-certificates' 'bubblewrap>=0.8.0')
+makedepends=('rust' 'cmake' 'clang' 'python' 'pkgconf')
+optdepends=('openssh: SSH Git remotes' 'systemd: user service management')
+provides=("aitd=${pkgver}")
+conflicts=('aitd')
+# GCC LTO objects in native Rust dependencies cannot be linked by Rust's lld.
+options=('!strip' '!debug' '!lto')
+source=("ait::git+${url}.git#branch=main" 'aitd.service')
+sha256sums=(
+  'SKIP'
+  '8d4f2659b311dab569bfcd10542ea74bdc2d482ef1b36dca143e5edc2b493699'
+)
+
+pkgver() {
+  cd "$srcdir/ait"
+  printf '%s.g%s' "$(git show -s --format=%cs HEAD | tr -d -)" "$(git rev-parse --short=8 HEAD)"
+}
+
+_build_env() {
+  export CARGO_TARGET_DIR="$srcdir/target"
+  export AIT_BUILD_VERSION="git-$(git show -s --format=%cs HEAD)-$(git rev-parse --short=8 HEAD)"
+}
+
+prepare() {
+  cd "$srcdir/ait"
+  _build_env
+  cargo fetch --locked --target x86_64-unknown-linux-gnu
+}
+
+build() {
+  cd "$srcdir/ait"
+  _build_env
+  cargo build --locked --release -p daemon --bin daemon
+}
+
+package() {
+  install -Dm755 "$srcdir/target/release/daemon" "$pkgdir/usr/bin/aitd"
+  install -Dm644 "$srcdir/ait/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$srcdir/aitd.service" "$pkgdir/usr/lib/systemd/user/aitd.service"
+}

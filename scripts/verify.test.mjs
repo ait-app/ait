@@ -232,3 +232,18 @@ test("Ait workspaces and CI run this same script", () => {
     );
   }
 });
+
+test("AUR recipes, shared services and publication workflow select packaging regression tests", () => {
+  for (const file of [
+    "packaging/aur/aitd-bin/PKGBUILD",
+    "packaging/aur/ait-git/PKGBUILD",
+    "packaging/systemd/aitd.service",
+    ".github/workflows/publish-aur.yml",
+  ]) {
+    const result = plan([file]);
+    assert.ok(find(result, "scripts/aur-publish.test.mjs"), file);
+    assert.equal(find(result, "npm run test:release"), undefined);
+    assert.equal(find(result, "npm run test:mobile-release"), undefined);
+    assert.equal(result.outputs.rust, false);
+  }
+});

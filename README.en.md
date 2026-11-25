@@ -37,6 +37,7 @@ The macOS and Linux desktop installers bundle the daemon, which the app starts a
 The Linux deb, rpm, and Arch packages depend on `bubblewrap >= 0.8.0` automatically; AppImage and tar.gz users must install it themselves and allow unprivileged user namespaces before using sandboxed worktrees.
 
 Arch Linux users can also install from the AUR: [`ait-bin`](https://aur.archlinux.org/packages/ait-bin) is the prebuilt release package, and [`ait-git`](https://aur.archlinux.org/packages/ait-git) builds from `main` locally. Pick one (for example `paru -S ait-bin`).
+For a headless host, choose `aitd-bin` (stable binary) or `aitd-git` (daemon-only source build). Both install `/usr/bin/aitd` and a user service, can coexist with the desktop package, and require manual service activation; see the [headless guide](docs/operations/headless-daemon.md#arch-linux--aur).
 
 ### Connecting from other devices
 

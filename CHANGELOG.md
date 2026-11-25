@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add independent `aitd-bin` and `aitd-git` Arch packages with an opt-in systemd user service.
+  Stable releases can publish both desktop and daemon binary recipes; Git recipes remain locally maintained.
+
 - Bots accept compatible application-bot sender identities from Feishu and Lark. After a restart,
   uncertain executions keep their records while fresh context resumes inputs that never ran.
   In-flight channel replies have up to ten seconds to finish during shutdown.
