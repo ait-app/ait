@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
+import { restartDaemonFromSettings } from "./daemon-lifecycle";
 
 test("Ait restart completes when the same process serves a fresh instance", async () => {
   let startedAt = "2026-09-28T01:00:00.000Z";
@@ -60,34 +60,6 @@ test("a lost restart acknowledgment can still confirm the replacement", async ()
     },
   });
   expect(pid).toBe(11);
-});
-
-test("installation and worker version confirmation are separate outcomes", async () => {
-  let pid = 10;
-  await expect(
-    updateDaemonFromSettings("daemon", {
-      getStatus: async () => ({ pid, version: "1.0.0", serverId: "daemon" }),
-      updateDaemon: async () => {
-        pid = 11;
-        return { success: true, error: null, newVersion: "2.0.0" };
-      },
-    }),
-  ).rejects.toThrow("Package installed; replacement worker version was not confirmed");
-});
-
-test("an installed version is confirmed only in its replacement worker", async () => {
-  let pid = 10,
-    version = "1.0.0";
-  await expect(
-    updateDaemonFromSettings("daemon", {
-      getStatus: async () => ({ pid, version, serverId: "daemon" }),
-      updateDaemon: async () => {
-        pid = 11;
-        version = "2.0.0";
-        return { success: true, error: null, newVersion: version };
-      },
-    }),
-  ).resolves.toEqual({ workerVersion: "2.0.0" });
 });
 
 test("RPC errors mentioning transport are not retried", async () => {

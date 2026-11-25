@@ -596,29 +596,6 @@ export const settings = {
         requestFailedTitle: "Erro",
         dialogFailedMessage: "Não foi possível abrir o diálogo de confirmação de reinício.",
       },
-      update: {
-        desktopManagedHint:
-          "Este daemon é gerenciado pelo Ait Desktop. Atualize o Ait Desktop no host.",
-        title: "Atualizar daemon",
-        hint: "Atualiza o daemon para a versão mais recente e o reinicia",
-        confirm: "Atualizar",
-        confirmTitle: "Atualizar {{name}}",
-        confirmMessage:
-          "Isso vai atualizar o daemon para a versão mais recente e reiniciá-lo. Agentes em execução serão interrompidos brevemente.",
-        phaseStarting: "Preparando atualização...",
-        phaseDownloading: "Baixando pacotes...",
-        phaseInstalling: "Instalando...",
-        phaseComplete: "Atualização concluída, reiniciando...",
-        unavailableTitle: "Host indisponível",
-        unavailableMessage:
-          "Este host não está conectado. Aguarde até ele ficar online antes de atualizar.",
-        offlineTitle: "Host offline",
-        offlineMessage:
-          "Este host está offline. Aguarde até ele voltar a ficar online antes de atualizar.",
-        requestFailedTitle: "Falha na atualização",
-        requestFailedMessage: "Falha ao atualizar o daemon: {{error}}",
-        dialogFailedMessage: "Não foi possível abrir o diálogo de confirmação da atualização.",
-      },
       dangerZone: "Zona de perigo",
       remove: {
         title: "Remover host",

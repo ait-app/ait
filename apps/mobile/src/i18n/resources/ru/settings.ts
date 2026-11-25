@@ -599,27 +599,6 @@ export const settings = {
         requestFailedTitle: "Ошибка",
         dialogFailedMessage: "Не удалось открыть диалог подтверждения перезапуска.",
       },
-      update: {
-        desktopManagedHint: "Этот демон управляется Ait Desktop. Обновите Ait Desktop на хосте.",
-        title: "Обновить демон",
-        hint: "Обновить демон до последней версии и перезапустить его",
-        confirm: "Обновить",
-        confirmTitle: "Обновить {{name}}",
-        confirmMessage:
-          "Демон будет обновлён до последней версии и перезапущен. Работа агентов будет ненадолго прервана.",
-        phaseStarting: "Подготовка обновления...",
-        phaseDownloading: "Загрузка пакетов...",
-        phaseInstalling: "Установка...",
-        phaseComplete: "Обновление завершено. Перезапуск...",
-        unavailableTitle: "Хост недоступен",
-        unavailableMessage:
-          "Этот хост не подключён. Дождитесь его появления в сети перед обновлением.",
-        offlineTitle: "Хост не в сети",
-        offlineMessage: "Этот хост не в сети. Дождитесь его появления в сети перед обновлением.",
-        requestFailedTitle: "Не удалось обновить",
-        requestFailedMessage: "Не удалось обновить демон: {{error}}",
-        dialogFailedMessage: "Не удалось открыть диалог подтверждения обновления.",
-      },
       dangerZone: "Опасная зона",
       remove: {
         title: "Удалить хост",

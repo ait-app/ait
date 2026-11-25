@@ -591,29 +591,6 @@ export const settings = {
         requestFailedTitle: "오류",
         dialogFailedMessage: "재시작 확인 대화 상자를 열 수 없습니다.",
       },
-      update: {
-        desktopManagedHint:
-          "이 데몬은 Ait Desktop에서 관리됩니다. 호스트에서 Ait 데스크톱을 업데이트합니다.",
-        title: "데몬 업데이트",
-        hint: "데몬을 최신 버전으로 업데이트하고 다시 시작하세요.",
-        confirm: "업데이트",
-        confirmTitle: "{{name}} 업데이트",
-        confirmMessage:
-          "그러면 데몬이 최신 버전으로 업데이트되고 다시 시작됩니다. 실행 중인 에이전트가 잠시 중단됩니다.",
-        phaseStarting: "업데이트 준비 중...",
-        phaseDownloading: "패키지 다운로드 중...",
-        phaseInstalling: "설치 중...",
-        phaseComplete: "업데이트 완료, 다시 시작 중...",
-        unavailableTitle: "호스트를 사용할 수 없습니다",
-        unavailableMessage:
-          "이 호스트는 연결되어 있지 않습니다. 업데이트하기 전에 온라인 상태가 될 때까지 기다리십시오.",
-        offlineTitle: "호스트 오프라인",
-        offlineMessage:
-          "이 호스트는 오프라인 상태입니다. 업데이트하기 전에 다시 온라인 상태가 될 때까지 기다리십시오.",
-        requestFailedTitle: "업데이트 실패",
-        requestFailedMessage: "데몬 업데이트 실패: {{error}}",
-        dialogFailedMessage: "업데이트 확인 대화 상자를 열 수 없습니다.",
-      },
       dangerZone: "위험 구역",
       remove: {
         title: "호스트 제거",

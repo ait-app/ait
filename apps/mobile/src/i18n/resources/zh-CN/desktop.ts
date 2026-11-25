@@ -31,9 +31,6 @@ export const desktop = {
       stopFailed: "无法停止守护进程",
       pauseAttached: "暂停自动管理守护进程？已连接的守护进程将继续运行。",
       pause: "暂停管理",
-      workerUpdated: "工作进程已更新至 {{version}}",
-      supervisorRefresh:
-        "运行中的监督进程仍使用原有代码。需要由启动它的程序将其停止并重新启动，才能更新监督进程。",
     },
     title: "守护进程",
     status: {

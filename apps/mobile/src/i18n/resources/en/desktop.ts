@@ -32,9 +32,6 @@ export const desktop = {
       stopFailed: "Unable to stop daemon",
       pauseAttached: "Pause automatic daemon management? The attached daemon will keep running.",
       pause: "Pause management",
-      workerUpdated: "Worker updated to {{version}}",
-      supervisorRefresh:
-        "The running supervisor retains its original code. Its launcher must stop and start it to refresh the supervisor.",
     },
     status: {
       title: "Status",

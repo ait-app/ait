@@ -603,30 +603,6 @@ export const settings = {
         dialogFailedMessage:
           "Impossible d'ouvrir la boîte de dialogue de confirmation de redémarrage.",
       },
-      update: {
-        desktopManagedHint:
-          "Ce daemon est géré par Ait Desktop. Mettez à jour Ait Desktop sur l’hôte.",
-        title: "Mettre à jour le démon",
-        hint: "Met à jour le démon vers la dernière version et le redémarre",
-        confirm: "Mettre à jour",
-        confirmTitle: "Mettre à jour {{name}}",
-        confirmMessage:
-          "Cela mettra à jour le démon vers la dernière version et le redémarrera. Les agents en cours d'exécution seront brièvement interrompus.",
-        phaseStarting: "Préparation de la mise à jour...",
-        phaseDownloading: "Téléchargement des paquets...",
-        phaseInstalling: "Installation...",
-        phaseComplete: "Mise à jour terminée, redémarrage...",
-        unavailableTitle: "Hôte indisponible",
-        unavailableMessage:
-          "Cet hôte n'est pas connecté. Attendez qu'il soit en ligne avant de mettre à jour.",
-        offlineTitle: "Hôte hors ligne",
-        offlineMessage:
-          "Cet hôte est hors ligne. Attendez qu'il soit de nouveau en ligne avant de mettre à jour.",
-        requestFailedTitle: "La mise à jour a échoué",
-        requestFailedMessage: "Échec de la mise à jour du démon : {{error}}",
-        dialogFailedMessage:
-          "Impossible d'ouvrir la boîte de dialogue de confirmation de mise à jour.",
-      },
       dangerZone: "Zone dangereuse",
       remove: {
         title: "Supprimer l'hôte",

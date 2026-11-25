@@ -31,9 +31,6 @@ export const desktop = {
       stopFailed: "데몬을 중지할 수 없음",
       pauseAttached: "데몬 자동 관리를 일시 중지할까요? 연결된 데몬은 계속 실행됩니다.",
       pause: "관리 일시 중지",
-      workerUpdated: "워커가 {{version}} 버전으로 업데이트됨",
-      supervisorRefresh:
-        "실행 중인 감독 프로세스는 원래 코드를 유지합니다. 업데이트하려면 이를 시작한 프로그램에서 중지한 뒤 다시 시작해야 합니다.",
     },
     title: "데몬",
     status: {

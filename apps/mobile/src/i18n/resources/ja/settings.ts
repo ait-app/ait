@@ -595,29 +595,6 @@ export const settings = {
         requestFailedTitle: "エラー",
         dialogFailedMessage: "再起動確認ダイアログを開けませんでした。",
       },
-      update: {
-        desktopManagedHint:
-          "このデーモンはAit Desktopによって管理されています。ホスト上のAit Desktopを更新してください。",
-        title: "デーモンを更新",
-        hint: "デーモンを最新バージョンに更新して再起動します",
-        confirm: "更新",
-        confirmTitle: "{{name}}を更新",
-        confirmMessage:
-          "これによりデーモンが最新バージョンに更新され、再起動されます。実行中のエージェントは一時的に中断されます。",
-        phaseStarting: "更新を準備中...",
-        phaseDownloading: "パッケージをダウンロード中...",
-        phaseInstalling: "インストール中...",
-        phaseComplete: "更新が完了しました。再起動中...",
-        unavailableTitle: "ホストが利用できません",
-        unavailableMessage:
-          "このホストは接続されていません。更新する前にオンラインになるまでお待ちください。",
-        offlineTitle: "ホストオフライン",
-        offlineMessage:
-          "このホストはオフラインです。オンラインに戻るまで待ってから更新してください。",
-        requestFailedTitle: "更新に失敗しました",
-        requestFailedMessage: "デーモンの更新に失敗しました: {{error}}",
-        dialogFailedMessage: "更新確認ダイアログを開けませんでした。",
-      },
       dangerZone: "危険ゾーン",
       remove: {
         title: "ホストを削除",

@@ -33,9 +33,6 @@ export const desktop = {
       pauseAttached:
         "Suspendre la gestion automatique du daemon ? Le daemon connecté continuera de fonctionner.",
       pause: "Suspendre la gestion",
-      workerUpdated: "Worker mis à jour vers {{version}}",
-      supervisorRefresh:
-        "Le superviseur en cours conserve son code d’origine. Le programme qui l’a lancé doit l’arrêter puis le redémarrer pour le mettre à jour.",
     },
     title: "Daemon",
     status: {

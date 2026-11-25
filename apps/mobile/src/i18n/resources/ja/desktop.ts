@@ -32,9 +32,6 @@ export const desktop = {
       stopFailed: "デーモンを停止できません",
       pauseAttached: "デーモンの自動管理を一時停止しますか？接続中のデーモンは実行を継続します。",
       pause: "管理を一時停止",
-      workerUpdated: "ワーカーを {{version}} に更新しました",
-      supervisorRefresh:
-        "実行中のスーパーバイザーは元のコードを保持しています。更新するには、起動元のプログラムで停止して再起動する必要があります。",
     },
     title: "デーモン",
     status: {

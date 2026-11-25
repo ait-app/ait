@@ -599,30 +599,6 @@ export const settings = {
         requestFailedTitle: "Error",
         dialogFailedMessage: "No se puede abrir el cuadro de diálogo de confirmación de reinicio.",
       },
-      update: {
-        desktopManagedHint:
-          "Este daemon está administrado por Ait Desktop. Actualiza Ait Desktop en el host.",
-        title: "Actualizar demonio",
-        hint: "Actualiza el demonio a la última versión y lo reinicia",
-        confirm: "Actualizar",
-        confirmTitle: "Actualizar {{name}}",
-        confirmMessage:
-          "Esto actualizará el demonio a la última versión y lo reiniciará. Los agentes en ejecución se interrumpirán brevemente.",
-        phaseStarting: "Preparando la actualización...",
-        phaseDownloading: "Descargando paquetes...",
-        phaseInstalling: "Instalando...",
-        phaseComplete: "Actualización completada, reiniciando...",
-        unavailableTitle: "Host no disponible",
-        unavailableMessage:
-          "Este host no está conectado. Espere a que se conecte antes de actualizar.",
-        offlineTitle: "Host fuera de línea",
-        offlineMessage:
-          "Este host está desconectado. Espere hasta que vuelva a estar en línea antes de actualizar.",
-        requestFailedTitle: "La actualización falló",
-        requestFailedMessage: "No se pudo actualizar el demonio: {{error}}",
-        dialogFailedMessage:
-          "No se puede abrir el cuadro de diálogo de confirmación de actualización.",
-      },
       dangerZone: "Zona de peligro",
       remove: {
         title: "Eliminar host",
