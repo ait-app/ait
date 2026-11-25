@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     BUSY_NOTICE, Disposition, Incoming, Socket, admit, chunks, connect_socket, deliver, expose,
-    json_response, media,
+    json_response, media, supervise,
 };
 use crate::service::Bots;
 use frames::{Fragments, Frame, Header};
@@ -180,15 +180,12 @@ where
         },
         cancel,
     );
-    let sending = deliver(bots, channel.id, cancel, |turn, conversation| {
+    let stop = cancel.child_token();
+    let sending = Box::pin(deliver(bots, channel.id, &stop, |turn, conversation| {
         let connection = connection.clone();
         async move { connection.reply(turn, conversation).await }
-    });
-    tokio::select! {
-        () = cancel.cancelled() => Ok(()),
-        result = receiving => result,
-        result = sending => result,
-    }
+    }));
+    supervise(cancel, &stop, receiving, sending).await
 }
 
 struct StreamOptions<'a> {
@@ -265,17 +262,29 @@ async fn receive(
 }
 
 fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Incoming>, ErrorCode> {
-    let (ChannelConfig::Feishu { .. } | ChannelConfig::Lark { .. }) = &channel.config else {
+    let (ChannelConfig::Feishu { app_id, .. } | ChannelConfig::Lark { app_id, .. }) =
+        &channel.config
+    else {
         return Err(ErrorCode::InvalidMessage);
     };
     if event["header"]["event_type"] != "im.message.receive_v1" {
         return Ok(None);
     }
     let sender = &event["event"]["sender"];
-    let Some(sender_id) = sender["sender_id"]["open_id"].as_str() else {
+    let Some(sender_id) = ["open_id", "app_id", "user_id"]
+        .into_iter()
+        .find_map(|key| {
+            sender["sender_id"][key]
+                .as_str()
+                .filter(|id| !id.is_empty())
+        })
+    else {
         return Ok(None);
     };
-    if !matches!(sender["sender_type"].as_str(), Some("user" | "bot")) || sender_id == bot_id {
+    if !matches!(sender["sender_type"].as_str(), Some("user" | "bot" | "app"))
+        || sender_id == bot_id
+        || sender["sender_id"]["app_id"].as_str() == Some(app_id.as_str())
+    {
         return Ok(None);
     }
     let message = &event["event"]["message"];

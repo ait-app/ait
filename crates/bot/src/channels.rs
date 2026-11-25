@@ -26,6 +26,8 @@ const BUSY_NOTICE: &str =
     "This conversation is busy with earlier messages; please resend this one later.";
 /// Longest wait between admission attempts while the Bot's global backlog is full.
 const MAX_BACKLOG_RETRY: Duration = Duration::from_secs(30);
+/// Give an in-flight platform send this long to finish after admission stops.
+const DELIVERY_DRAIN: Duration = Duration::from_secs(10);
 
 /// What a receiver does with one inbound message after asking the Bot to admit it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -235,6 +237,9 @@ where
     Fut: Future<Output = Result<(), ErrorCode>>,
 {
     loop {
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
         let Some((turn, conversation)) = bots.delivery_next(channel).await? else {
             tokio::select! {
                 () = cancel.cancelled() => return Ok(()),
@@ -243,9 +248,21 @@ where
             continue;
         };
         let id = turn.id;
+        if cancel.is_cancelled() {
+            // The receipt was claimed, but no platform request has started.
+            bots.delivery(id, DeliveryStatus::Pending).await?;
+            return Ok(());
+        }
+        let sending = send(turn, conversation);
+        tokio::pin!(sending);
         let outcome = tokio::select! {
-            () = cancel.cancelled() => Err(ErrorCode::BotIo),
-            result = send(turn, conversation) => result,
+            biased;
+            result = &mut sending => result,
+            () = cancel.cancelled() => {
+                tokio::time::timeout(DELIVERY_DRAIN, &mut sending)
+                    .await
+                    .unwrap_or(Err(ErrorCode::BotIo))
+            },
         };
         bots.delivery(
             id,

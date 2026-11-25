@@ -236,3 +236,4 @@ node 分享允许更广的节点操作，分享和账号授权保留给所有者
 [连接规格](connection.md#主机资源监控)与 [ADR-247](../decisions/daemon/adr-247-host-resource-monitor.md)。
 
 Bot 的所有入口共用原生执行上下文，外部会话独立配置接收方式；消息来源与回复路由保留在轮次及工单上。详见 [Bot 规格](bot.md)和 [ADR-306](../decisions/bot/adr-306-shared-bot-context-and-chat-reception.md)。
+启动时将结果不明的执行留在旧 generation，以新原生上下文继续未执行的输入；关闭时为正在发送的回执提供有限排空窗口，见 [ADR-307](../decisions/bot/adr-307-bot-restart-recovery-and-delivery-drain.md)。

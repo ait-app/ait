@@ -212,7 +212,7 @@ fn catalog_crud_requires_exclusive_ownership_and_retains_deleted_history() {
 }
 
 #[test]
-fn interrupted_turns_block_replay_until_explicit_reset_and_history_is_paginated() {
+fn interrupted_turns_remain_in_paginated_history_while_new_input_uses_a_new_generation() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
     state
@@ -239,12 +239,6 @@ fn interrupted_turns_block_replay_until_explicit_reset_and_history_is_paginated(
     let mut restarted = fixture.state();
     assert_eq!(restarted.turn(turn).unwrap().status, TurnStatus::Uncertain);
     assert!(restarted.ready().unwrap().is_empty());
-    restarted
-        .execute(
-            "bot.context.reset.request",
-            json!({"workspaceId":WORKSPACE}),
-        )
-        .unwrap();
     restarted
         .execute(
             "bot.message.send.request",

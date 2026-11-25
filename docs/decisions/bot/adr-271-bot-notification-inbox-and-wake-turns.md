@@ -36,6 +36,7 @@ paths:
   [ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 第 3 节的保留标签与 `botScope`、[ADR-227](adr-227-bot-multi-message-output.md) 的轮次记录。
 
 后续修订：[ADR-306](adr-306-shared-bot-context-and-chat-reception.md)。
+后续修订：[ADR-307](adr-307-bot-restart-recovery-and-delivery-drain.md) 使启动后已换代的来源仍能接收唤醒，并在关闭时有限排空回执。
 
 ## 背景
 

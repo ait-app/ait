@@ -42,8 +42,11 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   单个 Conversation 积压时确认并丢弃该条
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)）。
 - daemon 重启时，`sending`、`running`、`needs_approval` 轮次改为 `uncertain`，正在发送的投递也改为 `uncertain`；
-  执行结果无法确认时同样记为 `uncertain`。`uncertain` 阻止同一 Bot 的后续执行，需显式重置共享上下文，不自动重做或重发
-  （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、[Bot 手册](../operations/bots.md)）。
+  启动时为当前 generation 有执行不确定记录的 Bot 换用新共享原生上下文，保留旧记录与去重，不重做不确定输入。
+  未执行的排队输入按原顺序继续；排队记录的 generation 在启动时与来源对齐，允许恢复中途再次崩溃。
+  暂停的 Bot 仍不执行。运行期间新出现的执行不确定性仍阻塞同一 Bot，需显式重置或重启。
+  单纯投递不确定不阻塞执行，也不触发换代或重发
+  （[ADR-307](../decisions/bot/adr-307-bot-restart-recovery-and-delivery-drain.md)、[Bot 手册](../operations/bots.md)）。
 - 每轮正常结束后释放（`Release`）原生会话但保留其身份，下一轮重新打开；reset 与退役改为关闭（`Close`）并归档会话
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
@@ -105,8 +108,10 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   定时任务 worker 启动时把 15 分钟内结束的运行再报告一次，`settled` 因此是“至少一次”
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
 - 关闭：`Bots::stop` 只停止 Channel 与执行中的轮次，worker 继续把通知写入日志（不唤醒）直到 `Bots::shutdown`；`shutdown` 先等待已提交的
-  `Bots::offer`。`Api::wait_closed` 先关闭定时任务再关闭 Bot，关闭时结算的运行结果因此在重启后唤醒
-  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
+  `Bots::offer`。正在进行的 Channel 回执发送最多继续 10 秒，不领取后续回执；成功确认记为已投递，失败或超时记为投递不确定。
+  worker 在任务结束前继续接收投递落盘命令。`Api::wait_closed` 先关闭定时任务再关闭 Bot，关闭时结算的运行结果因此在重启后唤醒
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节、
+  [ADR-307](../decisions/bot/adr-307-bot-restart-recovery-and-delivery-drain.md)）。
 - `bot_overview` 的 `notifications` 是调用会话尚未在完成轮次中看到的通知（`bot.notifications.list` 的 `unseenBy`），
   至多 20 条、`summary` 至多 512 字节，计入 24 KiB 预算；对话已不属于 Bot 时为 `null`
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。

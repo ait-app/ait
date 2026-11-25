@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bots accept compatible application-bot sender identities from Feishu and Lark. After a restart,
+  uncertain executions keep their records while fresh context resumes inputs that never ran.
+  In-flight channel replies have up to ten seconds to finish during shutdown.
+
 - A Workspace Bot now shares its context across chats and channels. Each Feishu group can
   independently listen to every message or respond only to mentions, and direct chats can be
   paused separately. Bots can read messages from other bots, rich text and card bodies, stay

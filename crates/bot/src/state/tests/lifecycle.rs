@@ -83,7 +83,7 @@ fn channel_admission_retries_a_full_bot_backlog_but_refuses_a_full_conversation(
 }
 
 #[test]
-fn reset_of_an_uncertain_conversation_cancels_its_blocked_queue() {
+fn manual_reset_of_an_uncertain_conversation_cancels_its_blocked_queue() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
     state
@@ -92,26 +92,26 @@ fn reset_of_an_uncertain_conversation_cancels_its_blocked_queue() {
     let interrupted = admit(&mut state, WORKSPACE, "interrupted");
     assert_eq!(state.ready().unwrap().len(), 1);
     let queued = admit(&mut state, WORKSPACE, "queued");
-    let mut restarted = fixture.state();
+    state
+        .progress(interrupted.id, TurnStatus::Uncertain, None, None)
+        .unwrap();
+    state.finished(interrupted.conversation_id);
     assert_eq!(
-        restarted.turn(interrupted.id).unwrap().status,
+        state.turn(interrupted.id).unwrap().status,
         TurnStatus::Uncertain
     );
-    assert!(restarted.ready().unwrap().is_empty());
+    assert!(state.ready().unwrap().is_empty());
 
-    restarted
+    state
         .execute(
             "bot.context.reset.request",
             json!({"workspaceId":WORKSPACE}),
         )
         .unwrap();
 
-    assert_eq!(
-        restarted.turn(queued.id).unwrap().status,
-        TurnStatus::Cancelled
-    );
-    let next = admit(&mut restarted, WORKSPACE, "after-reset");
-    let ready = restarted.ready().unwrap();
+    assert_eq!(state.turn(queued.id).unwrap().status, TurnStatus::Cancelled);
+    let next = admit(&mut state, WORKSPACE, "after-reset");
+    let ready = state.ready().unwrap();
     assert_eq!(ready.len(), 1);
     assert_eq!(ready[0].turn.id, next.id);
     assert_eq!(ready[0].turn.generation, 1);

@@ -637,8 +637,7 @@ fn entry(sequence: u64, wake: WakeStatus) -> LoggedNotification {
     }
 }
 
-/// Put `conversation` in the state a daemon crash leaves it in: its current generation holds an
-/// uncertain turn, so nothing runs there until the user resets it.
+/// Leave a current runtime outcome uncertain; it blocks until a reset or restart.
 fn make_uncertain(state: &mut State, conversation: ConversationId) {
     state
         .execute(
@@ -770,7 +769,7 @@ fn a_wake_turn_the_user_cancelled_is_not_retried() {
 }
 
 #[test]
-fn a_wake_turn_a_crash_interrupted_is_retried_in_the_owner_conversation() {
+fn a_wake_turn_a_crash_interrupted_recovers_its_source_in_a_fresh_context() {
     let fixture = Fixture::new();
     let mut state = active(&fixture);
     let channel = telegram(&mut state);
@@ -785,9 +784,12 @@ fn a_wake_turn_a_crash_interrupted_is_retried_in_the_owner_conversation() {
 
     let turns = wake_turns(&fixture);
     assert_eq!(turns.len(), 2);
-    let owner = owner(&mut restarted);
-    assert_eq!(turns[1].conversation_id, owner);
-    assert_eq!(wake_state(&restarted, "a")["conversationId"], json!(owner));
+    assert_eq!(turns[1].conversation_id, origin);
+    assert_eq!(wake_state(&restarted, "a")["conversationId"], json!(origin));
+    assert_eq!(
+        restarted.ready().unwrap().pop().unwrap().turn.id,
+        turns[1].id
+    );
 }
 
 #[test]
@@ -995,7 +997,7 @@ fn an_observation_by_a_turn_a_restart_cut_short_never_suppresses_the_report() {
     let mut restarted = fixture.state();
     restarted.wake(later(20));
 
-    // The interrupted conversation is uncertain, so the report falls back to the owner.
+    // Startup renewed the source, so the unseen report can wake it again.
     assert_eq!(wake_state(&restarted, "seen")["state"], "woke");
     assert_eq!(wake_turns(&fixture).len(), 1);
 }

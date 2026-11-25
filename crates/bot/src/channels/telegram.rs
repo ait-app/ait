@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response, media,
+    supervise,
 };
 use crate::service::Bots;
 
@@ -63,7 +64,8 @@ async fn run_at(
     };
     let image_directory = bots.image_directory();
     let receiving = receiver.receive(cancel);
-    let sending = deliver(bots, channel.id, cancel, |turn, conversation| {
+    let stop = cancel.child_token();
+    let sending = Box::pin(deliver(bots, channel.id, &stop, |turn, conversation| {
         let image_directory = image_directory.clone();
         async move {
             send_reply(
@@ -76,12 +78,8 @@ async fn run_at(
             )
             .await
         }
-    });
-    tokio::select! {
-        () = cancel.cancelled() => Ok(()),
-        result = receiving => result,
-        result = sending => result,
-    }
+    }));
+    supervise(cancel, &stop, receiving, sending).await
 }
 
 /// The status of a connected account, warning when group privacy hides mentions the channel accepts.

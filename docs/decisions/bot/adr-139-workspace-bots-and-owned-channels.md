@@ -19,6 +19,7 @@ paths:
   见 [Bot 规格](../../architecture/bot.md#channel-与凭据)。
 
 后续修订：[ADR-306](adr-306-shared-bot-context-and-chat-reception.md)。
+后续修订：[ADR-307](adr-307-bot-restart-recovery-and-delivery-drain.md) 调整重启恢复与关闭投递。
 
 ## 背景
 

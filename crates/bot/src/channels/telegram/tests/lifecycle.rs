@@ -229,11 +229,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
         }
         cancel.cancel();
     };
-    let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
-        tokio::join!(driver, verify)
-    })
-    .await
-    .unwrap();
+    let (result, ()) = tokio::join!(driver, verify);
     result.unwrap();
     bots.shutdown().await.unwrap();
     server.abort();

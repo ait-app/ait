@@ -5,6 +5,7 @@ mod execution;
 mod follow;
 mod notifications;
 mod recall;
+mod recovery;
 mod shared;
 mod tickets;
 mod webhook;
@@ -88,6 +89,9 @@ pub(crate) struct State {
     next_bot_sequence: BTreeMap<BotId, u64>,
 }
 
+const INTERRUPTED_EXECUTION: &str =
+    "Daemon restarted during execution; outcome unknown; this input will not be retried.";
+
 impl State {
     pub(crate) fn load(
         store: Arc<dyn Store>,
@@ -158,6 +162,7 @@ impl State {
                 return Err(ErrorCode::BotIo);
             }
         }
+        state.recover_contexts()?;
         state.offer_reports(loaded.reports, now)?;
         Ok(state)
     }
@@ -177,54 +182,64 @@ impl State {
                 return Err(ErrorCode::BotIo);
             }
             let store = self.store.clone();
-            store.scan_turns(conversation.id, &mut |mut turn| {
-                let interrupted = matches!(
-                    turn.status,
-                    TurnStatus::Sending | TurnStatus::Running | TurnStatus::NeedsApproval
-                );
-                let original_delivery = turn.delivery;
-                if turn.conversation_id != conversation.id
-                    || turn.sequence >= conversation.next_sequence
-                {
-                    return Err(model::bot::StorageError);
-                }
-                if interrupted {
-                    turn.status = TurnStatus::Uncertain;
-                    turn.error = Some("Daemon restarted during native execution; reset the conversation to continue".into());
-                }
-                if turn.delivery == DeliveryStatus::Sending {
-                    turn.delivery = DeliveryStatus::Uncertain;
-                }
-                if self.receipts.contains_key(&turn.id)
-                    || self.order.contains_key(&(conversation.id, turn.sequence))
-                    || self
-                        .inputs
-                        .contains_key(&(conversation.channel_id, turn.message_id.clone()))
-                {
-                    return Err(model::bot::StorageError);
-                }
-                if let Some(sequence) = turn.bot_sequence {
-                    let next = self.next_bot_sequence.entry(conversation.bot_id).or_insert(1);
-                    *next = (*next).max(sequence.saturating_add(1));
-                }
-                if matches!(self.channel(conversation.bot_id, conversation.channel_id).map(|c| &c.config), Ok(ChannelConfig::Feishu { .. } | ChannelConfig::Lark { .. }))
-                    && let Some(message) = &turn.reply_to
-                {
-                    self.inputs.entry((conversation.channel_id, message.clone())).or_insert(turn.id);
-                }
-                self.index_turn(&turn).map_err(|_| model::bot::StorageError)?;
-                self
-                    .inputs
-                    .insert((conversation.channel_id, turn.message_id.clone()), turn.id);
-                self.load_wake(&conversation, &turn, interrupted, now, &mut stored_wakes);
-                if turn.status == TurnStatus::Completed {
-                    self.saw_notifications(&turn);
-                }
-                if interrupted || original_delivery == DeliveryStatus::Sending {
-                    rewritten.push(turn);
-                }
-                Ok(())
-            }).map_err(|_| ErrorCode::BotIo)?;
+            store
+                .scan_turns(conversation.id, &mut |mut turn| {
+                    let interrupted = matches!(
+                        turn.status,
+                        TurnStatus::Sending | TurnStatus::Running | TurnStatus::NeedsApproval
+                    );
+                    let original_delivery = turn.delivery;
+                    if turn.conversation_id != conversation.id
+                        || turn.sequence >= conversation.next_sequence
+                    {
+                        return Err(model::bot::StorageError);
+                    }
+                    if interrupted {
+                        turn.status = TurnStatus::Uncertain;
+                        turn.error = Some(INTERRUPTED_EXECUTION.into());
+                    }
+                    if turn.delivery == DeliveryStatus::Sending {
+                        turn.delivery = DeliveryStatus::Uncertain;
+                    }
+                    if self.receipts.contains_key(&turn.id)
+                        || self.order.contains_key(&(conversation.id, turn.sequence))
+                        || self
+                            .inputs
+                            .contains_key(&(conversation.channel_id, turn.message_id.clone()))
+                    {
+                        return Err(model::bot::StorageError);
+                    }
+                    if let Some(sequence) = turn.bot_sequence {
+                        let next = self
+                            .next_bot_sequence
+                            .entry(conversation.bot_id)
+                            .or_insert(1);
+                        *next = (*next).max(sequence.saturating_add(1));
+                    }
+                    if matches!(
+                        self.channel(conversation.bot_id, conversation.channel_id)
+                            .map(|c| &c.config),
+                        Ok(ChannelConfig::Feishu { .. } | ChannelConfig::Lark { .. })
+                    ) && let Some(message) = &turn.reply_to
+                    {
+                        self.inputs
+                            .entry((conversation.channel_id, message.clone()))
+                            .or_insert(turn.id);
+                    }
+                    self.index_turn(&turn)
+                        .map_err(|_| model::bot::StorageError)?;
+                    self.inputs
+                        .insert((conversation.channel_id, turn.message_id.clone()), turn.id);
+                    self.load_wake(&conversation, &turn, interrupted, now, &mut stored_wakes);
+                    if turn.status == TurnStatus::Completed {
+                        self.saw_notifications(&turn);
+                    }
+                    if interrupted || original_delivery == DeliveryStatus::Sending {
+                        rewritten.push(turn);
+                    }
+                    Ok(())
+                })
+                .map_err(|_| ErrorCode::BotIo)?;
         }
         // The inbox goes first: a crash before the rewrites leaves an interrupted wake turn
         // executing on disk with its notifications already pending, and the next start finds

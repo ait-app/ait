@@ -3,22 +3,26 @@ use domain::{BotId, ChannelId};
 mod lifecycle;
 mod transport;
 
+fn configured_channel(kind: &str) -> Channel {
+    Channel {
+        id: ChannelId::generate(),
+        bot_id: BotId::generate(),
+        enabled: true,
+        cursor: None,
+        sync_token: None,
+        deleted: false,
+        config: serde_json::from_value(json!({
+            "kind":kind, "appId":"app-1", "secretRef":"env:AIT_SERVER_CREDENTIAL_TEST",
+            "allowedSenders":["ou_alice"], "allowGroups":true,
+        }))
+        .unwrap(),
+    }
+}
+
 #[test]
 fn feishu_and_lark_scope_user_group_and_thread_before_admission() {
     for kind in ["feishu", "lark"] {
-        let mut channel = Channel {
-            id: ChannelId::generate(),
-            bot_id: BotId::generate(),
-            enabled: true,
-            cursor: None,
-            sync_token: None,
-            deleted: false,
-            config: serde_json::from_value(json!({
-                "kind":kind, "appId":"app-1", "secretRef":"env:AIT_SERVER_CREDENTIAL_TEST",
-                "allowedSenders":["ou_alice"], "allowGroups":true,
-            }))
-            .unwrap(),
-        };
+        let mut channel = configured_channel(kind);
         let mut event = json!({"header":{"event_type":"im.message.receive_v1","event_id":"event-1"},"event":{"sender":{"sender_type":"user","sender_id":{"open_id":"ou_alice"}},"message":{"chat_type":"group","chat_id":"oc_group","message_type":"text","content":"{\"text\":\"hello\"}","thread_id":"thread-1","mentions":[{"id":{"open_id":"ou_bot"}}]}}});
         event["event"]["message"]["message_id"] = json!("om_original");
         let routed = incoming(&channel, &event, "ou_bot").unwrap().unwrap();
@@ -54,7 +58,7 @@ fn feishu_and_lark_scope_user_group_and_thread_before_admission() {
         );
         event["event"]["sender"]["sender_id"]["open_id"] = json!("ou_alice");
         event["event"]["sender"]["sender_type"] = json!("app");
-        assert!(incoming(&channel, &event, "ou_bot").unwrap().is_none());
+        assert!(incoming(&channel, &event, "ou_bot").unwrap().is_some());
         event["event"]["sender"]["sender_type"] = json!("user");
         let (ChannelConfig::Feishu { allow_groups, .. } | ChannelConfig::Lark { allow_groups, .. }) =
             &mut channel.config
@@ -66,6 +70,65 @@ fn feishu_and_lark_scope_user_group_and_thread_before_admission() {
         assert!(incoming(&channel, &event, "ou_bot").unwrap().is_some());
         event["event"]["message"]["chat_type"] = json!("p2p");
         assert!(incoming(&channel, &event, "ou_bot").unwrap().is_some());
+    }
+}
+
+#[test]
+fn user_and_bot_sender_ids_fall_back_without_accepting_our_own_messages() {
+    for kind in ["feishu", "lark"] {
+        let channel = configured_channel(kind);
+        for (sender_type, ids, expected) in [
+            (
+                "user",
+                json!({"open_id":"ou_alice","user_id":"alice"}),
+                Some("ou_alice"),
+            ),
+            ("bot", json!({"open_id":"ou_alert"}), Some("ou_alert")),
+            ("app", json!({"app_id":"cli_alert"}), Some("cli_alert")),
+            ("bot", json!({"app_id":"cli_alert"}), Some("cli_alert")),
+            ("user", json!({"user_id":"alice"}), Some("alice")),
+            (
+                "app",
+                json!({"open_id":"","app_id":"cli_alert"}),
+                Some("cli_alert"),
+            ),
+            (
+                "app",
+                json!({"open_id":"ou_alert","app_id":"cli_alert"}),
+                Some("ou_alert"),
+            ),
+            (
+                "app",
+                json!({"open_id":"ou_bot","app_id":"cli_alert"}),
+                None,
+            ),
+            ("bot", json!({"open_id":"ou_other","app_id":"app-1"}), None),
+            ("app", json!({"app_id":"app-1"}), None),
+            ("user", json!({"open_id":"ou_bot"}), None),
+            ("bot", json!({}), None),
+            ("app", json!({"app_id":""}), None),
+            ("system", json!({"open_id":"ou_alice"}), None),
+        ] {
+            let event = json!({
+                "header":{"event_type":"im.message.receive_v1","app_id":"app-1"},
+                "event":{
+                    "sender":{"sender_type":sender_type,"sender_id":ids},
+                    "message":{"chat_type":"group","chat_id":"oc_alerts",
+                        "message_id":"om_alert","message_type":"text",
+                        "content":"{\"text\":\"service unavailable\"}"}
+                }
+            });
+            let incoming = incoming(&channel, &event, "ou_bot").unwrap();
+            assert_eq!(
+                incoming.as_ref().map(|input| input.sender.as_str()),
+                expected
+            );
+            if let Some(input) = incoming {
+                assert_eq!(input.sender_type.as_deref(), Some(sender_type));
+                assert_eq!(input.peer, "oc_alerts");
+                assert!(input.passive);
+            }
+        }
     }
 }
 

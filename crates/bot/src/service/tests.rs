@@ -9,7 +9,7 @@ use crate::service::{Bots, Notified};
 use crate::test_support::{Fixture, OTHER_WORKSPACE, WORKSPACE, setup};
 
 #[tokio::test]
-async fn provider_failures_are_durable_and_ambiguous_statuses_require_explicit_recovery() {
+async fn provider_failures_stay_durable_while_restart_recovers_later_inputs() {
     for (status, expected) in [
         (json!({"status":"error"}), "failed"),
         (json!({"status":"unknown"}), "uncertain"),
@@ -43,6 +43,29 @@ async fn provider_failures_are_durable_and_ambiguous_statuses_require_explicit_r
             .await
             .unwrap();
         assert_eq!(persisted["turn"]["status"], expected);
+        *fixture.native.status.lock().unwrap() = None;
+        let next = recovered
+            .execute(
+                "bot.message.send.request",
+                json!({"workspaceId":WORKSPACE,"conversationId":conversation,
+                    "messageId":"after-restart","text":"new input"}),
+            )
+            .await
+            .unwrap()["turn"]["id"]
+            .clone();
+        wait(&recovered, WORKSPACE, &next, "completed").await;
+        let original_sends = fixture
+            .native
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, action)| {
+                matches!(action, provider::service::bot_execution::Action::Send { message_id, .. }
+                if Some(message_id.as_str()) == turn.as_str())
+            })
+            .count();
+        assert_eq!(original_sends, 1);
         recovered.shutdown().await.unwrap();
     }
 }

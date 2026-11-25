@@ -989,12 +989,14 @@ async fn serve(
             },
             () = bots.0.closing.cancelled(), if stopping && !closing => {
                 closing = true;
+                tasks.close();
                 None
             },
+            () = tasks.wait(), if closing && state.running.is_empty() => None,
             command = receiver.recv() => command,
             _ = interval.tick() => None,
         };
-        if closing && state.running.is_empty() {
+        if closing && state.running.is_empty() && tasks.is_empty() {
             break;
         }
         let host_credentials = credentials.clone();
@@ -1054,12 +1056,7 @@ async fn serve(
         for channel in std::mem::take(&mut state.released_webhooks) {
             tasks.spawn(crate::channels::webhook::release(bots.clone(), channel));
         }
-        for (owner, action) in std::mem::take(&mut state.session_actions) {
-            let executor = bots.0.executor.clone();
-            tasks.spawn(async move {
-                let _ = executor.execute(owner, action).await;
-            });
-        }
+        run_session_actions(&mut state, &bots.0.executor, &tasks);
         if !stopping {
             refresh_channels(&bots, desired, &credentials, &tasks, &mut channels);
         }
@@ -1071,6 +1068,15 @@ async fn serve(
     }
     tasks.close();
     tasks.wait().await;
+}
+
+fn run_session_actions(state: &mut State, executor: &Arc<dyn Executor>, tasks: &TaskTracker) {
+    for (owner, action) in std::mem::take(&mut state.session_actions) {
+        let executor = executor.clone();
+        tasks.spawn(async move {
+            let _ = executor.execute(owner, action).await;
+        });
+    }
 }
 
 fn apply(
