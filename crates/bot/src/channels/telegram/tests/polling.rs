@@ -107,7 +107,11 @@ async fn refused_update_is_skipped_without_blocking_later_updates() {
                 } else {
                     assert_eq!(body["offset"], 12);
                     let conversations = store.conversations().unwrap();
-                    let turns = store.turns(conversations[0].id).unwrap();
+                    let source = conversations
+                        .iter()
+                        .find(|conversation| conversation.channel_id == id)
+                        .unwrap();
+                    let turns = store.turns(source.id).unwrap();
                     assert_eq!(turns.len(), 1);
                     assert_eq!(turns[0].message_id, "11");
                     cancel.cancel();

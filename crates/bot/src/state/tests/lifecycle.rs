@@ -239,13 +239,12 @@ fn receipt_write_failure_freezes_private_admission_and_cursor_updates() {
             .cursor
             .is_none()
     );
-    assert!(
-        fixture
-            .store
-            .turns(fixture.store.conversations().unwrap()[0].id)
-            .unwrap()
-            .is_empty()
-    );
+    let conversations = fixture.store.conversations().unwrap();
+    let source = conversations
+        .iter()
+        .find(|conversation| conversation.channel_id == channel)
+        .unwrap();
+    assert!(fixture.store.turns(source.id).unwrap().is_empty());
 }
 
 #[test]

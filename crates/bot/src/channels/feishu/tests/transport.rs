@@ -83,7 +83,13 @@ async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
     let turn_id = serde_json::from_value(input["turn"]["id"].clone()).unwrap();
     let mut turn = state.turn(turn_id).unwrap();
     turn.reply = Some("reply".into());
-    let conversation = fixture.store.conversations().unwrap().remove(0);
+    let conversation = fixture
+        .store
+        .conversations()
+        .unwrap()
+        .into_iter()
+        .find(|conversation| conversation.id == turn.conversation_id)
+        .unwrap();
     let api = format!("http://{address}");
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let secret = SecretString::from("offline-secret".to_owned());
