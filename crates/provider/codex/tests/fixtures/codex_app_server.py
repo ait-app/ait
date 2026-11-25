@@ -147,6 +147,13 @@ def load_history():
     path = history_path()
     return json.loads(path.read_text()) if path.exists() else []
 
+def write_history(turns):
+    # A host shutdown can interrupt a history write after turn/start has returned.
+    path = history_path()
+    staging = path.with_suffix(f".{uuid.uuid4()}.tmp")
+    staging.write_text(json.dumps(turns))
+    staging.replace(path)
+
 def thread_metadata(identifier):
     path = root / ("native-session-" + identifier + ".json")
     defaults = {"id": identifier, "cwd": str(root), "createdAt": 1700000000,
@@ -167,7 +174,7 @@ def save_turn(turn_id, text, status):
         if text is not None:
             items.append({"type": "agentMessage", "id": turn_id + "-assistant", "text": "Echo: " + text})
         turns.append({"id": turn_id, "status": status, "startedAt": 1700000000, "items": items})
-        history_path().write_text(json.dumps(turns))
+        write_history(turns)
 
 def complete(turn_id, text):
     global pending
@@ -325,7 +332,7 @@ for line in sys.stdin:
         thread_id = source if mode == "fork-same-id" else str(uuid.uuid4())
         metadata = {**thread_metadata(source), "id": thread_id}
         (root / ("native-session-" + thread_id + ".json")).write_text(json.dumps(metadata))
-        history_path().write_text(json.dumps(turns))
+        write_history(turns)
         result = {"thread": {**metadata, "turns": turns}}
     elif method == "thread/rollback":
         if mode == "rollback-removed":
@@ -333,7 +340,7 @@ for line in sys.stdin:
             continue
         thread_id = params["threadId"]
         turns = load_history()[:-params["numTurns"]]
-        history_path().write_text(json.dumps(turns))
+        write_history(turns)
         result = {"thread": {**thread_metadata(thread_id), "turns": turns}}
     elif method == "account/read":
         result = {"account": {"type": "chatgpt", "email": os.environ.get("AIT_TEST_USAGE_ACCOUNT", "private@example.test"), "planType": "plus"}, "requiresOpenaiAuth": True}
