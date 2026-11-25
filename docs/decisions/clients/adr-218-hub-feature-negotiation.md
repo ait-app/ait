@@ -25,6 +25,7 @@ paths:
   daemon 不再建立 relay control 与下载 Relay，修订 [ADR-140](../daemon/adr-140-headless-local-api-token.md)、
   [ADR-200](../daemon/adr-200-headless-independent-transports.md)、[ADR-201](../daemon/adr-201-daemon-owned-publication.md)（前述关系于 2026-11-23 补登记）
 - 后续修订：[ADR-305](../daemon/adr-305-cross-host-mcp-peer-sessions.md) 增加可选 feature `peer`：只在中心声明时由 main serve 链路声明，不属于“必须声明”的六项，旧中心上链路照常建立。
+- 后续修订：[ADR-314](adr-314-hub-cross-dp-routing.md) 增加可选 feature `redirect`：只在中心声明时由 main access 链路声明，`welcome.f` 不含它时链路照常建立。
 
 `ait-hub-v1` 保持帧格式和版本号，新增六个由中心声明、双方协商的 feature：`lease`、`hosts`、`state`、`credit`、`download`、`bulk`。中心在 `register` 和 `hub-tickets` 响应中返回 `hub_features`，新中心始终声明全部六项。新客户端（桌面、手机、网页和 daemon）只连接新中心：`hello.f` 固定带上自己实现的全部 feature（main link 为 `lease`、`hosts`、`state`、`credit`、`download`，bulk link 只含 `credit`、`download`），resume 保持相同集合；`register` 或 `hub-tickets` 响应缺少 `hub_features` 或其中任一 feature、或 `welcome.f` 不含所有已声明的 feature 时，客户端明确报错（提示账号服务版本过低，需要更新服务），不静默降级，也不保留对旧中心的任何回退路径。
 

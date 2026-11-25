@@ -9,6 +9,7 @@ import {
   HUB_FEATURES,
   HUB_MAX_WINDOW,
   HUB_PATH,
+  HUB_REDIRECT,
   type HubHost,
   type HubInboundHeader,
   type HubLane,
@@ -23,6 +24,7 @@ import {
   type HubSessionLink,
 } from "./session.js";
 import { HubCalls, HubCallError } from "./calls.js";
+import { hubRoute, sameHubRoute, type HubRedirectTarget, type HubRoute } from "./route.js";
 import type {
   HubAccountConnection,
   HubAccountSnapshot,
@@ -39,6 +41,8 @@ import type {
 export interface HubTicket {
   centerUrl: string;
   ticket: string;
+  /** The center's `hub_features`; optional features are announced only when it lists them. */
+  features?: readonly string[];
 }
 
 /**
@@ -71,6 +75,11 @@ export interface HubLinkOptions {
   lane?: HubLane;
   /** Stop the link after this long without sessions; the next `start()` creates a new link. */
   idleMs?: number;
+  /**
+   * Connect to this Hub WebSocket URL instead of the ticket center's `/v1/hub`. Set on the links
+   * an account link opens to other DPs of its center (`redirect`).
+   */
+  hubUrl?: string;
 }
 
 interface LinkIdentity {
@@ -82,6 +91,16 @@ interface LinkIdentity {
   lostAt: number | null;
   methods: readonly string[];
   pingMs: number;
+  /** `hello.f` of this link; every resume repeats it. */
+  features: readonly string[];
+  /** `redirect` is enabled: `hosts` includes Hosts other DPs serve. */
+  redirect: boolean;
+}
+
+interface PendingOpen {
+  header: Extract<HubSessionHeader, { t: "open" }>;
+  payload?: Uint8Array;
+  bytes: number;
 }
 
 const RECONNECT_BASE_MS = 300;
@@ -104,6 +123,9 @@ const HEARTBEAT_INTERVAL_MS = 20_000;
 const PONG_TIMEOUT_MS = 15_000;
 const SHARE_RETRY_MS = 3000;
 const SHARE_SUBSCRIBE = "share.subscribe";
+const MAX_SESSIONS = 16;
+/** A link to another DP closes after this long without sessions. */
+const REMOTE_IDLE_MS = 60_000;
 
 const consoleLogger: HubLinkLogger = {
   info: (fields, message) => console.info(message, formatDiagnosticFields(fields)),
@@ -136,6 +158,8 @@ function hubHost(value: unknown): value is HubHost {
 }
 
 function normalizeHost(host: HubHost): HubHost {
+  // A Host another DP serves keeps where it is served when that is a valid location.
+  const route = hubRoute(host);
   return {
     host_id: host.host_id,
     node_id: host.node_id ?? null,
@@ -148,6 +172,13 @@ function normalizeHost(host: HubHost): HubHost {
     state: host.state,
     offline_since: host.offline_since ?? null,
     f: host.f ?? [],
+    ...(route
+      ? {
+          ...(typeof host.dp === "string" ? { dp: host.dp } : {}),
+          hub_url: route.hubUrl,
+          center: route.center,
+        }
+      : {}),
   };
 }
 
@@ -236,8 +267,12 @@ export class HubLink implements HubAccountConnection {
   private recoveryStartedAt: number | null = null;
   private welcomed = false;
   private link: LinkIdentity | null = null;
+  /** The home DP's endpoints survive a reset of its logical link. */
+  private homeRoute: HubRoute | null = null;
   private sent = 0;
   private unacked: { seq: number; frame: Uint8Array }[] = [];
+  private readonly pendingOpens = new Map<string, PendingOpen>();
+  /** Includes the space reserved for opens waiting for the first welcome. */
   private unackedBytes = 0;
   private recv = 0;
   private acked = 0;
@@ -267,6 +302,10 @@ export class HubLink implements HubAccountConnection {
   private readonly listeners = new Set<() => void>();
   private readonly events = new Set<(event: HubAccountEvent) => void>();
   private readonly calls = new HubCalls();
+  /** The account link that opened this link to another DP; null for the account link itself. */
+  private readonly home: HubLink | null;
+  /** Links to the other DPs that serve this account's Hosts, by their center (`redirect`). */
+  private readonly remotes = new Map<string, HubLink>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -277,18 +316,29 @@ export class HubLink implements HubAccountConnection {
   private readonly logger: HubLinkLogger;
   private readonly sessionLink: HubSessionLink = {
     recoverLiveness: () => this.recoverLiveness(),
-    send: (header, payload) => this.sendSequenced(header, payload),
+    send: (header, payload) => this.sendSessionFrame(header, payload),
     credit: (s, c) => {
       if (this.welcomed) this.write(this.generation, encodeHubFrame({ t: "credit", s, c }));
     },
     release: (id) => {
       this.sessions.delete(id);
+      const pending = this.pendingOpens.get(id);
+      if (pending) {
+        this.unackedBytes -= pending.bytes;
+        this.pendingOpens.delete(id);
+      }
       this.armIdle();
     },
+    redirect: (session, target) => (this.home ?? this).redirectSession(session, target, this),
   };
 
-  constructor(private readonly options: HubLinkOptions) {
+  /** `home` is internal: the account link that opens this one to another DP. */
+  constructor(
+    private readonly options: HubLinkOptions,
+    home?: HubLink,
+  ) {
     this.logger = options.logger ?? consoleLogger;
+    this.home = home ?? null;
   }
 
   get state(): HubLinkState {
@@ -299,9 +349,27 @@ export class HubLink implements HubAccountConnection {
     return this.options.lane === "bulk";
   }
 
-  /** `hello.f` of every connection: the same set for the whole life of a link. */
-  private get features(): readonly string[] {
+  /** Features the center must enable on this link. */
+  private get required(): readonly string[] {
     return this.bulk ? HUB_BULK_FEATURES : HUB_FEATURES;
+  }
+
+  /**
+   * `hello.f` of a new link: the required set, and `redirect` on main links when the center's
+   * `hub_features` list it. Every connection of the link repeats the set.
+   */
+  private announced(advertised: readonly string[] | undefined): readonly string[] {
+    return !this.bulk && advertised?.includes(HUB_REDIRECT)
+      ? [...this.required, HUB_REDIRECT]
+      : this.required;
+  }
+
+  /**
+   * The center enabled `redirect` on this link: `hosts` also lists Hosts other DPs serve, and
+   * sessions to them open on links to those DPs.
+   */
+  get redirects(): boolean {
+    return this.link?.redirect ?? false;
   }
 
   /** A download-only link (`lane: "bulk"`) with this link's transport; `ticket` issues bulk-lane tickets. */
@@ -462,6 +530,7 @@ export class HubLink implements HubAccountConnection {
     if (this.paused) {
       // Resume within the grace period; connect() starts a new link after it.
       this.paused = false;
+      for (const remote of this.remotes.values()) remote.start();
       void this.connect();
       return;
     }
@@ -479,12 +548,17 @@ export class HubLink implements HubAccountConnection {
   pause(): void {
     if (this.current === "stopped" || this.paused) return;
     this.paused = true;
+    for (const remote of this.remotes.values()) remote.pause();
     this.drop(this.generation, "paused");
   }
 
   /** Close the connection and end every session; the next start creates a new link. */
   stop(): void {
     if (this.current === "stopped") return;
+    // Links to other DPs belong to this one; their sessions end with it.
+    const remotes = Array.from(this.remotes.values());
+    this.remotes.clear();
+    for (const remote of remotes) remote.stop();
     if (this.welcomed) {
       // Release the peer's resources now instead of after the grace period.
       for (const session of this.sessions.values()) {
@@ -500,6 +574,7 @@ export class HubLink implements HubAccountConnection {
     this.repeatedRetry = null;
     this.retryCount = 0;
     this.paused = false;
+    this.homeRoute = null;
     this.closeSocket();
     this.clearTimer("retry");
     this.resetLink("stopped", false);
@@ -547,10 +622,16 @@ export class HubLink implements HubAccountConnection {
   }
 
   /**
-   * Prove the connection is alive, e.g. after returning to the foreground. A reconnect waiting for
-   * its backoff starts at once; an unanswered ping forces a reconnect.
+   * Probe this connection and the links to other DPs after returning to the foreground.
+   * The result describes this connection; each remote recovers independently.
    */
   verify(timeoutMs = DEFAULT_VERIFY_MS): Promise<boolean> {
+    for (const remote of this.remotes.values()) void remote.verifySocket(timeoutMs);
+    return this.verifySocket(timeoutMs);
+  }
+
+  /** An unanswered ping drops this socket. A pending reconnect skips its backoff. */
+  private verifySocket(timeoutMs = DEFAULT_VERIFY_MS): Promise<boolean> {
     if (this.current === "stopped") return Promise.resolve(false);
     if (this.verification) return this.verification;
     if (!this.welcomed || !this.socket) {
@@ -592,7 +673,7 @@ export class HubLink implements HubAccountConnection {
   /** Recover only the current link; a new link cannot preserve its sessions. */
   private async recoverLiveness(): Promise<boolean> {
     const link = this.link;
-    if (!link || (await this.verify()) || this.link !== link) return false;
+    if (!link || (await this.verifySocket()) || this.link !== link) return false;
     if (this.welcomed) return true;
     // drop() has armed the grace timer. Its expiry, stop(), or a rejection resets
     // the identity and notifies this waiter, so recovery cannot wait indefinitely.
@@ -611,7 +692,7 @@ export class HubLink implements HubAccountConnection {
     if (!this.welcomed) return;
     this.heartbeatTimer = setTimeout(() => {
       this.heartbeatTimer = null;
-      void this.verify(PONG_TIMEOUT_MS);
+      void this.verifySocket(PONG_TIMEOUT_MS);
     }, this.link?.pingMs ?? HEARTBEAT_INTERVAL_MS);
   }
 
@@ -626,7 +707,11 @@ export class HubLink implements HubAccountConnection {
     if (this.current === "stopped") throw new Error("Hub link is stopped.");
     if (this.bulk && options.kind !== "download")
       throw new HubCallError("unsupported", "Bulk links carry only downloads.");
-    if (this.sessions.size >= 16) throw new Error("Too many hub sessions.");
+    // A Host another DP serves is reached through a link to that DP.
+    const route = this.routeFor(nodeId);
+    const remote = route && this.linkTo(route);
+    if (remote && remote !== this) return remote.openSession(nodeId, options);
+    if (this.sessions.size >= MAX_SESSIONS) throw new Error("Too many hub sessions.");
     this.clearTimer("idle");
     const id = (this.options.randomUUID ?? (() => crypto.randomUUID()))();
     const session = new HubSession(this.sessionLink, id, nodeId, {
@@ -638,6 +723,79 @@ export class HubLink implements HubAccountConnection {
     });
     this.sessions.set(id, session);
     return session;
+  }
+
+  /** The DP serving `nodeId` when the account link's `hosts` place it on another DP. */
+  private routeFor(nodeId: string): HubRoute | null {
+    if (this.home || this.bulk || !this.link?.redirect || !this.hostMap) return null;
+    for (const host of this.hostMap.values())
+      if (host.node_id === nodeId && host.state !== "offline") return hubRoute(host);
+    return null;
+  }
+
+  /**
+   * The link of the account link's center that serves `route`: this link for its own DP,
+   * otherwise a link to that DP, created and started on first use. Its tickets come from the
+   * account's center, like this link's, and stay valid on every DP of the center.
+   */
+  private linkTo(route: HubRoute): HubLink {
+    if (this.homeRoute && sameHubRoute(this.homeRoute, route)) return this;
+    const existing = this.remotes.get(route.center);
+    if (existing && existing.state !== "stopped") return existing;
+    const ticket = async (): Promise<HubTicket> => ({
+      ...(await this.options.ticket()),
+      centerUrl: route.center,
+    });
+    const link = new HubLink(
+      { ...this.options, ticket, lane: "main", idleMs: REMOTE_IDLE_MS, hubUrl: route.hubUrl },
+      this,
+    );
+    this.remotes.set(route.center, link);
+    // It stops itself when idle; the next session to that DP opens a new one.
+    const remove = link.subscribe(() => {
+      if (link.state !== "stopped") return;
+      remove();
+      if (this.remotes.get(route.center) === link) this.remotes.delete(route.center);
+    });
+    this.logger.info(
+      { link: this.link?.id, center: route.center },
+      "[Hub] opening a link to another DP",
+    );
+    link.start();
+    if (this.paused) link.pause();
+    return link;
+  }
+
+  /**
+   * Move `session`, whose open the DP of `from` refused with `redirect`, to the link of the DP
+   * now serving its target. Null when there is none other than `from`, or it cannot take it.
+   */
+  private redirectSession(
+    session: HubSession,
+    target: HubRedirectTarget,
+    from: HubLink,
+  ): HubSessionLink | null {
+    if (this.bulk || this.current === "stopped") return null;
+    const link = this.linkTo(target);
+    if (link === from) return null;
+    this.logger.info(
+      { link: from.link?.id, session: session.id, center: target.center, epoch: target.epoch },
+      "[Hub] session redirected",
+    );
+    return link.adopt(session);
+  }
+
+  /** Take over a session another link of this account opened; null when this link cannot. */
+  private adopt(session: HubSession): HubSessionLink | null {
+    if (
+      this.current === "stopped" ||
+      this.sessions.size >= MAX_SESSIONS ||
+      this.sessions.has(session.id)
+    )
+      return null;
+    this.clearTimer("idle");
+    this.sessions.set(session.id, session);
+    return this.sessionLink;
   }
 
   /**
@@ -685,9 +843,11 @@ export class HubLink implements HubAccountConnection {
     this.setState(link ? "reconnecting" : "connecting");
     let centerUrl: string;
     let credential: string;
+    let features: readonly string[];
     if (link?.token && !this.useTicket) {
       centerUrl = link.centerUrl;
       credential = link.token;
+      features = link.features;
     } else {
       try {
         const ticket = await this.options.ticket();
@@ -697,13 +857,15 @@ export class HubLink implements HubAccountConnection {
         if (this.link && ticket.centerUrl !== this.link.centerUrl) this.resetLink("center_changed");
         centerUrl = ticket.centerUrl;
         credential = ticket.ticket;
+        features = this.link?.features ?? this.announced(ticket.features);
       } catch (error) {
         if (generation === this.generation) this.retry(error);
         return;
       }
     }
-    const url = new URL(`${centerUrl}${HUB_PATH}`);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const url = new URL(this.options.hubUrl ?? `${centerUrl}${HUB_PATH}`);
+    if (!this.options.hubUrl) url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    if (!this.home) this.homeRoute = hubRoute({ center: centerUrl, hub_url: url.href });
     let socket: WebSocketLike;
     try {
       socket = this.options.webSocketFactory(
@@ -728,7 +890,7 @@ export class HubLink implements HubAccountConnection {
       bindWsHandler(socket, "open", () => {
         if (generation !== this.generation) return;
         const resume = this.link ? { link: this.link.id, recv: this.recv } : null;
-        this.write(generation, encodeHubFrame({ t: "hello", v: 1, resume, f: [...this.features] }));
+        this.write(generation, encodeHubFrame({ t: "hello", v: 1, resume, f: [...features] }));
       }),
       bindWsHandler(socket, "message", (...args) => {
         if (generation !== this.generation) return;
@@ -736,7 +898,7 @@ export class HubLink implements HubAccountConnection {
           args[0],
           typeof args[1] === "boolean" ? args[1] : undefined,
         );
-        this.receive(generation, message.data, message.isBinary, centerUrl);
+        this.receive(generation, message.data, message.isBinary, centerUrl, features);
       }),
       bindWsHandler(socket, "close", () => this.drop(generation, "closed")),
       bindWsHandler(socket, "error", () => this.drop(generation, "error")),
@@ -760,6 +922,7 @@ export class HubLink implements HubAccountConnection {
     data: string | ArrayBuffer,
     binary: boolean,
     centerUrl: string,
+    features: readonly string[],
   ): void {
     let header: HubInboundHeader;
     let payload: Uint8Array;
@@ -779,7 +942,7 @@ export class HubLink implements HubAccountConnection {
       return;
     }
     if (!this.welcomed) {
-      if (header.t === "welcome") this.welcome(generation, header, centerUrl);
+      if (header.t === "welcome") this.welcome(generation, header, centerUrl, features);
       else this.drop(generation, "unexpected_frame");
       return;
     }
@@ -906,7 +1069,12 @@ export class HubLink implements HubAccountConnection {
     if (changed) this.emit();
   }
 
-  private welcome(generation: number, welcome: HubWelcome, centerUrl: string): void {
+  private welcome(
+    generation: number,
+    welcome: HubWelcome,
+    centerUrl: string,
+    features: readonly string[],
+  ): void {
     this.clearTimer("handshake");
     if (!welcome.resumed) {
       // A new link replaces the old one: its sessions and sequence numbers are gone.
@@ -916,7 +1084,7 @@ export class HubLink implements HubAccountConnection {
         return;
       }
       // Without every announced feature there are no Hosts, leases or presence to rely on.
-      const missing = this.features.filter((feature) => !welcome.f?.includes(feature));
+      const missing = this.required.filter((feature) => !welcome.f?.includes(feature));
       if (missing.length) {
         this.logger.warn({ link: welcome.link, missing }, "[Hub] center lacks required features");
         this.drop(generation, "missing_features");
@@ -934,6 +1102,9 @@ export class HubLink implements HubAccountConnection {
           Number.isSafeInteger(welcome.ping_seconds) && welcome.ping_seconds > 0
             ? welcome.ping_seconds * 1000
             : HEARTBEAT_INTERVAL_MS,
+        features,
+        // Optional: without it, Hosts other DPs serve are listed offline, as on older centers.
+        redirect: features.includes(HUB_REDIRECT) && welcome.f?.includes(HUB_REDIRECT) === true,
       };
     } else if (!this.link || this.link.id !== welcome.link || welcome.recv > this.sent) {
       this.serverError("invalid_resume");
@@ -947,6 +1118,11 @@ export class HubLink implements HubAccountConnection {
     this.tokenFailures = 0;
     this.useTicket = false;
     this.clearTimer("grace");
+    for (const { header, payload, bytes } of this.pendingOpens.values()) {
+      this.unackedBytes -= bytes;
+      this.sendSequenced(header, payload);
+    }
+    this.pendingOpens.clear();
     // Frames pumped by this release join the buffer so the replay below sends them in order.
     this.release(welcome.recv);
     this.welcomed = true;
@@ -1002,16 +1178,40 @@ export class HubLink implements HubAccountConnection {
     this.write(generation, encodeHubFrame({ t: "ack", a: this.recv }));
   }
 
+  private sendSessionFrame(header: HubSessionHeader, payload?: Uint8Array): void {
+    if (this.home && !this.link) {
+      // Before the first welcome the peer cannot have seen the open. Hold it without assigning a
+      // sequence so cancellation can remove it, and there is nothing for a close to release there.
+      if (header.t === "close") return;
+      if (header.t === "open") {
+        const bytes = this.encodeSequenced(header, this.pendingOpens.size + 1, payload).byteLength;
+        this.pendingOpens.set(header.s, { header, payload, bytes });
+        this.unackedBytes += bytes;
+        return;
+      }
+    }
+    this.sendSequenced(header, payload);
+  }
+
+  private encodeSequenced(
+    header: HubSessionHeader | { t: "call"; id: string; method: string },
+    seq: number,
+    payload?: Uint8Array,
+  ): Uint8Array {
+    if (this.current === "stopped") throw new Error("Hub link is stopped.");
+    const length = payload?.byteLength ?? 0;
+    if (this.unackedBytes + length > MAX_UNACKED_BYTES) throw new HubBufferFullError();
+    const frame = encodeHubFrame({ ...header, seq } as HubOutboundHeader, payload);
+    if (this.unackedBytes + frame.byteLength > MAX_UNACKED_BYTES) throw new HubBufferFullError();
+    return frame;
+  }
+
   private sendSequenced(
     header: HubSessionHeader | { t: "call"; id: string; method: string },
     payload?: Uint8Array,
   ): void {
-    if (this.current === "stopped") throw new Error("Hub link is stopped.");
-    const length = payload?.byteLength ?? 0;
-    if (this.unackedBytes + length > MAX_UNACKED_BYTES) throw new HubBufferFullError();
     const seq = this.sent + 1;
-    const frame = encodeHubFrame({ ...header, seq } as HubOutboundHeader, payload);
-    if (this.unackedBytes + frame.byteLength > MAX_UNACKED_BYTES) throw new HubBufferFullError();
+    const frame = this.encodeSequenced(header, seq, payload);
     this.sent = seq;
     this.unacked.push({ seq, frame });
     this.unackedBytes += frame.byteLength;
@@ -1090,6 +1290,9 @@ export class HubLink implements HubAccountConnection {
       this.setState(this.link ? "reconnecting" : "unavailable");
       return;
     }
+    // Sessions opened on a link to another DP before it ever connected fail at once, and the
+    // caller retries; frames queued for them are dropped with them.
+    if (this.home && !this.link && this.sessions.size) this.resetLink("unreachable");
     const unavailable = status(reason) === 404;
     this.retryCount++;
     const answered = rejected || status(reason) !== undefined;
@@ -1128,6 +1331,7 @@ export class HubLink implements HubAccountConnection {
     this.link = null;
     this.sent = this.recv = this.acked = this.unackedBytes = 0;
     this.unacked = [];
+    this.pendingOpens.clear();
     this.hostMap = null;
     this.hostsVersion = 0;
     this.groupSnapshot = null;

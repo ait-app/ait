@@ -159,13 +159,16 @@ const BULK_RETRY_MS = 60_000;
  * Require every feature of `HUB_CENTER_FEATURES` in an HTTP response's `hub_features`. This client
  * works only with centers that advertise them; the center stays compatible with older clients.
  */
-function requireHubFeatures(value: unknown): void {
-  const advertised = Array.isArray(value) ? value : [];
+function requireHubFeatures(value: unknown): string[] {
+  const advertised = Array.isArray(value)
+    ? value.filter((feature): feature is string => typeof feature === "string")
+    : [];
   const missing = HUB_CENTER_FEATURES.filter((feature) => !advertised.includes(feature));
   if (missing.length)
     throw new Error(
       `The account service is too old for this app (missing Hub features: ${missing.join(", ")}). Update the service.`,
     );
+  return advertised;
 }
 
 /** Map a `hosts` frame entry onto the Host shape the apps consume. */
@@ -242,7 +245,12 @@ export class AccountSessionManager {
   private unsubscribeBulk: (() => void) | null = null;
   private bulkRetryAt = 0;
   /** One-use access ticket issued with the registration, for the link's first connection. */
-  private registeredTicket: { ticket: string; expiresAt: number; node: NodeSession } | null = null;
+  private registeredTicket: {
+    ticket: string;
+    expiresAt: number;
+    node: NodeSession;
+    features: readonly string[];
+  } | null = null;
   private state: AccountSnapshot = {
     status: "logged_out",
     center: DEFAULT_ACCOUNT_CENTER,
@@ -715,7 +723,9 @@ export class AccountSessionManager {
     const host = hub.hostFor(hostId);
     if (!host?.node_id || host.state !== "online" || !host.f.includes("download")) return null;
     const generation = this.generation;
-    const bulk = await this.bulkLink(hub);
+    // A Host another DP serves is reached through the link to that DP, which the main link
+    // opens; the bulk link only reaches Hosts of this DP.
+    const bulk = host.center ? null : await this.bulkLink(hub);
     if (generation !== this.generation || this.hub !== hub) return null;
     if (bulk) {
       try {
@@ -778,7 +788,7 @@ export class AccountSessionManager {
     const registered = lane === "main" ? this.registeredTicket : null;
     if (lane === "main") this.registeredTicket = null;
     if (registered?.node === node && registered.expiresAt > Date.now())
-      return { centerUrl: center, ticket: registered.ticket };
+      return { centerUrl: center, ticket: registered.ticket, features: registered.features };
     let grant: { hub_ticket: string; hub_path: string; protocol: string; hub_features?: unknown };
     try {
       grant = await this.api(
@@ -792,8 +802,8 @@ export class AccountSessionManager {
       throw error;
     }
     if (generation !== this.generation) throw new Error("Connection cancelled.");
-    requireHubFeatures(grant.hub_features);
-    return { centerUrl: center, ticket: hubTicket(grant) };
+    const features = requireHubFeatures(grant.hub_features);
+    return { centerUrl: center, ticket: hubTicket(grant), features };
   }
 
   /** Recover from a rejected node session outside the tick: register again or sign out. */
@@ -884,7 +894,7 @@ export class AccountSessionManager {
         if (generation !== this.generation || !this.account) return;
         const { hub_features, hub_ticket, hub_path, hub_expires_in_seconds, hub_ep, ...node } =
           registered;
-        requireHubFeatures(hub_features);
+        const features = requireHubFeatures(hub_features);
         // The registration also issues the link's first access ticket.
         this.registeredTicket =
           hub_ep === "access" &&
@@ -899,6 +909,7 @@ export class AccountSessionManager {
                     1000 -
                   TICKET_MARGIN_MS,
                 node,
+                features,
               }
             : null;
         this.node = node;

@@ -33,6 +33,10 @@
   of being told to update the Host. Their per-chat reset is refused without changing shared
   context; update the client to reset the Bot context.
 
+- Hosts served by another region of the online service now show online and open normally. When the
+  service announces Hub `redirect`, the app connects to that region's Hub for those Hosts, follows
+  redirects after a Host moves, and keeps the account's own connection for everything else.
+
 - Add independent `aitd-bin` and `aitd-git` Arch packages with an opt-in systemd user service.
   Stable releases can publish both desktop and daemon binary recipes; Git recipes remain locally maintained.
 

@@ -23,6 +23,14 @@ export const HUB_CENTER_FEATURES: readonly string[] = [...HUB_FEATURES, "bulk"];
 /** Features a bulk link (`lane: "bulk"`) must announce; it may announce no others. */
 export const HUB_BULK_FEATURES: readonly HubFeature[] = ["credit", "download"];
 
+/**
+ * Optional main-link feature of a center whose data planes (DPs) serve different Hosts. A link
+ * announces it only when the center lists it in `hub_features`. With it, `hosts` also lists the
+ * Hosts other DPs serve, with that DP's `hub_url` and `center`, and an `open` for one of them is
+ * refused with `close{code:"redirect", redirect}`.
+ */
+export const HUB_REDIRECT = "redirect";
+
 /** `main` links carry everything; `bulk` links carry only download sessions. */
 export type HubLane = "main" | "bulk";
 
@@ -90,6 +98,13 @@ export interface HubHost {
   offline_since: string | null;
   /** Features of the Host's current serve link; `[]` without one. */
   f: string[];
+  /**
+   * With `redirect`, for a Host another DP serves: that DP's name, Hub WebSocket URL and API
+   * base. Sessions to the Host open on a link to that DP. Absent for Hosts this link's DP serves.
+   */
+  dp?: string;
+  hub_url?: string;
+  center?: string;
 }
 
 /** Frames the center sends. Unknown kinds are ignored for forward compatibility. */
@@ -101,7 +116,17 @@ export type HubInboundHeader =
   | { t: "open"; seq: number; s: string; from: string }
   | { t: "accept"; seq: number; s: string; w?: number }
   | { t: "msg"; seq: number; s?: string; from?: string; pt: HubPayloadType; ck?: string }
-  | { t: "close"; seq: number; s: string; code: string }
+  | {
+      t: "close";
+      seq: number;
+      s: string;
+      code: string;
+      /**
+       * With `code: "redirect"`: `{node, hub_url, center, epoch}`, where to open the refused
+       * session instead; read through `hubRedirect()`.
+       */
+      redirect?: unknown;
+    }
   | { t: "credit"; s: string; c: number }
   | { t: "hosts"; seq: number; ver: number; full?: boolean }
   | { t: "groups"; seq: number }

@@ -1,5 +1,6 @@
 import type { DaemonTransport } from "../daemon-client-transport-types.js";
 import { HUB_MAX_PAYLOAD, type HubInboundHeader, type HubSessionKind } from "./frame.js";
+import { hubRedirect, type HubRedirectTarget } from "./route.js";
 
 export type HubSessionHeader =
   | {
@@ -20,6 +21,11 @@ export interface HubSessionLink {
   /** Grant cumulative credit; unsequenced, so the session resends it after a resume. */
   credit(session: string, c: number): void;
   release(session: string): void;
+  /**
+   * Hand a session whose `open` the center refused with `redirect` to the link of the DP serving
+   * its target. Returns that link, which now holds the session, or null when there is none.
+   */
+  redirect?(session: HubSession, target: HubRedirectTarget): HubSessionLink | null;
 }
 
 /** The link's unacknowledged buffer cannot take this frame now; retry after acknowledgements. */
@@ -58,6 +64,8 @@ export interface HubSessionOptions {
 /** Messages queued while the peer window or link buffer is full; a stalled peer fails beyond it. */
 const MAX_QUEUED_BYTES = 16 * 1024 * 1024;
 const ACCEPT_TIMEOUT_MS = 30_000;
+/** Redirects one session follows before it fails with `redirect`. */
+const MAX_REDIRECTS = 3;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -104,13 +112,20 @@ export class HubSession implements DaemonTransport {
   private credit: Credit | null;
   private queue: { pt: "text" | "binary"; payload: Uint8Array }[] = [];
   private queuedBytes = 0;
+  /** The business hello, kept until the accept so a redirected `open` can be repeated. */
+  private hello: Uint8Array | null = null;
+  /** A message went out before the accept, so the open can no longer move to another DP. */
+  private sentEarly = false;
+  private redirects = 0;
+  /** Location epoch of the latest redirect followed; an older one is stale. */
+  private epoch = 0;
   /** Share ID for a guest session to a resource another account shares. */
   readonly share?: string;
   readonly kind: HubSessionKind;
   private readonly manualCredit: boolean;
 
   constructor(
-    private readonly link: HubSessionLink,
+    private link: HubSessionLink,
     readonly id: string,
     readonly node: string,
     options: HubSessionOptions = {},
@@ -143,7 +158,9 @@ export class HubSession implements DaemonTransport {
 
   /**
    * Hub close code when the center ended the session (`peer_gone`, `unknown_share`,
-   * `share_revoked`, `done`, `unsupported`, ...), otherwise null. Guest sessions closed with
+   * `share_revoked`, `done`, `unsupported`, ...), otherwise null. A `redirect` close is reported
+   * here if the session ends on that frame. If the next DP cannot connect after the redirect,
+   * the transport reports a connection error and this stays null. Guest sessions closed with
    * `share_revoked` or `unknown_share` lost their access and should not be reopened
    * automatically; `peer_gone` means the sharing Host went away, so reopen once its share is
    * `online` again.
@@ -173,27 +190,14 @@ export class HubSession implements DaemonTransport {
     }
     if (this.stage === "hello") {
       if (typeof data !== "string") throw new Error("Expected the AIT hello before sending data.");
-      this.link.send(
-        {
-          t: "open",
-          s: this.id,
-          to: { node: this.node },
-          ...(this.share ? { share: this.share } : {}),
-          ...(this.kind === "download" ? { k: "download" as const } : {}),
-          ...(this.credit ? { w: this.credit.window } : {}),
-        },
-        payload,
-      );
-      this.stage = "accept";
-      this.timer = setTimeout(
-        () => this.abort(new Error("Hub session was not accepted in time.")),
-        ACCEPT_TIMEOUT_MS,
-      );
+      this.open(payload);
+      this.hello = payload;
       return;
     }
     const pt = typeof data === "string" ? "text" : "binary";
     if (!this.credit) {
       this.link.send({ t: "msg", s: this.id, pt }, payload);
+      if (this.stage === "accept") this.sentEarly = true;
       return;
     }
     // Whether flow control applies is known only after the accept; queue until then.
@@ -319,10 +323,67 @@ export class HubSession implements DaemonTransport {
     this.fail(error);
   }
 
+  /** Send the `open` carrying the business hello and wait for the accept. */
+  private open(hello: Uint8Array): void {
+    this.link.send(
+      {
+        t: "open",
+        s: this.id,
+        to: { node: this.node },
+        ...(this.share ? { share: this.share } : {}),
+        ...(this.kind === "download" ? { k: "download" as const } : {}),
+        ...(this.credit ? { w: this.credit.window } : {}),
+      },
+      hello,
+    );
+    this.stage = "accept";
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(
+      () => this.abort(new Error("Hub session was not accepted in time.")),
+      ACCEPT_TIMEOUT_MS,
+    );
+  }
+
+  /**
+   * Repeat an `open` the center refused with `redirect` on the link of the DP it names. Only
+   * before the accept, while nothing but the open reached the refusing DP, for the same node and
+   * a location no older than one already followed.
+   */
+  private follow(value: unknown): boolean {
+    const target = hubRedirect(value);
+    const hello = this.hello;
+    const previous = this.link;
+    if (
+      !target ||
+      !hello ||
+      this.stage !== "accept" ||
+      this.sentEarly ||
+      target.node !== this.node ||
+      target.epoch < this.epoch ||
+      this.redirects >= MAX_REDIRECTS ||
+      !previous.redirect
+    )
+      return false;
+    const next = previous.redirect(this, target);
+    if (!next || next === previous) return false;
+    this.link = next;
+    this.redirects += 1;
+    this.epoch = target.epoch;
+    previous.release(this.id);
+    try {
+      this.open(hello);
+    } catch (error) {
+      this.fail(error instanceof Error ? error : new Error("Hub session redirect failed."));
+    }
+    return true;
+  }
+
   /** Called by the link for sequenced frames addressed to this session. */
   receive(header: HubInboundHeader, payload: Uint8Array): void {
     if (this.stage === "closed") return;
     if (header.t === "close") {
+      // A target another DP serves: the session continues there.
+      if (header.code === "redirect" && this.follow(header.redirect)) return;
       // The center already ended the session; never echo a close back.
       this.code = header.code;
       this.fail(new HubSessionClosedError(header.code));
@@ -334,6 +395,7 @@ export class HubSession implements DaemonTransport {
         return;
       }
       this.stage = "ready";
+      this.hello = null;
       if (this.timer) clearTimeout(this.timer);
       this.timer = null;
       // An accept without a window means the Host has no `credit`.
@@ -359,6 +421,7 @@ export class HubSession implements DaemonTransport {
 
   private dispose(): void {
     this.stage = "closed";
+    this.hello = null;
     this.queue = [];
     this.queuedBytes = 0;
     for (const resolve of this.drains) resolve();

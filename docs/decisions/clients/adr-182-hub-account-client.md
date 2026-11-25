@@ -12,6 +12,8 @@ paths:
 
 > 普通业务传输已由 [ADR-204](../clients/adr-204-hub-only-online-business-transport.md) 修订：仅使用 Hub，传统 Relay 仅保留独立下载与控制。
 
+- 后续修订：[ADR-314](adr-314-hub-cross-dp-routing.md) 在账号链路之外，按需为中心的其它数据面各建一条只承载会话的 access 链路。
+
 修订：2026-10-26，桌面内置 daemon 默认选择中心原生通知，独立 daemon 保留显式开启策略。
 
 ## 背景

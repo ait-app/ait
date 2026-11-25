@@ -1015,6 +1015,7 @@ describe("hub tickets", () => {
     await expect(manager.openHubTicket()).resolves.toEqual({
       centerUrl: "https://aitapp.cn/api",
       ticket: "c".repeat(64),
+      features: CENTER_FEATURES,
     });
     const [url, options] = hubCalls(http)[0]!;
     expect(url).toBe("https://aitapp.cn/api/v1/node-sessions/lease/hub-tickets");
@@ -1327,6 +1328,65 @@ describe("hub features", () => {
     expect(f.manager.snapshot().status).not.toBe("logged_out");
     f.link.stop();
     await f.manager.logout();
+  });
+
+  describe("Hosts another DP serves", () => {
+    const CENTER = "https://aitapp.cn/api";
+    const JP_HUB = "wss://hub.jp.test/api/v1/hub";
+    const elsewhere = {
+      ...hubHost,
+      dp: "jp-dp",
+      hub_url: JP_HUB,
+      center: "https://hub.jp.test/api",
+    };
+    const tickets = (f: ReturnType<typeof featureFixture>) =>
+      f.http.mock.calls
+        .filter(([url]) => String(url).endsWith("/hub-tickets"))
+        .map(([, options]) => JSON.parse(String(options?.body)));
+
+    it("announces redirect from the first ticket on when the center lists it", async () => {
+      const f = featureFixture();
+      f.center.features = [...CENTER_FEATURES, "redirect"];
+      const socket = await f.online();
+      expect(socket.frames("hello")).toEqual([
+        { t: "hello", v: 1, resume: null, f: [...FEATURES, "redirect"] },
+      ]);
+      expect(f.link.redirects).toBe(true);
+      // Hosts other DPs serve are online for the apps; where they are stays in the link.
+      socket.receive(
+        { t: "hosts", seq: 1, ver: 1, full: true },
+        JSON.stringify({ hosts: [elsewhere] }),
+      );
+      expect(f.manager.snapshot().hosts).toEqual([
+        expect.objectContaining({ host_id: "remote", online: true, hub_online: true }),
+      ]);
+      f.link.stop();
+      await f.manager.logout();
+    });
+
+    it("opens their downloads on the link to that DP instead of this DP's bulk link", async () => {
+      const f = featureFixture();
+      f.center.features = [...CENTER_FEATURES, "redirect"];
+      const main = await f.online({ ping_seconds: 3600 });
+      main.receive(
+        { t: "hosts", seq: 1, ver: 1, full: true },
+        JSON.stringify({ hosts: [elsewhere] }),
+      );
+      const session = (await f.manager.openHubDownload("remote", "token", CENTER))!;
+      await vi.advanceTimersByTimeAsync(1);
+      const remote = f.socket();
+      expect(remote.url).toBe(JP_HUB);
+      remote.open();
+      remote.welcome({ link: "jp-link", ping_seconds: 3600 });
+      expect(remote.frames("open")).toEqual([
+        { t: "open", seq: 1, s: session.id, to: { node: "other" }, k: "download", w: 1024 * 1024 },
+      ]);
+      expect(main.frames("open")).toEqual([]);
+      // A main-lane ticket of the account's center; no bulk link.
+      expect(tickets(f)).toEqual([{ ep: "access" }]);
+      f.link.stop();
+      await f.manager.logout();
+    });
   });
 
   describe("bulk downloads", () => {
