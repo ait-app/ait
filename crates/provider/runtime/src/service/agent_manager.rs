@@ -145,7 +145,7 @@ impl LiveAgent {
         permit: tokio::sync::OwnedSemaphorePermit,
         record: PersistedAgentRuntimeRecord,
         registered: bool,
-        ledger: Arc<dyn UsageLedger>,
+        calls: ledger::Calls,
     ) -> Self {
         Self {
             mcp: None,
@@ -166,7 +166,7 @@ impl LiveAgent {
             exclusive: false,
             interruption_requested: false,
             child_controls: BTreeMap::new(),
-            calls: ledger::Calls::new(ledger),
+            calls,
         }
     }
 }
@@ -251,7 +251,7 @@ impl AgentManager {
             workspace_names: None,
             workspaces: None,
             auto_archives: auto_archive::AutoArchives::default(),
-            usage_cache: usage::UsageCache::default(),
+            usage_cache: usage::UsageCache::for_host(),
             usage_ledger: Arc::new(NoopUsageLedger),
             presets: None,
         }
@@ -1346,25 +1346,29 @@ impl AgentManager {
         } else {
             let close_result = session.close().await;
             if close_result.is_err() {
+                let calls = self.calls(&record.provider);
                 self.live.insert(
                     agent_id.to_owned(),
-                    LiveAgent::new(session, permit, record, false, self.usage_ledger.clone()),
+                    LiveAgent::new(session, permit, record, false, calls),
                 );
                 return Err(AgentManagerError::Session);
             }
             return Err(AgentManagerError::Registry);
         }
+        let calls = self.calls(&record.provider);
         self.live.insert(
             agent_id.to_owned(),
-            LiveAgent::new(
-                session,
-                permit,
-                record.clone(),
-                true,
-                self.usage_ledger.clone(),
-            ),
+            LiveAgent::new(session, permit, record.clone(), true, calls),
         );
         Ok(record)
+    }
+
+    /// Ledger and account usage hooks for the calls of a session of `provider`.
+    fn calls(&self, provider: &str) -> ledger::Calls {
+        ledger::Calls::new(
+            self.usage_ledger.clone(),
+            self.usage_cache.activity(provider),
+        )
     }
 
     async fn reject_session(
@@ -1375,9 +1379,10 @@ impl AgentManager {
         permit: tokio::sync::OwnedSemaphorePermit,
     ) -> AgentManagerError {
         if session.close().await.is_err() {
+            let calls = self.calls(&record.provider);
             self.live.insert(
                 agent_id.to_owned(),
-                LiveAgent::new(session, permit, record, false, self.usage_ledger.clone()),
+                LiveAgent::new(session, permit, record, false, calls),
             );
         }
         AgentManagerError::Session

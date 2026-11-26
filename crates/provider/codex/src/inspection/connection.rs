@@ -8,6 +8,7 @@ use tokio::io::AsyncReadExt;
 use super::super::{CodexClient, Transport};
 use provider_core::ports::account_usage::UsageIdentity;
 use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::diagnostics::Category;
 
 /// Native account metadata and the independent, serialized quota transport.
 #[derive(Debug, Clone, Default)]
@@ -118,7 +119,9 @@ impl Shared {
             .cloned()
     }
 
-    /// Read quotas on the process that established this account; discard it on failure/cancel.
+    /// Read quotas on the process that established this account.
+    ///
+    /// A failed or cancelled read discards the process; one the service throttled keeps it.
     pub(super) async fn report(
         &self,
         client: &CodexClient,
@@ -144,10 +147,20 @@ impl Shared {
             self.invalidate();
             return Err(AgentSessionError::Failed);
         }
-        let response = process
+        let response = match process
             .transport
             .request("account/rateLimits/read", json!({}))
-            .await?;
+            .await
+        {
+            // The service throttled a healthy process; the next read reuses it and its account.
+            Err(AgentSessionError::Rejected)
+                if process.transport.rpc_category == Some(Category::RateLimit) =>
+            {
+                attempt.completed = true;
+                return Err(AgentSessionError::Rejected);
+            }
+            response => response?,
+        };
         let mut report = super::usage(&response)?;
         if fingerprint(client).await != account.fingerprint {
             return Err(AgentSessionError::Failed);

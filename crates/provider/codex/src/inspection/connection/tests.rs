@@ -134,6 +134,36 @@ async fn cancelled_quota_request_drops_process_and_rebuilds_on_next_read() {
 }
 
 #[tokio::test]
+async fn throttled_quota_read_keeps_the_process_and_other_rejections_replace_it() {
+    let fixture = Fixture::new();
+    let client = client(&fixture);
+    let cwd = fixture.cwd.to_str().unwrap();
+    let launches = || {
+        fixture
+            .requests()
+            .iter()
+            .filter(|request| request["method"] == "initialize")
+            .count()
+    };
+    let refusal = fixture.cwd.join("refuse-usage");
+    client.native_usage_in(cwd).await.unwrap();
+
+    for (message, expected_launches) in [("rate limit exceeded", 1), ("internal failure", 2)] {
+        std::fs::write(&refusal, message).unwrap();
+        assert_eq!(
+            client.native_usage_in(cwd).await,
+            Err(AgentSessionError::Rejected)
+        );
+        std::fs::remove_file(&refusal).unwrap();
+        assert_eq!(
+            client.native_usage_in(cwd).await.unwrap()["status"],
+            "available"
+        );
+        assert_eq!(launches(), expected_launches);
+    }
+}
+
+#[tokio::test]
 async fn explicit_close_reaps_query_process_while_client_clones_remain_alive() {
     use provider_core::ports::agent_session::AgentClient;
     let fixture = Fixture::new();

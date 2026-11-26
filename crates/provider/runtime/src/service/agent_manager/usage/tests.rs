@@ -220,3 +220,74 @@ async fn unknown_provider_is_rejected_without_querying_other_accounts() {
         Err(ErrorCode::UnsupportedCapability)
     );
 }
+
+#[test]
+fn failed_reads_back_off_from_one_minute_to_fifteen() {
+    let seconds: Vec<_> = (0..8)
+        .map(|failures| error_backoff(failures).as_secs())
+        .collect();
+    assert_eq!(seconds, [60, 60, 120, 240, 480, 900, 900, 900]);
+    assert_eq!(error_backoff(u32::MAX), MAX_ERROR_BACKOFF);
+}
+
+#[tokio::test(start_paused = true)]
+async fn reset_deadline_is_the_first_window_reset_still_ahead() {
+    let at =
+        |seconds| json!((chrono::Utc::now() + chrono::Duration::seconds(seconds)).to_rfc3339());
+    let report = json!({"windows":[
+        {"resetsAt":at(-60)}, {"resetsAt":"soon"}, {"resetsAt":null}, {},
+        {"resetsAt":at(7200)}, {"resetsAt":at(600)},
+    ]});
+    let reset = reset_deadline(&report)
+        .unwrap()
+        .duration_since(Instant::now());
+    assert!(reset > Duration::from_secs(590) && reset <= Duration::from_secs(600));
+    assert!(reset_deadline(&json!({"windows":[{"resetsAt":at(-1)}]})).is_none());
+    assert!(reset_deadline(&available()).is_none());
+    assert!(reset_deadline(&json!({"status":"error"})).is_none());
+}
+
+#[test]
+fn activity_is_counted_per_provider_and_shared_by_cache_clones() {
+    let cache = UsageCache::for_host();
+    let codex = cache.activity("codex");
+    codex.mark();
+    cache.clone().activity("codex").mark();
+    assert_eq!(codex.count(), 2);
+    assert_eq!(cache.activity_count("codex"), 2);
+    assert_eq!(cache.activity_count("claude"), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn session_snapshots_expire_after_five_minutes_and_host_snapshots_after_thirty() {
+    let account = identity("account");
+    for (cache, max_age) in [
+        (UsageCache::default(), SESSION_MAX_AGE),
+        (UsageCache::for_host(), HOST_MAX_AGE),
+    ] {
+        cache.put("codex", Some(account.clone()), available(), "attempt");
+        tokio::time::advance(max_age.saturating_sub(Duration::from_secs(1))).await;
+        assert!(cache.get("codex", &account, false).is_some());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert!(cache.get("codex", &account, false).is_none());
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn failures_back_off_no_longer_than_the_cache_keeps_a_snapshot() {
+    let account = identity("account");
+    for (cache, longest) in [
+        (UsageCache::default(), SESSION_MAX_AGE),
+        (UsageCache::for_host(), MAX_ERROR_BACKOFF),
+    ] {
+        for _ in 0..6 {
+            let failed = failure("codex", AgentSessionError::Failed);
+            cache.put("codex", Some(account.clone()), failed, "attempt");
+        }
+        tokio::time::advance(longest.saturating_sub(Duration::from_secs(1))).await;
+        assert!(cache.get("codex", &account, false).is_some());
+        assert!(cache.get("codex", &account, true).is_none());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert!(cache.get("codex", &account, false).is_none());
+    }
+}

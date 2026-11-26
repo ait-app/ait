@@ -329,6 +329,36 @@ async fn sessions_without_token_usage_finish_calls_as_such_and_late_requests_are
     assert!(!ledger.finishes()[0].token_usage_available);
 }
 
+#[tokio::test]
+async fn call_starts_ends_and_every_request_mark_the_activity_of_the_provider() {
+    let (mut manager, _, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    let activity = manager.usage_cache.activity("codex");
+    assert_eq!(activity.count(), 0);
+
+    manager.send("agent-1", "hello").await.unwrap();
+    assert_eq!(activity.count(), 1);
+    client.0.lock().unwrap().events.extend([
+        AgentTurnEvent::RequestUsage(request_usage("turn-segment")),
+        AgentTurnEvent::Completed(None),
+    ]);
+    manager.poll().await.unwrap();
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(AgentTurnEvent::RequestUsage(request_usage("late-segment")));
+    manager.poll().await.unwrap();
+
+    // The late request has no call to join, but it consumed quota all the same.
+    assert_eq!(activity.count(), 4);
+    assert_eq!(manager.usage_cache.activity("claude").count(), 0);
+}
+
 #[test]
 fn call_source_comes_from_the_bot_owner_and_schedule_label() {
     let user = stored_record();

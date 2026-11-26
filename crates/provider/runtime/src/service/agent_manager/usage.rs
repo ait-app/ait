@@ -3,6 +3,7 @@
 use provider_core::ports::account_usage::UsageIdentity;
 use provider_core::ports::agent_session::AgentClient;
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::Instant;
@@ -22,29 +23,58 @@ use provider_core::ports::agent_session::AgentSessionError;
 pub(super) struct UsageCache {
     entries: Arc<Mutex<BTreeMap<String, CachedUsage>>>,
     flights: Arc<Mutex<BTreeMap<String, host::Flight>>>,
+    activity: Arc<Mutex<BTreeMap<String, Activity>>>,
     budget: Arc<tokio::sync::Semaphore>,
     tasks: tokio_util::task::TaskTracker,
+    /// How long a snapshot answers reads that do not force a refresh.
+    max_age: Duration,
 }
 
 impl Default for UsageCache {
+    /// The cache of one live session.
     fn default() -> Self {
-        Self {
-            entries: Arc::default(),
-            flights: Arc::default(),
-            budget: Arc::new(tokio::sync::Semaphore::new(4)),
-            tasks: tokio_util::task::TaskTracker::new(),
-        }
+        Self::lasting(SESSION_MAX_AGE)
+    }
+}
+
+/// Count of the quota-consuming events of one provider on this Host.
+///
+/// A snapshot read at an earlier count no longer describes the account.
+#[derive(Debug, Clone, Default)]
+pub(super) struct Activity(Arc<AtomicU64>);
+
+impl Activity {
+    /// Record that a call to the provider started, reported a request or ended.
+    pub(super) fn mark(&self) {
+        self.0.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Events recorded so far.
+    pub(super) fn count(&self) -> u64 {
+        self.0.load(Ordering::Relaxed)
     }
 }
 
 const COLLECTION_TIMEOUT: Duration = Duration::from_secs(25);
-const REFRESH_AFTER: Duration = Duration::from_secs(60);
-const MAX_AGE: Duration = Duration::from_secs(300);
+/// Longest a snapshot answers reads once provider activity or a window reset followed it.
+const OUTDATED_MAX_AGE: Duration = Duration::from_secs(300);
+/// Longest a Host snapshot answers reads; it bounds what use on other devices can hide.
+const HOST_MAX_AGE: Duration = Duration::from_mins(30);
+const SESSION_MAX_AGE: Duration = Duration::from_secs(300);
+/// Wait after the first failed read; each consecutive failure doubles it.
+const ERROR_BACKOFF: Duration = Duration::from_secs(60);
+const MAX_ERROR_BACKOFF: Duration = Duration::from_mins(15);
 
 #[derive(Debug)]
 struct CachedUsage {
     fetched: Instant,
     retry_until: Option<Instant>,
+    /// First window reset that follows this read.
+    reset_at: Option<Instant>,
+    /// Consecutive failed reads ending with this one.
+    failures: u32,
+    /// Provider activity count this read could observe.
+    activity: u64,
     source: Option<UsageIdentity>,
     identity: Option<UsageIdentity>,
     value: Value,
@@ -56,37 +86,105 @@ impl CachedUsage {
         self.retry_until
             .is_some_and(|retry_until| Instant::now() < retry_until)
     }
+
+    /// Whether this snapshot answers a read instead of a new read of the account.
+    ///
+    /// An upstream retry time holds every read to it. Otherwise it answers reads that do not
+    /// `force` a refresh for `max_age`, or less when it is a failure or when the provider's
+    /// `activity` count or a window reset has moved past it.
+    fn answers(&self, force: bool, max_age: Duration, activity: u64) -> bool {
+        if self.retry_pending() {
+            return true;
+        }
+        let lifetime = if self.value["status"] == "error" {
+            error_backoff(self.failures)
+        } else if self.activity != activity
+            || self.reset_at.is_some_and(|reset| Instant::now() >= reset)
+        {
+            OUTDATED_MAX_AGE
+        } else {
+            max_age
+        };
+        !force && self.fetched.elapsed() < lifetime.min(max_age)
+    }
 }
 
-/// Convert an error's retry time once so wall-clock changes cannot extend the cooldown.
+/// How long the `failures`-th consecutive failed read answers reads that do not force a refresh.
+fn error_backoff(failures: u32) -> Duration {
+    ERROR_BACKOFF
+        .saturating_mul(1 << failures.saturating_sub(1).min(4))
+        .min(MAX_ERROR_BACKOFF)
+}
+
+/// Convert an RFC 3339 time once so wall-clock changes cannot move the deadline.
+///
+/// Returns nothing for a missing, malformed or past time.
+fn deadline(at: &Value) -> Option<Instant> {
+    let at = chrono::DateTime::parse_from_rfc3339(at.as_str()?).ok()?;
+    let delay = at.signed_duration_since(chrono::Utc::now()).to_std().ok()?;
+    Instant::now().checked_add(delay)
+}
+
+/// Earliest time an error allows the next read, at most one hour away.
 fn retry_deadline(value: &Value) -> Option<Instant> {
     if value["status"] != "error" {
         return None;
     }
-    let retry_at = chrono::DateTime::parse_from_rfc3339(value["nextRefreshAt"].as_str()?).ok()?;
-    let delay = retry_at
-        .signed_duration_since(chrono::Utc::now())
-        .to_std()
-        .ok()?;
-    Instant::now().checked_add(delay.min(Duration::from_secs(3600)))
+    let limit = Instant::now() + Duration::from_secs(3600);
+    deadline(&value["nextRefreshAt"]).map(|retry| retry.min(limit))
+}
+
+/// First reset among the windows of `value` that is still ahead.
+fn reset_deadline(value: &Value) -> Option<Instant> {
+    value["windows"]
+        .as_array()?
+        .iter()
+        .filter_map(|window| deadline(&window["resetsAt"]))
+        .min()
 }
 
 impl UsageCache {
+    /// The Host's shared cache, which outlives sessions and follows provider activity.
+    pub(super) fn for_host() -> Self {
+        Self::lasting(HOST_MAX_AGE)
+    }
+
+    fn lasting(max_age: Duration) -> Self {
+        Self {
+            entries: Arc::default(),
+            flights: Arc::default(),
+            activity: Arc::default(),
+            budget: Arc::new(tokio::sync::Semaphore::new(4)),
+            tasks: tokio_util::task::TaskTracker::new(),
+            max_age,
+        }
+    }
+
+    /// The activity counter of `provider`, shared by every session that runs it.
+    pub(super) fn activity(&self, provider: &str) -> Activity {
+        self.activity.lock().map_or_else(
+            |_| Activity::default(),
+            |mut activity| activity.entry(provider.to_owned()).or_default().clone(),
+        )
+    }
+
+    fn activity_count(&self, provider: &str) -> u64 {
+        self.activity
+            .lock()
+            .ok()
+            .and_then(|activity| activity.get(provider).map(Activity::count))
+            .unwrap_or_default()
+    }
+
     fn get(&self, provider: &str, identity: &UsageIdentity, force: bool) -> Option<Value> {
+        let activity = self.activity_count(provider);
         self.entries
             .lock()
             .ok()?
             .get(provider)
             .filter(|cached| {
                 cached.identity.as_ref() == Some(identity)
-                    && (cached.retry_pending()
-                        || (!force
-                            && cached.fetched.elapsed()
-                                < if cached.value["status"] == "error" {
-                                    Duration::from_secs(15)
-                                } else {
-                                    MAX_AGE
-                                }))
+                    && cached.answers(force, self.max_age, activity)
             })
             .map(|cached| cached.value.clone())
     }
@@ -99,6 +197,7 @@ impl UsageCache {
         attempted_at: &str,
     ) -> Value {
         value["fetchedAt"] = json!(attempted_at);
+        let activity = self.activity_count(provider);
         let Ok(mut cache) = self.entries.lock() else {
             return value;
         };
@@ -134,11 +233,19 @@ impl UsageCache {
             if cache.len() >= 64 {
                 cache.pop_first();
             }
+            let failures = if value["status"] == "error" {
+                previous.as_ref().map_or(0, |cached| cached.failures) + 1
+            } else {
+                0
+            };
             cache.insert(
                 provider.to_owned(),
                 CachedUsage {
                     fetched: Instant::now(),
                     retry_until: retry_deadline(&value),
+                    reset_at: reset_deadline(&value),
+                    failures,
+                    activity,
                     source: None,
                     identity: Some(identity),
                     value: value.clone(),

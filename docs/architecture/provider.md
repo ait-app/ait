@@ -381,13 +381,20 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
 
 ## 账号用量
 
-- Host 用量缓存归 `AgentManager`，账号身份是只在内存比较的 SHA-256 摘要。60 秒内直接返回，
-  60–300 秒返回旧快照并后台刷新，错误快照最多复用 15 秒；整个 Host 最多四路原生查询，共用
+- Host 用量缓存归 `AgentManager`，账号身份是只在内存比较的 SHA-256 摘要。整个 Host 最多四路原生查询，共用
   25 秒截止时间（[ADR-119](../decisions/providers/adr-119-native-account-usage-and-codex-speed.md)
   的缓存策略已由 [ADR-167](../decisions/providers/adr-167-account-scoped-successful-usage.md)、
   [ADR-219](../decisions/providers/adr-219-shared-account-usage-cache.md) 修订）。
+- Host 快照在其 Provider 有活动（调用开始、请求用量、调用结束）或某个窗口的重置时间已过之后才算过期。
+  过期的快照只回答 5 分钟，未过期的回答 30 分钟；此后的读取等待新查询，凭据源可验证时同时到达的读取共用一次，手动强刷随时查询。
+  会话快照只保留 5 分钟。失败的读取按连续失败次数退避，60 秒起每次翻倍，最长 15 分钟且不超过快照的保留时间，
+  强刷可提前重试。
+  读取方不能靠提高读取频率取得更新的数据：中心每 5 分钟读取一次，查询次数由 Host 自己的活动决定
+  （[ADR-310](../decisions/providers/adr-310-activity-driven-account-usage.md)）。
+- Codex 用量查询进程在上游限流后保留；其他拒绝、传输失败、超时和取消丢弃进程，下次读取时重建。
 - 错误报告的有效未来 `nextRefreshAt` 暂停同账号轮询，最长一小时；Runtime 在收到报告时转为
-  单调时钟截止时间，普通读取、后台刷新和手动强刷均遵守，账号或凭据源变化仍先隔离历史。
+  单调时钟截止时间，普通读取和手动强刷均遵守，账号或凭据源变化仍先隔离历史。
+  截止时间之后，非强制读取还要等失败退避结束。
   Claude HTTP 429 显示明确的临时限流错误，按 `Retry-After` 秒数或 HTTP 日期等待；缺失、无效、
   零或过期值至少等待六十秒，最长一小时。同账号 `lastSuccessful` 保留原成功时间，正常报告的
   `nextRefreshAt` 不限制强刷（[ADR-285](../decisions/providers/adr-285-account-usage-retry-delay.md)）。

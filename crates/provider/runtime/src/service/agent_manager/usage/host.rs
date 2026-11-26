@@ -1,7 +1,7 @@
-//! Global host snapshots: serve cached facts while one bounded background refresh runs.
+//! Global host snapshots: readers share one bounded refresh, which outlives any of them.
 use super::{
-    AgentClient, AgentSessionError, COLLECTION_TIMEOUT, Duration, Instant, MAX_AGE, REFRESH_AFTER,
-    UsageCache, UsageIdentity, Value, failure, now_timestamp,
+    AgentClient, AgentSessionError, COLLECTION_TIMEOUT, Instant, UsageCache, UsageIdentity, Value,
+    failure, now_timestamp,
 };
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -13,6 +13,12 @@ pub(super) struct Flight {
     lane: Arc<tokio::sync::Mutex<()>>,
     source: Option<UsageIdentity>,
     result: watch::Receiver<Option<Value>>,
+}
+
+/// When a refresh started and the provider activity its read can observe.
+struct Attempt {
+    at: String,
+    activity: u64,
 }
 
 impl UsageCache {
@@ -31,11 +37,7 @@ impl UsageCache {
         let Ok(source) = tokio::time::timeout_at(deadline, client.usage_cache_key()).await else {
             return failure(&provider, AgentSessionError::Failed);
         };
-        if let Some((cached, age)) = self.snapshot(&provider, source.as_ref(), force) {
-            if age >= REFRESH_AFTER && cached["status"] != "error" {
-                // Own the refresh independently of the RPC/UI connection lifetime.
-                let _ = self.refresh_host(client, source, deadline, true);
-            }
+        if let Some(cached) = self.snapshot(&provider, source.as_ref(), force) {
             return cached;
         }
         let mut result = match self.refresh_host(client, source, deadline, force) {
@@ -67,18 +69,13 @@ impl UsageCache {
         provider: &str,
         source: Option<&UsageIdentity>,
         force: bool,
-    ) -> Option<(Value, Duration)> {
+    ) -> Option<Value> {
         let source = source?;
+        let activity = self.activity_count(provider);
         let entries = self.entries.lock().ok()?;
         let entry = entries.get(provider)?;
-        let age = entry.fetched.elapsed();
-        let ttl = if entry.value["status"] == "error" {
-            Duration::from_secs(15)
-        } else {
-            MAX_AGE
-        };
-        (entry.source.as_ref() == Some(source) && (entry.retry_pending() || (!force && age < ttl)))
-            .then(|| (entry.value.clone(), age))
+        (entry.source.as_ref() == Some(source) && entry.answers(force, self.max_age, activity))
+            .then(|| entry.value.clone())
     }
 
     fn commit_host(
@@ -86,21 +83,24 @@ impl UsageCache {
         provider: &str,
         source: Option<UsageIdentity>,
         report: (Option<UsageIdentity>, Value, bool),
-        attempted: &str,
+        attempt: &Attempt,
     ) -> Value {
         let (identity, value, changed) = report;
         let value = if changed {
             // Native labels may match across workspaces; history also belongs
             // to the verified local credential/config generation.
+            let mut failures = 0;
             if let Ok(mut entries) = self.entries.lock()
-                && entries
-                    .get(provider)
-                    .is_some_and(|entry| entry.source != source)
+                && let Some(entry) = entries.get(provider)
             {
-                entries.remove(provider);
+                if entry.source == source {
+                    failures = entry.failures;
+                } else {
+                    entries.remove(provider);
+                }
             }
             let unknown = identity.is_none();
-            let value = self.put(provider, identity, value, attempted);
+            let value = self.put(provider, identity, value, &attempt.at);
             // Verified local credentials also bound preparation failures. Keep
             // this snapshot separate from native-account success/history.
             if unknown
@@ -116,6 +116,13 @@ impl UsageCache {
                     super::CachedUsage {
                         fetched: Instant::now(),
                         retry_until: super::retry_deadline(&value),
+                        reset_at: None,
+                        failures: if value["status"] == "error" {
+                            failures + 1
+                        } else {
+                            0
+                        },
+                        activity: attempt.activity,
                         source: source.clone(),
                         identity: None,
                         value: value.clone(),
@@ -131,6 +138,10 @@ impl UsageCache {
             && let Some(entry) = entries.get_mut(provider)
         {
             entry.source = source;
+            if changed {
+                // Activity during the read may be missing from its answer.
+                entry.activity = attempt.activity;
+            }
         }
         value
     }
@@ -174,7 +185,10 @@ impl UsageCache {
         );
         let cache = self.clone();
         self.tasks.spawn(async move {
-            let attempted = now_timestamp();
+            let attempt = Attempt {
+                at: now_timestamp(),
+                activity: cache.activity_count(&provider),
+            };
             let mut known_identity = cache.entries.lock().ok().and_then(|entries| {
                 entries
                     .get(&provider)
@@ -233,7 +247,7 @@ impl UsageCache {
                     .get(&provider)
                     .is_some_and(|flight| flight.generation == generation)
                 {
-                    cache.commit_host(&provider, source, (identity, value, changed), &attempted)
+                    cache.commit_host(&provider, source, (identity, value, changed), &attempt)
                 } else {
                     failure(&provider, AgentSessionError::Failed)
                 }

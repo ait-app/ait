@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Ait asks Claude, Codex and other providers for plan usage far less often: about twice an hour
+  on an idle host and at most twelve times an hour while agents work, down from about fifty.
+  Usage figures can now be up to five minutes behind during work; Refresh still reads at once.
+  Failed usage reads back off for up to fifteen minutes instead of retrying every poll.
+
 - Fixed completed agent turns appearing active again after an idle snapshot when a delayed
   start event or history response arrives, leaving a stale Stop button in the composer.
 

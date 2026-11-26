@@ -28,6 +28,8 @@ pub(super) struct Transport {
     pub(super) diagnostics: Diagnostics,
     pub(super) failure: diagnostics::failure::Failure,
     pub(super) rpc_error: Option<secrecy::SecretString>,
+    /// Class of the error that answered the last request, if it was rejected.
+    pub(super) rpc_category: Option<Category>,
     _stderr: AbortOnDropHandle<()>,
     input: Arc<Mutex<ChildStdin>>,
     messages: mpsc::Receiver<Value>,
@@ -157,6 +159,7 @@ impl Transport {
             diagnostics: diagnostics.clone(),
             failure: diagnostics::failure::Failure::default(),
             rpc_error: None,
+            rpc_category: None,
             _stderr: AbortOnDropHandle::new(tokio::spawn(diagnostics.drain(stderr))),
             input,
             messages,
@@ -211,6 +214,7 @@ impl Transport {
             return Err(AgentSessionError::Failed);
         }
         self.rpc_error = None;
+        self.rpc_category = None;
         self.sequence += 1;
         let request = json!({"id":self.sequence,"method":method,"params":params});
         let result = tokio::time::timeout(self.deadline, async {
@@ -236,6 +240,8 @@ impl Transport {
                         {
                             return Err(AgentSessionError::Unavailable);
                         }
+                        let diagnostic = diagnostics::native(error, "rpc");
+                        self.rpc_category = Some(diagnostic.category);
                         let message = error["message"].as_str().unwrap_or_default();
                         self.rpc_error = (!message.is_empty() && message.len() <= 8192)
                             .then(|| message.to_owned().into());
@@ -260,7 +266,7 @@ impl Transport {
                                 "Native provider rejected a recoverable control request"
                             );
                         } else {
-                            self.observe_error(error, diagnostics::native(error, "rpc"), method);
+                            self.observe_error(error, diagnostic, method);
                         }
                         if method == "thread/resume"
                             && writer_conflict(error, request["params"]["threadId"].as_str())

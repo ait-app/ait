@@ -13,6 +13,8 @@ paths:
 
 - 基线：v0.2.0（5e50a7a0）。延续 ADR-119 的账号隔离与原生额度边界。
 - Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
+- 后续修订：[ADR-310](adr-310-activity-driven-account-usage.md) 以 Provider 活动取代 60 秒与 300 秒的年龄阈值，
+  过期快照不再先返回后刷新，以失败退避取代 15 秒错误缓存，Codex 查询进程在上游限流后保留，中心采集间隔改为 5 分钟。
 
 ## 问题
 

@@ -8,6 +8,7 @@ use domain::agent_runtime::{
     PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
 };
 
+use super::usage::Activity;
 use crate::ports::usage_ledger::{
     CallBegin, CallFinish, CallOutcome, CallSource, RequestRecord, UsageLedger, UsageLedgerError,
     UsageQuery, UsageSummary,
@@ -36,15 +37,20 @@ impl super::AgentManager {
 pub(super) struct Calls {
     /// Host ledger that receives every write.
     ledger: Arc<dyn UsageLedger>,
+    /// Counter that tells the Host's account usage cache its snapshot of the provider is outdated.
+    activity: Activity,
     /// Call of the active native turn; its id is the turn id.
     active: Option<String>,
 }
 
 impl Calls {
     /// Track calls of one Agent in `ledger`, with no call open.
-    pub(super) fn new(ledger: Arc<dyn UsageLedger>) -> Self {
+    ///
+    /// Each start, request and end of a call marks `activity`, the counter of the Agent's provider.
+    pub(super) fn new(ledger: Arc<dyn UsageLedger>, activity: Activity) -> Self {
         Self {
             ledger,
+            activity,
             active: None,
         }
     }
@@ -61,6 +67,7 @@ impl Calls {
     ) {
         self.ledger
             .begin_call(call_begin(call_id.clone(), record, model, source));
+        self.activity.mark();
         self.active = Some(call_id);
     }
 
@@ -106,6 +113,8 @@ impl Calls {
     ///
     /// Usage that arrives while no call is open, such as a late frame between turns, is dropped.
     pub(super) fn record(&self, agent_id: &str, usage: RequestUsage) {
+        // The request consumed quota whether or not a call can take it.
+        self.activity.mark();
         let Some(call_id) = &self.active else {
             tracing::debug!(agent_id, "Request usage without an active call was dropped");
             return;
@@ -129,6 +138,7 @@ impl Calls {
                 ended_at: now_unix_ms(),
                 token_usage_available,
             });
+            self.activity.mark();
         }
     }
 }

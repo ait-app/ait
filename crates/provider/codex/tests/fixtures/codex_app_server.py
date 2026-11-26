@@ -345,6 +345,10 @@ for line in sys.stdin:
     elif method == "account/read":
         result = {"account": {"type": "chatgpt", "email": os.environ.get("AIT_TEST_USAGE_ACCOUNT", "private@example.test"), "planType": "plus"}, "requiresOpenaiAuth": True}
     elif method == "account/rateLimits/read":
+        refusal = root / "refuse-usage"
+        if refusal.exists():
+            emit({"id": request["id"], "error": {"code": -32603, "message": refusal.read_text()}})
+            continue
         if (root / "hold-usage").exists():
             (root / "usage-entered").write_text("")
             deadline = time.monotonic() + 30

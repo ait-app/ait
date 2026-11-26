@@ -128,6 +128,8 @@ API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储�
 账号用量的上游限流由 adapter 投影安全错误和重试时间，`provider` 按已验证账号在内存中遵守
 等待期限，手动强刷也不能提前轮询；同账号成功快照继续保留
 （[ADR-285](../decisions/providers/adr-285-account-usage-retry-delay.md)）。
+Host 用量快照只在其 Provider 有活动或额度窗口重置后刷新，查询次数不随读取方的读取频率增长
+（[ADR-310](../decisions/providers/adr-310-activity-driven-account-usage.md)）。
 
 BTW 侧会话的共享端口和 DTO 归 `provider-core`，辅助执行归 adapter，冻结显示上下文、
 持久话题、收据与恢复归 `provider`。客户端浮窗调用同一协议，展开时将话题交给新会话草稿，
