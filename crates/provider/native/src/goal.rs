@@ -22,7 +22,9 @@ pub fn snapshot(native: &Value, editable: bool) -> Option<Value> {
         "blocked" => "blocked",
         "usageLimited" => "usageLimited",
         "complete" | "completed" => "completed",
-        "budgetLimited" | "budget_limited" | "budget_exhausted" => "budgetLimited",
+        "budgetLimited" | "budget-limited" | "budget_limited" | "budget_exhausted" => {
+            "budgetLimited"
+        }
         "failed" => "failed",
         _ => "unknown",
     };

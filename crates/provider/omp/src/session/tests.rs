@@ -354,6 +354,7 @@ async fn newly_accepted_or_started_work_invalidates_an_earlier_idle_check() {
             written: None,
             after_turn: false,
             model: false,
+            goal_start: None,
             deadline: Instant::now() + Duration::from_secs(60),
         });
         session.idle_without_outcome = Some(Instant::now() - STATE_CHECK_INTERVAL);
@@ -390,6 +391,7 @@ async fn reconfiguration_discards_checks_owned_by_the_previous_native_process() 
         written: Some(receiver),
         after_turn: false,
         model: false,
+        goal_start: None,
         deadline: Instant::now() + Duration::from_secs(60),
     });
     session.cancel_requests.insert("old-abort".to_owned(), turn);
@@ -447,6 +449,7 @@ async fn a_previous_state_response_cannot_finish_the_next_admitted_turn() {
         written: None,
         after_turn: false,
         model: false,
+        goal_start: None,
         deadline: Instant::now() + Duration::from_secs(60),
     });
     session.finish();
@@ -485,6 +488,7 @@ async fn busy_or_missing_state_facts_never_complete_the_active_turn() {
             written: None,
             after_turn: false,
             model: false,
+            goal_start: None,
             deadline: Instant::now() + Duration::from_secs(60),
         });
         let mut state = json!({"sessionId":session.state["sessionId"],"isSettled":true});
@@ -512,8 +516,103 @@ fn state_check(id: &str, turn: Option<String>) -> StateCheck {
         turn,
         written: None,
         model: false,
+        goal_start: None,
         deadline: Instant::now() + Duration::from_secs(60),
     }
+}
+
+#[tokio::test]
+async fn goal_admission_reconciles_only_the_matching_idle_read() {
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    session.pending_goal_start = Some("new-goal".to_owned());
+    for (requested, busy, pending) in [
+        ("old-goal", false, true),
+        ("new-goal", true, true),
+        ("new-goal", false, false),
+    ] {
+        let mut check = state_check("goal-state", None);
+        check.goal_start = Some(requested.to_owned());
+        session.state_check = Some(check);
+        let mut state = session.state.clone();
+        state["isSettled"] = json!(true);
+        state["hasPendingAsyncWork"] = json!(busy);
+        session
+            .checked_state(&json!({"type":"response","command":"get_state",
+            "id":"goal-state","success":true,"data":state}))
+            .unwrap();
+        assert_eq!(session.pending_foreground(), pending);
+    }
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn earlier_goal_facts_cannot_release_a_resume_awaiting_its_answer() {
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    session.pending_goal_start = Some("resume-request".to_owned());
+    session
+        .pending
+        .insert("resume-request".to_owned(), slash::Pending::Goal);
+    for goal in [
+        Value::Null,
+        json!({"objective":"Verify", "status":"paused"}),
+    ] {
+        session.observe_goal(&goal);
+        assert!(session.pending_foreground());
+    }
+    let pending = session.pending.remove("resume-request").unwrap();
+    session.command_answered(
+        pending,
+        &json!({"id":"resume-request", "success":true,
+        "data":{"goal":{"objective":"Verify", "status":"active"}}}),
+    );
+    assert!(session.pending_foreground());
+    session.observe_goal(&json!({"objective":"Verify", "status":"paused"}));
+    assert!(!session.pending_foreground());
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_goal_start_takes_over_pending_admission_until_native_settlement() {
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    session.pending_goal_start = Some("goal-request".to_owned());
+    session.consume(&json!({"type":"agent_start"})).unwrap();
+    assert!(session.pending_goal_start.is_none());
+    assert!(session.active.is_some());
+    assert!(session.pending_foreground());
+    assert!(matches!(
+        session.next_event(),
+        Some(AgentTurnEvent::Started(_))
+    ));
+    assert!(!session.pending_foreground());
+    session
+        .consume(&json!({"type":"agent_end","isTerminal":true,"messages":[]}))
+        .unwrap();
+    assert!(
+        session.active.is_some(),
+        "a goal may continue after agent_end"
+    );
+    session.consume(&json!({"type":"session_settled"})).unwrap();
+    assert!(session.active.is_none());
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn omp_budget_limit_offers_only_native_lifecycle_operations() {
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    session.observe_goal(&json!({"objective":"Verify", "status":"budget-limited",
+        "tokenBudget":100,"tokensUsed":105,"timeUsedSeconds":3}));
+    let goal = session.runtime().unwrap().extra.unwrap()["goal"].clone();
+    assert_eq!(goal["status"], "budgetLimited");
+    assert_eq!(goal["tokensUsed"], 105);
+    assert_eq!(
+        goal["actions"],
+        json!({"edit":false,"pause":true,"resume":false,"clear":true})
+    );
+    session.close().await.unwrap();
 }
 
 /// A `get_state` response `id` naming native session `session` with file `file`.
@@ -582,6 +681,7 @@ async fn an_unanswered_state_check_expires_and_is_asked_again() {
     session.phase = TurnPhase::AwaitingSettlement;
     session.state_check = Some(StateCheck {
         model: true,
+        goal_start: None,
         deadline: Instant::now(),
         ..state_check("lost", Some(turn))
     });
@@ -720,6 +820,7 @@ async fn a_failed_state_write_invalidates_the_connection() {
         written: Some(receiver),
         after_turn: false,
         model: false,
+        goal_start: None,
         deadline: Instant::now() + Duration::from_secs(60),
     });
 
@@ -747,6 +848,7 @@ async fn a_state_response_can_precede_the_correlated_prompt_result() {
         written: None,
         after_turn: false,
         model: false,
+        goal_start: None,
         deadline: Instant::now() + Duration::from_secs(60),
     });
     session

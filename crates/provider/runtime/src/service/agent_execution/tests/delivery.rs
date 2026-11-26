@@ -390,6 +390,45 @@ async fn native_goal_continuations_acquire_and_release_the_host_foreground_turn(
 }
 
 #[tokio::test]
+async fn initial_native_goal_is_routed_before_creation_completes() {
+    let fixture = Fixture::new();
+    fixture.mode("workflows");
+    let (execution, _) = worker(&fixture);
+    let created = execution
+        .execute(
+            "agent.create.request",
+            json!({
+                "config":{"provider":"codex","cwd":fixture.cwd},
+                "initialPrompt":"/goal autonomous fixture", "clientMessageId":"initial-goal"
+            }),
+        )
+        .await
+        .unwrap();
+    let finished = execution
+        .execute(
+            "agent.finish.wait.request",
+            json!({"agentId":created["agentId"]}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(finished["lastMessage"], "Echo: Goal completed");
+    let requests = fixture.requests();
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|request| request["method"] == "thread/goal/set")
+            .count(),
+        1
+    );
+    assert!(
+        !requests
+            .iter()
+            .any(|request| request["method"] == "turn/start")
+    );
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn failed_queued_admission_does_not_block_an_independent_agent() {
     use provider_core::protocol::prompt::AgentPrompt;
     let fixture = Fixture::new();

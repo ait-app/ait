@@ -123,7 +123,15 @@ impl Session {
         };
         // As in Paseo, a handled command ends any replay of the resumed session (M8).
         self.live = true;
+        let starts_goal = kind == "goal"
+            && matches!(fields["op"].as_str(), Some("create" | "resume"))
+            && self.active.is_none();
         let id = self.transport.begin(kind, fields).await?;
+        if starts_goal {
+            self.invalidate_state_check();
+            self.pending_goal_start = Some(id.clone());
+            self.next_state_check = tokio::time::Instant::now() + super::STATE_CHECK_INTERVAL;
+        }
         // The loading row shows once the request is written; OMP's own rows stay hidden.
         let pending =
             pending.unwrap_or_else(|| Pending::Compact(self.stream.begin_manual_compaction()));
@@ -181,7 +189,12 @@ impl Session {
                     self.observe_goal(goal);
                 }
             }
-            Pending::Goal => self.command_failed("goal", "Goal operation failed", &event["error"]),
+            Pending::Goal => {
+                if event["id"].as_str() == self.pending_goal_start.as_deref() {
+                    self.pending_goal_start = None;
+                }
+                self.command_failed("goal", "Goal operation failed", &event["error"]);
+            }
             Pending::Compact(id) => {
                 self.stream
                     .end_manual_compaction(&id, success.then_some(&event["data"]));

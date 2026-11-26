@@ -403,6 +403,16 @@ fn version_seven_queue_migrates_and_keeps_existing_inputs() {
     timeline
         .reserve_creation_input("agent", "initial", &prompt)
         .unwrap();
+    let queued = timeline.queued_inputs().unwrap();
+    assert!(!queued[0].creation);
+    assert!(queued[1].creation);
+    assert!(
+        !timeline
+            .queued_for_agent("agent")
+            .unwrap()
+            .unwrap()
+            .creation
+    );
     timeline.recover_inputs().unwrap();
     assert_eq!(
         timeline

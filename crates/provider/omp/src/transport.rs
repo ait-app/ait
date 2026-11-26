@@ -322,7 +322,7 @@ pub(super) struct Transport {
     sequence: u64,
     timeouts: Timeouts,
     shutdown_signalled: bool,
-    extension: Option<tempfile::NamedTempFile>,
+    extensions: Vec<tempfile::NamedTempFile>,
 }
 
 /// A bounded handle to the existing serialized writer; failures poison the connection.
@@ -347,9 +347,9 @@ impl Writer {
 }
 
 impl Transport {
-    /// Retain the private extension for this connection's lifetime.
-    pub(super) fn retain_extension(&mut self, extension: Option<tempfile::NamedTempFile>) {
-        self.extension = extension;
+    /// Retain private extensions for this connection's lifetime.
+    pub(super) fn retain_extensions(&mut self, extensions: Vec<tempfile::NamedTempFile>) {
+        self.extensions = extensions;
     }
     /// Share only stdin serialization; this never creates a second native reader.
     pub(super) fn writer(&self) -> Result<Writer, AgentSessionError> {
@@ -529,7 +529,7 @@ impl Transport {
             sequence: 0,
             timeouts,
             shutdown_signalled: false,
-            extension: None,
+            extensions: Vec::new(),
         })
     }
 

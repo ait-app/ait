@@ -774,7 +774,10 @@ impl ExecutionState {
         has_preset: bool,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();
-        if !has_preset {
+        let initial_command = prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.text.trim_start().starts_with('/'));
+        if !has_preset && !initial_command {
             let result = json!({"agent":self.snapshot(id)?});
             let mut progress =
                 creations.advance(admission, Phase::AgentReady, Some(result), None)?;
@@ -796,8 +799,8 @@ impl ExecutionState {
                 json!({"status":"agent_created","agentId":id,"agent":snapshot,"error":null,"creation":progress}),
             );
         }
-        // AgentReady is committed before reservation, but this lane remains owned until the
-        // initial input has been queued, so a later request cannot overtake it.
+        // Presets and initial commands need the live configuration/catalog before admission.
+        // Reserve before releasing the lane so later input cannot overtake the initial command.
         let progress = creations.advance(
             admission,
             Phase::AgentReady,

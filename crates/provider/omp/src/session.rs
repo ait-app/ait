@@ -94,6 +94,8 @@ struct StateCheck {
     after_turn: bool,
     /// Read after OMP reported `model_changed`, for its runtime facts (M9).
     model: bool,
+    /// Goal admission whose lack of a native turn this read can reconcile.
+    goal_start: Option<String>,
     /// An unanswered check is abandoned, and asked again, after the request timeout.
     deadline: Instant,
 }
@@ -120,6 +122,8 @@ pub(super) struct Session {
     stream: Stream,
     dialogs: Dialogs,
     active: Option<String>,
+    /// A create/resume was written but its autonomous `agent_start` has not arrived.
+    pending_goal_start: Option<String>,
     closed: bool,
     children: super::subagents::Children,
     prompt_id: Option<String>,
@@ -187,11 +191,11 @@ async fn connect(
     confinement: Option<&WriteConfinement>,
 ) -> Result<(Transport, Value), AgentSessionError> {
     let mut args = config::launch_arguments(config, launch);
-    let extension = client
-        .vibe_host
-        .then(super::vibe::host::Host::extension)
-        .transpose()?;
-    if let Some(file) = &extension {
+    let mut extensions = vec![persistence::extension()?];
+    if client.vibe_host {
+        extensions.push(super::vibe::host::Host::extension()?);
+    }
+    for file in &extensions {
         args.extend([
             "--extension".to_owned(),
             file.path().to_string_lossy().into_owned(),
@@ -199,7 +203,7 @@ async fn connect(
     }
     let timeouts = config::timeouts(config, client.timeouts);
     let mut transport = Transport::spawn(client, cwd, &args, confinement, timeouts)?;
-    transport.retain_extension(extension);
+    transport.retain_extensions(extensions);
     match prepare(&mut transport, launch).await {
         Ok(state) => Ok((transport, state)),
         Err(error) => {
@@ -367,9 +371,8 @@ async fn open_scoped(
         return Err(AgentSessionError::Failed);
     }
     let mut stream = replayed.unwrap_or_else(|| Stream::new(id.to_owned(), client.images.clone()));
-    stream = stream
-        .with_blobs(history::paths::blobs(client, Some(&spec.cwd))?)
-        .with_identity_lookups();
+    let blobs = history::paths::blobs(client, Some(&spec.cwd))?;
+    stream = stream.with_blobs(blobs.clone()).with_identity_lookups();
     // OMP's todo state at attach, unless the replayed history already shows it (M4).
     stream.state_todos(&state);
     let mcp = super::mcp::Mcp::open(&spec.config, &mut transport).await?;
@@ -402,9 +405,9 @@ async fn open_scoped(
         stream,
         dialogs: Dialogs::default(),
         active: None,
+        pending_goal_start: None,
         closed: false,
-        children: super::subagents::Children::default()
-            .with_blobs(history::paths::blobs(client, Some(&spec.cwd))?),
+        children: super::subagents::Children::default().with_blobs(blobs),
         prompt_id: None,
         phase: TurnPhase::Idle,
         state_check: None,
@@ -549,6 +552,7 @@ impl Session {
         }
         // Request ids restart with each process, so nothing held can correlate with it.
         self.prompt_id = None;
+        self.pending_goal_start = None;
         self.stream.pending_inputs.clear();
         self.state_check = None;
         self.usage.reset();
@@ -943,6 +947,7 @@ impl Session {
     /// Handle `agent_start`: start an autonomous turn, mark the active turn's run started,
     /// or, after an acknowledged `abort`, end the cancelled turn before OMP's queued run.
     fn run_started(&mut self) {
+        self.pending_goal_start = None;
         if self.active.is_none() {
             self.begin_autonomous();
         } else if matches!(self.cancellation, Cancellation::Acknowledged(_)) {
@@ -1162,6 +1167,7 @@ impl Session {
 
     /// End the active turn as failed after its connection or protocol failed (D28).
     fn fail_turn(&mut self) {
+        self.pending_goal_start = None;
         if let Some(host) = &mut self.vibe {
             host.stop();
         }
@@ -1177,6 +1183,7 @@ impl Session {
     fn invalidate_state_check(&mut self) {
         if let Some(check) = &mut self.state_check {
             check.turn = None;
+            check.goal_start = None;
         }
         self.idle_without_outcome = None;
     }
@@ -1184,6 +1191,18 @@ impl Session {
     fn checked_state(&mut self, event: &Value) -> Result<(), AgentSessionError> {
         let check = self.state_check.take().ok_or(AgentSessionError::Failed)?;
         self.next_state_check = Instant::now() + STATE_CHECK_INTERVAL;
+        if check.goal_start.is_some()
+            && check.goal_start == self.pending_goal_start
+            && event["success"] == true
+            && event["command"] == "get_state"
+            && event["data"]["sessionId"] == self.state["sessionId"]
+            && state_is_settled(&event["data"])
+        {
+            self.pending_goal_start = None;
+            if let Some(goal) = event["data"].get("goal") {
+                self.observe_goal(goal);
+            }
+        }
         // An extension command can start or switch OMP's session; follow it, as a read
         // through `runtime_info` does.
         if event["success"] == true && event["data"]["sessionId"] != self.state["sessionId"] {
@@ -1218,17 +1237,7 @@ impl Session {
         }
         // Older native profiles may omit settlement facts; absence never means idle.
         let state = &event["data"];
-        if event["success"] != true || state["isSettled"] != true {
-            self.idle_without_outcome = None;
-            return Ok(());
-        }
-        if state["isStreaming"] == true
-            || state["isCompacting"] == true
-            || state["hasPendingAsyncWork"] == true
-            || state["queuedMessageCount"]
-                .as_u64()
-                .is_some_and(|count| count > 0)
-        {
+        if event["success"] != true || !state_is_settled(state) {
             self.idle_without_outcome = None;
             return Ok(());
         }
@@ -1304,7 +1313,16 @@ impl Session {
 
     /// Cache confirmed native Goal facts and publish their runtime projection.
     fn observe_goal(&mut self, goal: &Value) {
-        if provider_native::goal::snapshot(goal, false).is_some() {
+        if let Some(snapshot) = provider_native::goal::snapshot(goal, false) {
+            // Buffered facts from an earlier pause/drop cannot release a new admission
+            // before its own response has been processed.
+            let awaiting_answer = self
+                .pending_goal_start
+                .as_ref()
+                .is_some_and(|id| self.pending.contains_key(id));
+            if snapshot["status"] != "active" && !awaiting_answer {
+                self.pending_goal_start = None;
+            }
             self.state["goal"] = goal.clone();
             if let Ok(info) = self.runtime() {
                 self.stream
@@ -1330,11 +1348,17 @@ impl Session {
     /// Runtime facts from the last native state, with the effective mode: none means Full.
     fn runtime(&self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
         let mut info = config::runtime(&self.state)?;
-        if let Some(goal) = self
+        if let Some(mut goal) = self
             .state
             .get("goal")
             .and_then(|native| provider_native::goal::snapshot(native, false))
         {
+            if goal["status"] == "budgetLimited" {
+                // OMP's resume RPC accepts paused goals only; an exhausted budget first
+                // needs an explicit pause, and resuming never increases that budget.
+                goal["actions"]["pause"] = json!(true);
+                goal["actions"]["resume"] = json!(false);
+            }
             info.extra
                 .get_or_insert_with(Default::default)
                 .insert("goal".to_owned(), goal);
@@ -1410,7 +1434,11 @@ impl Session {
                 TurnPhase::Running | TurnPhase::AwaitingSettlement
             )
         });
-        if !after_turn && !model && (turn.is_none() || Instant::now() < self.next_state_check) {
+        if !after_turn
+            && !model
+            && ((turn.is_none() && self.pending_goal_start.is_none())
+                || Instant::now() < self.next_state_check)
+        {
             return Ok(());
         }
         let (id, written) = match self.transport.background("get_state") {
@@ -1427,6 +1455,7 @@ impl Session {
         self.state_check = Some(StateCheck {
             id,
             turn: turn.cloned(),
+            goal_start: self.pending_goal_start.clone(),
             written: Some(written),
             after_turn,
             model,
@@ -1553,10 +1582,35 @@ impl AgentSession for Session {
     }
     fn pending_foreground(&self) -> bool {
         // An autonomous native run started, but the runtime has not seen its turn yet.
-        self.stream
-            .events
-            .iter()
-            .any(|event| matches!(event, AgentTurnEvent::Started(_)))
+        self.pending_goal_start.is_some()
+            || self
+                .stream
+                .events
+                .iter()
+                .any(|event| matches!(event, AgentTurnEvent::Started(_)))
+    }
+    async fn cancel_pending(&mut self) -> Result<(), AgentSessionError> {
+        if !self.pending_foreground() {
+            return Ok(());
+        }
+        if self.pending_goal_start.is_none() {
+            if let Some(turn) = self.active.clone() {
+                self.cancel_turn(&turn).await?;
+            }
+            return Ok(());
+        }
+        // Stop also covers a continuation that raced ahead of its Started event. OMP's
+        // abort suppresses future continuation; pause preserves the resumable objective.
+        let response = self
+            .transport
+            .request("goal", json!({"op":"pause"}))
+            .await?;
+        self.transport.request("abort", json!({})).await?;
+        self.pending_goal_start = None;
+        if let Some(goal) = response.get("goal") {
+            self.observe_goal(goal);
+        }
+        Ok(())
     }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         let file = self.state["sessionFile"].as_str()?;
@@ -1720,6 +1774,7 @@ impl AgentSession for Session {
     }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
+        self.pending_goal_start = None;
         self.vibe.take();
         self.mcp.take();
         self.child_controls.clear(&mut self.stream.events);
@@ -1934,8 +1989,19 @@ fn failure_text(reason: &str, message: &Value) -> String {
     }
 }
 
+fn state_is_settled(state: &Value) -> bool {
+    state["isSettled"] == true
+        && state["isStreaming"] != true
+        && state["isCompacting"] != true
+        && state["hasPendingAsyncWork"] != true
+        && state["queuedMessageCount"]
+            .as_u64()
+            .is_none_or(|count| count == 0)
+}
+
 mod child_controls;
 mod command_catalog;
+mod persistence;
 mod slash;
 
 #[cfg(all(test, unix))]

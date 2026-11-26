@@ -252,6 +252,17 @@ impl AgentManager {
             timeline.finish_input(agent, &message, Receipt::Rejected)?;
             return Err(ErrorCode::AgentIo);
         }
+        self.execute_claimed_command(agent, &message, &prompt).await
+    }
+
+    /// Execute a command whose input receipt was claimed by immediate or creation admission.
+    async fn execute_claimed_command(
+        &mut self,
+        agent: &str,
+        message: &str,
+        prompt: &AgentPrompt,
+    ) -> Result<(), ErrorCode> {
+        let timeline = self.timeline.clone().ok_or(ErrorCode::AgentIo)?;
         let config = self
             .registry
             .get(agent)
@@ -264,7 +275,7 @@ impl AgentManager {
             .get(agent)
             .ok_or(ErrorCode::AgentIo)?
             .session
-            .command_config_patch(&prompt, &config);
+            .command_config_patch(prompt, &config);
         let result = match patch {
             Ok(Some(patch)) => self
                 .configure(agent, &patch)
@@ -282,7 +293,7 @@ impl AgentManager {
                     .get_mut(agent)
                     .ok_or(ErrorCode::AgentIo)?
                     .session
-                    .out_of_band(&prompt)
+                    .out_of_band(prompt)
                     .await
             }
             Err(error) => Err(error),
@@ -294,7 +305,7 @@ impl AgentManager {
             }
             Err(_) => Receipt::Uncertain,
         };
-        timeline.finish_input(agent, &message, receipt)?;
+        timeline.finish_input(agent, message, receipt)?;
         if matches!(
             result,
             Err(provider_core::ports::agent_session::AgentSessionError::Rejected)
@@ -447,7 +458,7 @@ impl AgentManager {
             .clients
             .get(provider)
             .is_some_and(|client| client.commands_include_ownership());
-        if !ownership || !input.prompt.text.trim_start().starts_with('/') {
+        if (!ownership && !input.creation) || !input.prompt.text.trim_start().starts_with('/') {
             return Ok(true);
         }
         if !self.live.contains_key(&input.agent) {
@@ -464,6 +475,24 @@ impl AgentManager {
             .get(&input.agent)
             .and_then(|live| live.session.command_route(&input.prompt.text));
         if matches!(route, Some(CommandRoute::Pending)) {
+            return Ok(false);
+        }
+        let out_of_band = route == Some(CommandRoute::OutOfBand)
+            || route.is_none()
+                && self
+                    .clients
+                    .get(provider)
+                    .is_some_and(|client| client.handles_out_of_band(&input.prompt.text));
+        if input.creation && out_of_band {
+            timeline.claim_input(&input.agent, &input.message)?;
+            // Only initial input is unclassified. A previously queued foreground command
+            // must still be rejected if ownership changes while it waits (ADR-302).
+            let result = self
+                .execute_claimed_command(&input.agent, &input.message, &input.prompt)
+                .await;
+            if selected.is_some() {
+                result?;
+            }
             return Ok(false);
         }
         if matches!(

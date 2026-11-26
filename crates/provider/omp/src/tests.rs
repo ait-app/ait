@@ -12,6 +12,7 @@ mod commands;
 mod deferred_config;
 mod diagnostics;
 mod fixture_program;
+mod goals;
 mod installed;
 mod interactions;
 mod native_history;
@@ -296,7 +297,7 @@ pub(super) fn launches(calls: &[Value]) -> Vec<Vec<String>> {
             if let Some(index) = args.iter().position(|arg| arg == "--config") {
                 args.drain(index..index + 2);
             }
-            if let Some(index) = args.iter().position(|arg| arg == "--extension") {
+            while let Some(index) = args.iter().position(|arg| arg == "--extension") {
                 args.drain(index..index + 2);
             }
             args

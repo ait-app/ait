@@ -1,5 +1,12 @@
 # Ait changelog
 
+## Unreleased
+
+- Start an Oh My Pi agent directly with `/goal`. Goal startup now reserves execution until
+  the native run begins, Stop pauses pending goals, and native token budget limits display
+  correctly. Goals stopped before the first reply survive reopening. Initial commands retain
+  extension ownership and creation retry protection.
+
 ## 0.2.28 - 2026-11-26
 
 - Share a workspace, project, or Host directly with people. Generate and copy the invitation

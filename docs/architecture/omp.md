@@ -81,7 +81,9 @@ flowchart LR
   恢复后 `sessionId` 与句柄不一致视为失败。
 - 恢复后的进程在首个 `agent_start` 或本地提交 prompt 之前，不把会话事件当作实时输出；
   已有对话由历史显示。
-- 尚未写入原生文件的空 Agent 可以重新打开；已提交过输入但会话文件丢失时返回错误，
+- 会话启动与切换时，私有扩展通过公开的 `sessionManager.ensureOnDisk` 提前建立原生文件，
+  使没有用户 prompt、也没有助手回复的 Goal 在停止后仍可恢复；目标状态仍只由 OMP 写入原生日志。
+  缺少该 API 的旧 OMP 仍允许重新打开未写入文件的空 Agent；已提交过输入但会话文件丢失时返回错误，
   不新建替代对话，也不重发输入。
 - 模型、推理级别与 Fast 在空闲时用 RPC 原地修改。模式、系统提示或 provider options 变化时，
   在回合之间重启进程：先启动并读取新进程，再关闭旧进程；有会话文件时用 `--session`，并带上
@@ -116,6 +118,9 @@ flowchart LR
 - 已注册的 Ait MCP 与 Vibe `host_tool_call` 由 adapter 执行并返回原生结果；未知 host tool 与
   `host_uri_request` 仍拒绝。并行调用和拒绝队列有界，达到拒绝队列上限时暂停原生读取。
 - 没有活动回合时到达的 `agent_start`（例如 OMP 自行恢复的队列）开始一个自主回合，按同样的规则结算。
+  Goal create/resume 写入后至首个 `agent_start` 之间也保留前台准入，避免等待完成过早返回或新输入抢跑；
+  原生拒绝、暂停、清除或对应的已结算状态读取消除等待。停止此窗口内的 Goal 会暂停原生目标并中止
+  可能已开始的执行，保留目标供显式恢复。`agent_end` 不表示 Goal 已结束，只有原生结算释放回合。
 
 ## 取消与追加输入
 
@@ -261,7 +266,6 @@ flowchart LR
 
 - 未实现：通用 MCP server 配置、经 `branch` 的会话回退、迟到 steer 拒绝后的重新排队、终端组件 UI。
 - 已知限制：
-  - 未经运行时通告的自主回合不能被 `cancel_pending` 取消，排队输入要等该运行结束后才投递。
   - 同一回合中先 `/follow-up` 后 `/steer` 时，客户端 ID 按写入顺序分配，而 OMP 先投递 steer。
   - 空闲时运行 `/compact` 期间发送的 prompt 不受保护。
   - HTML `ask` 中预先勾选的复选项无法回放：OMP 的 `select` 不带勾选状态。

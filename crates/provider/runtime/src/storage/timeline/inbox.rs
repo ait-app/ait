@@ -24,6 +24,8 @@ pub(crate) struct QueuedInput {
     pub(crate) agent: String,
     pub(crate) message: String,
     pub(crate) prompt: AgentPrompt,
+    /// Initial input has not yet been classified against the live command catalog.
+    pub(crate) creation: bool,
 }
 
 impl Timeline {
@@ -181,22 +183,24 @@ impl Timeline {
     /// Inspect queued work in FIFO order without changing admission state.
     pub(crate) fn queued_inputs(&self) -> Result<Vec<QueuedInput>, ErrorCode> {
         let database = self.database.lock().map_err(io)?;
-        let mut query = database.prepare("SELECT agent,message,prompt FROM input_receipts WHERE state='queued' ORDER BY seq LIMIT 1024").map_err(io)?;
+        let mut query = database.prepare("SELECT agent,message,prompt,is_creation FROM input_receipts WHERE state='queued' ORDER BY seq LIMIT 1024").map_err(io)?;
         query
             .query_map([], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, String>(2)?,
+                    row.get::<_, bool>(3)?,
                 ))
             })
             .map_err(io)?
             .map(|row| {
-                let (agent, message, prompt) = row.map_err(io)?;
+                let (agent, message, prompt, creation) = row.map_err(io)?;
                 Ok(QueuedInput {
                     agent,
                     message,
                     prompt: serde_json::from_str(&prompt).map_err(io)?,
+                    creation,
                 })
             })
             .collect()
@@ -220,14 +224,15 @@ impl Timeline {
     /// Returns storage or persisted prompt decoding errors.
     pub(crate) fn queued_for_agent(&self, agent: &str) -> Result<Option<QueuedInput>, ErrorCode> {
         let database = self.database.lock().map_err(io)?;
-        let row = database.query_row("SELECT message,prompt FROM input_receipts WHERE state='queued' AND agent=? ORDER BY seq LIMIT 1", [agent], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        let row = database.query_row("SELECT message,prompt,is_creation FROM input_receipts WHERE state='queued' AND agent=? ORDER BY seq LIMIT 1", [agent], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, bool>(2)?))
         }).optional().map_err(io)?;
-        row.map(|(message, prompt)| {
+        row.map(|(message, prompt, creation)| {
             Ok(QueuedInput {
                 agent: agent.to_owned(),
                 message,
                 prompt: serde_json::from_str(&prompt).map_err(io)?,
+                creation,
             })
         })
         .transpose()

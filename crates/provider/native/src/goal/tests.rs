@@ -35,6 +35,7 @@ fn native_goal_terminal_and_limited_states_keep_supported_actions() {
         "blocked",
         "usageLimited",
         "budgetLimited",
+        "budget-limited",
         "budget_exhausted",
     ] {
         let value = snapshot(&json!({"objective":"Ship","status":status}), true).unwrap();
@@ -45,4 +46,20 @@ fn native_goal_terminal_and_limited_states_keep_supported_actions() {
     let complete = snapshot(&json!({"objective":"Ship","status":"complete"}), true).unwrap();
     assert_eq!(complete["status"], "completed");
     assert_eq!(complete["actions"]["resume"], false);
+}
+
+#[test]
+fn omp_budget_limit_retains_the_native_budget_and_usage() {
+    let value = snapshot(
+        &json!({"enabled":true,"mode":"active","goal":{
+            "objective":"Verify", "status":"budget-limited", "tokenBudget":100,
+            "tokensUsed":102, "timeUsedSeconds":12
+        }}),
+        false,
+    )
+    .unwrap();
+    assert_eq!(value["status"], "budgetLimited");
+    assert_eq!(value["tokenBudget"], 100);
+    assert_eq!(value["tokensUsed"], 102);
+    assert_eq!(value["timeUsedSeconds"], 12);
 }
