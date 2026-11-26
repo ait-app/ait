@@ -87,7 +87,7 @@ impl Book {
         json!({"revision": self.revision, "shares": self.settings, "groups": self.groups})
     }
 
-    fn position(&self, kind: ResourceKind, key: &str, group_id: Uuid) -> Option<usize> {
+    fn position(&self, kind: ResourceKind, key: &str, group_id: Option<Uuid>) -> Option<usize> {
         self.settings
             .iter()
             .position(|setting| setting.is(kind, key, group_id))
@@ -98,7 +98,7 @@ impl Book {
         &self,
         kind: ResourceKind,
         key: &str,
-        group_id: Uuid,
+        group_id: Option<Uuid>,
         setting_id: Uuid,
     ) -> Option<usize> {
         self.position(kind, key, group_id)
@@ -367,7 +367,8 @@ impl Shares {
         }
     }
 
-    /// Create or change the share keyed by the request's resource and group.
+    /// Create or change the share keyed by the request's resource and group, or the
+    /// resource's direct share when the request names no group.
     ///
     /// # Errors
     /// Returns invalid requests, capacity exhaustion, or a failed write.
@@ -383,6 +384,7 @@ impl Shares {
     }
 
     /// Remove one share and end its guest sessions without waiting for the center.
+    /// `group_id` is `None` for the resource's direct share.
     ///
     /// # Errors
     /// Returns a failed write after the share was removed in memory.
@@ -390,7 +392,7 @@ impl Shares {
         &self,
         kind: ResourceKind,
         key: &str,
-        group_id: Uuid,
+        group_id: Option<Uuid>,
     ) -> Result<Value, ErrorCode> {
         let (removed, commit) = self.mutate(|book| {
             let removed = book

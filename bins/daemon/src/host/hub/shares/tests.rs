@@ -120,7 +120,7 @@ fn entry(key: &str) -> Published {
     Published {
         resource_kind: ResourceKind::Workspace,
         resource_key: key.to_owned(),
-        group_id: Uuid::nil(),
+        group_id: Some(Uuid::nil()),
         permission: "operate".to_owned(),
         audience: Audience::Group,
         recipients: Vec::new(),
@@ -198,6 +198,54 @@ async fn fresh_links_republish_the_same_revision_and_changes_get_a_larger_one() 
     assert_eq!(revisions.len(), 3);
     assert_eq!(revisions[0], revisions[1]);
     assert!(revisions[2] > revisions[1]);
+}
+
+#[tokio::test]
+async fn a_legacy_center_gets_group_shares_and_a_fresh_link_retries_direct_shares() {
+    let center = FakeCenter::new();
+    let grouped = entry("ws_1");
+    let direct = Published {
+        group_id: None,
+        audience: Audience::People,
+        setting_id: Uuid::new_v4(),
+        ..entry("ws_1")
+    };
+    let book = FakeBook::new(vec![grouped.clone(), direct.clone()]);
+    let mut publisher = Publisher::default();
+    center.online(Uuid::new_v4(), &[PUBLISH_METHOD]);
+    center
+        .results
+        .lock()
+        .expect("results")
+        .push_back(Err(CallError::Rejected("invalid_request".to_owned())));
+
+    assert_eq!(
+        attempt(&center, &book, &mut publisher).await,
+        Attempt::Retry
+    );
+    assert_eq!(
+        attempt(&center, &book, &mut publisher).await,
+        Attempt::Settled
+    );
+    assert_eq!(
+        attempt(&center, &book, &mut publisher).await,
+        Attempt::Settled
+    );
+    let calls = center.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0]["shares"], json!([grouped, direct]));
+    assert_eq!(calls[1]["shares"], json!([grouped]));
+    let outcomes = book.applied();
+    assert_eq!(outcomes[0].rejected[0].setting_id, direct.setting_id);
+    assert_eq!(outcomes[0].rejected[0].code, "direct_shares_unsupported");
+
+    center.online(Uuid::new_v4(), &[PUBLISH_METHOD]);
+    assert_eq!(
+        attempt(&center, &book, &mut publisher).await,
+        Attempt::Settled
+    );
+    assert_eq!(center.calls()[2]["shares"], json!([grouped, direct]));
+    assert!(book.applied()[1].rejected.is_empty());
 }
 
 #[tokio::test]

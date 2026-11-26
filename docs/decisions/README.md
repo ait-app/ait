@@ -38,6 +38,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-314：中心授权直接分享的接收人](daemon/adr-314-direct-share-recipients.md)
 - [ADR-313：连接清理独立准入、采样隔离与有界恢复](daemon/adr-313-connection-cleanup-and-sampling.md)
 - [ADR-305：跨主机 MCP——peer 会话与对端调用者](daemon/adr-305-cross-host-mcp-peer-sessions.md)
 - [ADR-295：MCP 工具按“域在前”命名，旧名字作为别名保留](daemon/adr-295-mcp-tool-naming-and-aliases.md)（经 [ADR-305](daemon/adr-305-cross-host-mcp-peer-sessions.md) 修订）
@@ -46,7 +47,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-288：Agent 状态延迟写入 `agents.json`，启动时由 Timeline 补齐](daemon/adr-288-deferred-agent-status-writes.md)
 - [ADR-282：单连接能力提议预算随方法目录扩容](daemon/adr-282-single-connection-capability-budget.md)
 - [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)（经 [ADR-313](daemon/adr-313-connection-cleanup-and-sampling.md) 修订）
-- [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
+- [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)（经 [ADR-314](daemon/adr-314-direct-share-recipients.md) 修订）
 - [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
 - [ADR-201：daemon 统一拥有节点发布与机器授权](daemon/adr-201-daemon-owned-publication.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](daemon/adr-200-headless-independent-transports.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）

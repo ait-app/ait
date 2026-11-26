@@ -112,7 +112,7 @@ async fn malformed_and_unadmitted_visitors_are_refused() {
             ..visitor.clone()
         },
         Visitor {
-            group_id: Uuid::new_v4(),
+            group_id: Some(Uuid::new_v4()),
             ..visitor.clone()
         },
         Visitor {
@@ -275,7 +275,11 @@ async fn revocation_cancels_the_session() {
         .api
         .shared
         .shares
-        .remove(ResourceKind::Workspace, &fixture.shared, fixture.group)
+        .remove(
+            ResourceKind::Workspace,
+            &fixture.shared,
+            Some(fixture.group),
+        )
         .await
         .unwrap();
     assert!(session.cancellation().is_cancelled());

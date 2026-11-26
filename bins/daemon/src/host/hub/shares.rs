@@ -1,8 +1,8 @@
 //! Share publication: the Host republishes its complete share list on every fresh
 //! serve link and after every local change, and applies the center's outcomes.
 //!
-//! The center checks each publication against current group membership and
-//! answers with share identities; later membership changes arrive as `share_status`.
+//! The center checks each publication and answers with share identities. Later changes
+//! to group membership or direct-share recipients arrive as `share_status`.
 //! Guest sessions are only routed to a link after it published, so a Host that
 //! never publishes never receives one.
 
@@ -10,14 +10,14 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use model::hub::{CallError, Center, LinkState};
-use model::share::{Outcome, PUBLISH_METHOD, Published, ShareBook};
+use model::share::{Audience, Outcome, PUBLISH_METHOD, Published, Rejected, ShareBook};
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use super::{COALESCE, MAX_BACKOFF, RETRY};
 
-/// What the center last accepted from this Host on one logical link.
+/// The local share list settled on one logical link. A legacy center receives its group entries.
 #[derive(Debug, PartialEq)]
 struct Sent {
     link: Option<Uuid>,
@@ -30,6 +30,7 @@ struct Sent {
 struct Publisher {
     sent: Option<Sent>,
     revision: u64,
+    legacy_link: Option<Uuid>,
 }
 
 impl Publisher {
@@ -135,17 +136,36 @@ async fn publish(
         return Attempt::Settled;
     }
     let revision = publisher.revision_for(&entries);
+    let legacy = publisher.legacy_link.is_some() && publisher.legacy_link == state.link;
+    let shares: Vec<_> = entries
+        .iter()
+        .filter(|entry| !legacy || entry.audience != Audience::People)
+        .collect();
     let params = json!({
         "revision": revision,
-        "shares": entries,
+        "shares": shares,
         "visitors": publication.visitors,
     });
     match center.call(scope, PUBLISH_METHOD, params).await {
         Ok(reply) => {
-            let Ok(outcome) = serde_json::from_value::<Outcome>(reply) else {
+            let Ok(mut outcome) = serde_json::from_value::<Outcome>(reply) else {
                 tracing::warn!("Center returned an invalid share publication result");
                 return Attempt::Retry;
             };
+            if legacy {
+                outcome.rejected.extend(
+                    entries
+                        .iter()
+                        .filter(|entry| entry.audience == Audience::People)
+                        .map(|entry| Rejected {
+                            resource_kind: entry.resource_kind,
+                            resource_key: entry.resource_key.clone(),
+                            group_id: None,
+                            setting_id: entry.setting_id,
+                            code: "direct_shares_unsupported".to_owned(),
+                        }),
+                );
+            }
             publisher.sent = Some(Sent {
                 link: state.link,
                 revision,
@@ -153,6 +173,19 @@ async fn publish(
             });
             book.apply(outcome);
             Attempt::Settled
+        }
+        // Older centers reject the entire list on a direct entry. Publish the group
+        // entries on that link and try direct sharing again on the next logical link.
+        Err(CallError::Rejected(code))
+            if code == "invalid_request"
+                && !legacy
+                && state.link.is_some()
+                && entries
+                    .iter()
+                    .any(|entry| entry.audience == Audience::People) =>
+        {
+            publisher.legacy_link = state.link;
+            Attempt::Retry
         }
         // A revision the center already holds with other content: publish anew.
         Err(CallError::Rejected(code)) if code == "conflict" => {

@@ -141,7 +141,7 @@ async fn guest_downloads_name_their_visitor_and_accept_bridged_requests() {
         user_id: Uuid::new_v4(),
         display_name: None,
         username: None,
-        group_id: Uuid::new_v4(),
+        group_id: Some(Uuid::new_v4()),
         share_id: Uuid::new_v4(),
         resource_kind: model::share::ResourceKind::Node,
         resource_key: String::new(),

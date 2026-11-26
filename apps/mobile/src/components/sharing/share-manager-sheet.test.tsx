@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   clients: new Map<string, ShareClient>(),
   activeServerId: "remote" as string | null,
   localServerId: "local" as string | null,
+  openExternalUrl: vi.fn(async (_url: string) => {}),
 }));
 
 vi.mock("@react-native-async-storage/async-storage", () => ({
@@ -28,6 +29,11 @@ vi.mock("@/runtime/host-runtime", async (importOriginal) => ({
   useHosts: () => state.hosts,
   useHostRuntimeClient: (serverId: string) => state.clients.get(serverId) ?? null,
 }));
+vi.mock("@/runtime/account-state", () => ({
+  useAccountState: (select: (account: { center: string }) => unknown) =>
+    select({ center: "https://center.test/api" }),
+}));
+vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: state.openExternalUrl }));
 vi.mock("@/hooks/use-is-local-daemon", () => ({
   useLocalDaemonServerId: () => state.localServerId,
 }));
@@ -166,6 +172,7 @@ beforeEach(async () => {
     ["remote", client()],
     ["guest", client()],
   ]);
+  state.openExternalUrl.mockClear();
   state.activeServerId = "remote";
   state.localServerId = "local";
 });
@@ -257,6 +264,50 @@ describe("project sharing host selection", () => {
     expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(view.queryByText("Old Host Team")).toBeNull();
     expect(view.queryByText(i18n.t("sharing.loadError"))).toBeNull();
+  });
+
+  it("opens invitations for a published direct share even without any groups", async () => {
+    const remote = client();
+    const grouped = share("remote-project");
+    const direct = { ...grouped, groupId: null, audience: "people", state: "pending" } as const;
+    const published = {
+      ...direct,
+      state: "accepted" as const,
+      shareId: "55555555-5555-4555-8555-555555555555",
+    };
+    remote.listShares
+      .mockResolvedValueOnce({ requestId: "initial", groups: [], shares: [] })
+      .mockResolvedValue({ requestId: "published", groups: [], shares: [published] });
+    remote.setShare.mockResolvedValue({ requestId: "new", share: direct });
+    state.clients.set("remote", remote);
+    const view = render(sheet());
+    const toggle = await view.findByRole("switch", { name: i18n.t("sharing.direct") });
+
+    vi.useFakeTimers();
+    try {
+      await act(async () => fireEvent.click(toggle));
+      expect(remote.setShare).toHaveBeenCalledWith({
+        resourceKind: "project",
+        resourceKey: "remote-project",
+        audience: "people",
+        displayName: "Project",
+        projectName: undefined,
+      });
+      const inviteLabel = i18n.t("sharing.openInvitations");
+      expect(view.queryByRole("button", { name: inviteLabel })).toBeNull();
+      await act(async () => vi.advanceTimersByTimeAsync(1500)); // virtual time
+      fireEvent.click(view.getByRole("button", { name: inviteLabel }));
+      expect(state.openExternalUrl).toHaveBeenCalledWith(
+        `https://center.test/dash/shares/${published.shareId}`,
+      );
+      await act(async () => fireEvent.click(toggle));
+      expect(remote.removeShare).toHaveBeenCalledWith({
+        resourceKind: "project",
+        resourceKey: "remote-project",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the selected Host fixed while a sharing update is pending", async () => {

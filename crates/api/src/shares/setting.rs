@@ -36,7 +36,9 @@ pub(super) struct Setting {
     pub(super) resource_kind: ResourceKind,
     #[serde(default)]
     pub(super) resource_key: String,
-    pub(super) group_id: Uuid,
+    /// Absent for a direct share ([`Audience::People`]).
+    #[serde(default)]
+    pub(super) group_id: Option<Uuid>,
     pub(super) permission: String,
     pub(super) audience: Audience,
     #[serde(default)]
@@ -60,8 +62,9 @@ pub(super) struct Setting {
 }
 
 impl Setting {
-    /// Whether this setting is the entry keyed by `kind`, `key` and `group_id`.
-    pub(super) fn is(&self, kind: ResourceKind, key: &str, group_id: Uuid) -> bool {
+    /// Whether this setting is the entry keyed by `kind`, `key` and `group_id`; a direct
+    /// share has no group.
+    pub(super) fn is(&self, kind: ResourceKind, key: &str, group_id: Option<Uuid>) -> bool {
         self.resource_kind == kind && self.resource_key == key && self.group_id == group_id
     }
 
@@ -82,10 +85,16 @@ impl Setting {
 
     /// Whether an accepted share `share_id` currently admits `user_id`. Recipients the
     /// center reported as not being members are not admitted until it accepts them again.
+    /// The center keeps the people of a direct share, so it admits whoever the center
+    /// forwards; the center's `denied` list ends the access of people it removes.
     pub(super) fn grants(&self, share_id: Uuid, user_id: Uuid) -> bool {
+        let audience = match self.audience {
+            Audience::Group | Audience::People => true,
+            Audience::Members => self.recipients.contains(&user_id),
+        };
         self.state == ShareState::Accepted
             && self.share_id == Some(share_id)
-            && (self.audience == Audience::Group || self.recipients.contains(&user_id))
+            && audience
             && !self.missing_recipients.contains(&user_id)
     }
 
@@ -134,7 +143,9 @@ pub(crate) struct SetRequest {
     pub(super) resource_kind: ResourceKind,
     #[serde(default)]
     pub(super) resource_key: String,
-    pub(super) group_id: Uuid,
+    /// Required for group and members audiences; must be absent for [`Audience::People`].
+    #[serde(default)]
+    pub(super) group_id: Option<Uuid>,
     pub(super) permission: String,
     pub(super) audience: Audience,
     #[serde(default)]
@@ -152,7 +163,9 @@ pub(super) struct RemoveRequest {
     pub(super) resource_kind: ResourceKind,
     #[serde(default)]
     pub(super) resource_key: String,
-    pub(super) group_id: Uuid,
+    /// Absent for a direct share.
+    #[serde(default)]
+    pub(super) group_id: Option<Uuid>,
 }
 
 /// Why a share request cannot be stored.
@@ -161,8 +174,9 @@ pub(super) enum ShareError {
     /// Only [`OPERATE`] can be granted.
     #[error("only the operate permission can be shared")]
     Permission,
-    /// Members audiences need recipients; group audiences must not list any.
-    #[error("recipients do not match the audience")]
+    /// Members audiences need recipients; group and people audiences must not list any.
+    /// Group and members audiences need a group; a people audience must not name one.
+    #[error("group or recipients do not match the audience")]
     Audience,
     /// More than [`MAX_RECIPIENTS`] recipients.
     #[error("too many recipients")]
@@ -214,7 +228,13 @@ impl SetRequest {
             return Err(ShareError::Recipients);
         }
         let listed = !self.recipients.is_empty();
-        if listed != (self.audience == Audience::Members) {
+        let grouped = self.group_id.is_some();
+        let fits = match self.audience {
+            Audience::Group => grouped && !listed,
+            Audience::Members => grouped && listed,
+            Audience::People => !grouped && !listed,
+        };
+        if !fits {
             return Err(ShareError::Audience);
         }
         self.display_name = name(self.display_name)?;

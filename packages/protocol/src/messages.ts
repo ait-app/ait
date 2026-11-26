@@ -1535,7 +1535,8 @@ export const ProjectListRequestMessageSchema = z.object({
 });
 
 export const ShareResourceKindSchema = z.enum(["workspace", "project", "node"]);
-export const ShareAudienceSchema = z.enum(["group", "members"]);
+// `people`: a direct share outside any group; the center keeps who accepted the invitation.
+export const ShareAudienceSchema = z.enum(["group", "members", "people"]);
 export const ShareStateSchema = z.enum(["pending", "accepted", "rejected", "revoked"]);
 
 export const ShareGroupSchema = z.object({
@@ -1548,7 +1549,8 @@ export const ShareGroupSchema = z.object({
 export const ShareSettingSchema = z.object({
   resourceKind: ShareResourceKindSchema,
   resourceKey: z.string(),
-  groupId: z.string().uuid(),
+  // Absent for a direct share (`audience: "people"`).
+  groupId: z.string().uuid().nullable().optional(),
   permission: z.literal("operate"),
   audience: ShareAudienceSchema,
   recipients: z.array(z.string().uuid()).default([]),
@@ -1576,7 +1578,8 @@ export const ShareSetRequestSchema = z.object({
   requestId: z.string(),
   resourceKind: ShareResourceKindSchema,
   resourceKey: z.string(),
-  groupId: z.string().uuid(),
+  // Omitted for a direct share (`audience: "people"`).
+  groupId: z.string().uuid().optional(),
   permission: z.literal("operate"),
   audience: ShareAudienceSchema,
   recipients: z.array(z.string().uuid()).default([]),
@@ -1589,7 +1592,8 @@ export const ShareRemoveRequestSchema = z.object({
   requestId: z.string(),
   resourceKind: ShareResourceKindSchema,
   resourceKey: z.string(),
-  groupId: z.string().uuid(),
+  // Omitted for the resource's direct share.
+  groupId: z.string().uuid().optional(),
 });
 
 export const FetchAgentHistoryRequestMessageSchema = z.object({
@@ -4657,7 +4661,7 @@ export const ShareRemoveResponseSchema = z.object({
     requestId: z.string(),
     resourceKind: ShareResourceKindSchema,
     resourceKey: z.string(),
-    groupId: z.string().uuid(),
+    groupId: z.string().uuid().nullable().optional(),
     removed: z.boolean(),
   }),
 });

@@ -3,7 +3,12 @@ const sharedSharing = {
   incomingHostHint: "有効なホストと共有されたプロジェクトやワークスペースが一覧に表示されます。",
   showHostInHosts: "{{host}} をホスト一覧に表示",
   sharedByMeCount: "自分が共有（{{count}}）",
-  action: "グループと共有",
+  action: "共有…",
+  direct: "個人と共有",
+  directHint: "メールアドレスまたはユーザー名で招待します。",
+  openInvitations: "ウェブで招待を管理",
+  openInvitationsError: "共有ページを開けませんでした。",
+  directUnsupported: "このサービスは直接共有に対応していません。",
   manage: "管理",
   refresh: "更新",
   stop: "共有を停止",
@@ -12,10 +17,10 @@ const sharedSharing = {
   hostSection: "共有",
   hostTitle: "このノードを共有",
   hostHint:
-    "グループにこのホスト上のすべてのプロジェクトとワークスペースへのアクセスを許可します。",
+    "個人やグループに、このホスト上のすべてのプロジェクトとワークスペースへのアクセスを許可します。",
   shareTitle: "{{name}} を共有",
   resourceTitle: "リソースを共有",
-  intro: "共有者がオンラインの間、グループメンバーは AIT でこのリソースを開けます。",
+  intro: "ホストがオンラインの間、招待した人やグループのメンバーはこのリソースを開けます。",
   projectHostHint: "選択したホスト上のこのプロジェクトとワークスペースを共有します。",
   hostUnavailable: "このホストは利用できません。接続して共有を管理してください。",
   scope: { node: "ノード", project: "プロジェクト", workspace: "ワークスペース" },
@@ -31,9 +36,6 @@ const sharedSharing = {
     groupAdmin: "このグループを管理しています",
     groupMember: "グループメンバー",
   },
-  noGroupsTitle: "利用可能なグループがありません",
-  noGroupsHint:
-    "ホスト設定 → 接続からこのノードをオンラインサービスに接続し、ノード所有者がグループに所属していることを確認してください。",
   nodeSettingsOnly:
     "この設定にはノード全体の共有が必要です。この共有でアクセスできるのはプロジェクトまたはワークスペースだけです。",
   ownerOnly:
@@ -43,7 +45,7 @@ const sharedSharing = {
   updateError: "共有を更新できません。",
   stopError: "共有を停止できません。",
   emptyIncomingTitle: "まだ共有されたものはありません",
-  emptyIncomingHint: "グループメンバーが共有したリソースがここに表示されます。",
+  emptyIncomingHint: "直接またはグループを通じて共有されたリソースがここに表示されます。",
   emptyOutgoingTitle: "何も共有していません",
   emptyOutgoingHint:
     "ワークスペースやプロジェクトのメニューを使うか、ホスト設定を開いてノード全体を共有してください。",

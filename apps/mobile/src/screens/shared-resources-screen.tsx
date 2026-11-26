@@ -61,7 +61,7 @@ export function SharedResourcesScreen() {
         await client.removeShare({
           resourceKind: entry.setting.resourceKind,
           resourceKey: entry.setting.resourceKey,
-          groupId: entry.setting.groupId,
+          ...(entry.setting.groupId ? { groupId: entry.setting.groupId } : {}),
         });
         await forgetOutgoingShare(entry.serverId, entry.setting.settingId);
       } catch (cause) {
@@ -89,7 +89,7 @@ export function SharedResourcesScreen() {
                   <SettingsRow
                     key={host.hostId}
                     label={host.label}
-                    hint={host.groupNames.join(" · ")}
+                    hint={host.groupNames.map((name) => name ?? t("sharing.direct")).join(" · ")}
                   >
                     <Switch
                       value={isSharedHostEnabled(
@@ -147,7 +147,7 @@ export function SharedResourcesScreen() {
                   <SettingsRow
                     key={entry.setting.settingId}
                     label={settingTitle(entry.setting, entry.hostLabel)}
-                    hint={`${t(`sharing.scope.${entry.setting.resourceKind}`)} · ${entry.groupName} · ${entry.hostLabel}`}
+                    hint={`${t(`sharing.scope.${entry.setting.resourceKind}`)} · ${entry.groupName ?? t("sharing.direct")} · ${entry.hostLabel}`}
                   >
                     <View style={styles.actions}>
                       <Text style={styles.meta}>

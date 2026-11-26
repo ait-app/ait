@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Share a workspace, project, or Host directly with people. Open the invitation page from Ait
+  to generate a link for someone by email or username.
+
 - Busy hosts no longer disconnect just because a subscription could not be released immediately.
   Recovery keeps saved chats and drafts visible, restores subscriptions gradually, and groups
   connection notices. Host resource monitoring no longer holds up other host requests, and desktop

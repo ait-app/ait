@@ -9,7 +9,7 @@ import type { HostRuntimeStore } from "./host-runtime";
 interface IncomingSharedHost {
   hostId: string;
   label: string;
-  groupNames: string[];
+  groupNames: (string | null)[];
 }
 
 /** Several grants from one Host share a single local visibility preference. */

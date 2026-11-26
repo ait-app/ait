@@ -67,6 +67,45 @@ describe("daemon share RPC messages", () => {
     expect(message.payload.groups[0]).toMatchObject({ groupId, name: "Design" });
   });
 
+  it("supports creating, displaying, and removing a share with no group", () => {
+    const resource = { resourceKind: "node", resourceKey: "" };
+    const set = {
+      ...resource,
+      type: "share.set.request",
+      requestId: "set-direct",
+      audience: "people",
+      permission: "operate",
+      recipients: [],
+    };
+    expect(SessionInboundMessageSchema.parse(set)).toEqual(set);
+    const remove = { ...resource, type: "share.remove.request", requestId: "remove-direct" };
+    expect(SessionInboundMessageSchema.parse(remove)).toEqual(remove);
+
+    const created = {
+      type: "share.set.response",
+      payload: {
+        requestId: "set-direct",
+        share: {
+          ...resource,
+          groupId: null,
+          audience: "people",
+          permission: "operate",
+          recipients: [],
+          settingId,
+          shareId,
+          state: "accepted",
+          missingRecipients: [],
+        },
+      },
+    };
+    expect(SessionOutboundMessageSchema.parse(created)).toEqual(created);
+    const removed = {
+      type: "share.remove.response",
+      payload: { ...resource, requestId: "remove-direct", groupId: null, removed: true },
+    };
+    expect(SessionOutboundMessageSchema.parse(removed)).toEqual(removed);
+  });
+
   it("rejects malformed identifiers at the desktop boundary", () => {
     expect(
       SessionInboundMessageSchema.safeParse({

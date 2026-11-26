@@ -14,13 +14,13 @@ import { useHubServices } from "@/runtime/hub-service-store";
 export interface OutgoingShare {
   serverId: string;
   hostLabel: string;
-  groupName: string;
+  groupName: string | null;
   setting: ShareSetting;
 }
 
 /** One Host's answer. The Host label is joined at read time because it can be renamed. */
 interface HostShare {
-  groupName: string;
+  groupName: string | null;
   setting: ShareSetting;
 }
 
@@ -55,7 +55,7 @@ async function fetchHostShares(serverId: string): Promise<HostShare[]> {
   return result.shares
     .filter((setting) => setting.state !== "revoked")
     .map((setting) => ({
-      groupName: groupNames.get(setting.groupId) ?? setting.groupId,
+      groupName: setting.groupId ? (groupNames.get(setting.groupId) ?? setting.groupId) : null,
       setting,
     }));
 }

@@ -53,6 +53,22 @@ fn rejects_invalid_requests() {
 }
 
 #[test]
+fn an_audience_requires_the_correct_group_and_recipient_fields() {
+    let mut request = members(&[Uuid::nil()]);
+    request.group_id = None;
+    assert_eq!(request.clone().normalize(), Err(ShareError::Audience));
+    request.audience = Audience::People;
+    assert_eq!(request.clone().normalize(), Err(ShareError::Audience));
+    request.recipients.clear();
+    assert!(request.clone().normalize().is_ok());
+    request.group_id = Some(Uuid::nil());
+    assert_eq!(request.clone().normalize(), Err(ShareError::Audience));
+    request.group_id = None;
+    request.audience = Audience::Group;
+    assert_eq!(request.normalize(), Err(ShareError::Audience));
+}
+
+#[test]
 fn resource_keys_must_fit_their_kind() {
     let mut project = members(&[Uuid::nil()]);
     project.resource_kind = ResourceKind::Project;
@@ -132,7 +148,7 @@ fn only_accepted_matching_shares_admit_visitors() {
         user_id: user,
         display_name: None,
         username: None,
-        group_id: Uuid::nil(),
+        group_id: Some(Uuid::nil()),
         share_id,
         resource_kind: ResourceKind::Workspace,
         resource_key: "w".into(),
@@ -143,7 +159,7 @@ fn only_accepted_matching_shares_admit_visitors() {
         share_id,
         resource_kind: ResourceKind::Workspace,
         resource_key: "w".into(),
-        group_id: Uuid::nil(),
+        group_id: Some(Uuid::nil()),
         setting_id: setting.id,
         missing_recipients: Vec::new(),
     });

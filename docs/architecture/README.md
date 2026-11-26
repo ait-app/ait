@@ -228,11 +228,11 @@ cwd 切换中止旧刷新；generation/revision 单调保护不变。公开 SDK/
 共享刷新和组件回调的内部契约有变化，明确迁移说明见
 [ADR-275](../decisions/providers/adr-275-shared-model-catalog-refresh.md)。
 
-群组分享以 Host 保存的范围为准，Hub 访客通过 `x-ait-guest` 准入；workspace/project 限制访问范围，
+资源分享的范围由 Host 保存，直接分享的接收人由中心授权。Hub 访客由 daemon 按分享范围准入。workspace/project 限制访问范围，
 node 分享允许更广的节点操作，分享和账号授权保留给所有者，Bot 与定时任务仅可读取。
 创建访客 Agent／终端的任务在连接断开后仍完成归属记录与撤销检查；撤销逐页取消 Agent，
 终端归属按存活状态清理。共享项目的配置文件和独立分享设置受保护，Forge 查询绑定到 checkout 远端。见
-[ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)。
+[ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)、[ADR-314](../decisions/daemon/adr-314-direct-share-recipients.md)。
 
 原生实时语音由 Provider 拥有原生 thread、SDP、上游 WebRTC、音频协议及认证，voice 拥有媒体连接
 和 PCM 消费确认，daemon 桥接端口，客户端采集与播放，见

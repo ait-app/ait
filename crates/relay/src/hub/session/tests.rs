@@ -269,7 +269,7 @@ fn visitor() -> Visitor {
         user_id: Uuid::new_v4(),
         display_name: Some("Bob".to_owned()),
         username: Some("bob".to_owned()),
-        group_id: Uuid::new_v4(),
+        group_id: Some(Uuid::new_v4()),
         share_id: Uuid::new_v4(),
         resource_kind: model::share::ResourceKind::Node,
         resource_key: String::new(),

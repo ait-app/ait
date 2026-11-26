@@ -137,7 +137,7 @@ async fn terminal_creation_keeps_tracking_after_the_request_is_dropped() {
                 .remove(
                     ResourceKind::Workspace,
                     &guest.fixture.shared,
-                    guest.fixture.group,
+                    Some(guest.fixture.group),
                 )
                 .await
                 .unwrap();
@@ -156,7 +156,7 @@ async fn terminal_creation_keeps_tracking_after_the_request_is_dropped() {
                 .remove(
                     ResourceKind::Workspace,
                     &guest.fixture.shared,
-                    guest.fixture.group,
+                    Some(guest.fixture.group),
                 )
                 .await
                 .unwrap();
@@ -177,7 +177,7 @@ async fn already_revoked_creation_never_starts_a_process() {
         .remove(
             ResourceKind::Workspace,
             &guest.fixture.shared,
-            guest.fixture.group,
+            Some(guest.fixture.group),
         )
         .await
         .unwrap();

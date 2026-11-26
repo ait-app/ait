@@ -7,7 +7,7 @@ fn visitor() -> Visitor {
         user_id: Uuid::nil(),
         display_name: Some("访客 Bob".into()),
         username: Some("bob".into()),
-        group_id: Uuid::max(),
+        group_id: Some(Uuid::max()),
         share_id: Uuid::nil(),
         resource_kind: ResourceKind::Project,
         resource_key: "prj_1".into(),
@@ -48,6 +48,46 @@ fn visitors_use_the_flat_snake_case_wire_form() {
             .get("username")
             .is_none()
     );
+}
+
+#[test]
+fn direct_shares_and_visitors_omit_group_fields() {
+    let direct = Visitor {
+        group_id: None,
+        ..visitor()
+    };
+    let payload = serde_json::to_value(&direct).unwrap();
+    assert!(payload.get("group_id").is_none());
+    assert_eq!(Visitor::decode(&direct.encode()), Some(direct));
+
+    let setting_id = Uuid::new_v4();
+    let published = Published {
+        resource_kind: ResourceKind::Node,
+        resource_key: String::new(),
+        group_id: None,
+        permission: "operate".into(),
+        audience: Audience::People,
+        recipients: Vec::new(),
+        display_name: None,
+        project_name: None,
+        setting_id,
+    };
+    assert_eq!(
+        serde_json::to_value(published).unwrap(),
+        json!({"resourceKind":"node","resourceKey":"","permission":"operate",
+            "audience":"people","settingId":setting_id})
+    );
+    let reply: Outcome = serde_json::from_value(json!({
+        "revision": 2,
+        "accepted": [{"shareId": Uuid::nil(), "resourceKind": "node", "resourceKey": "",
+            "settingId": setting_id}],
+        "rejected": [{"resourceKind": "node", "resourceKey": "", "settingId": setting_id,
+            "code": "revoked"}],
+        "groups": []
+    }))
+    .unwrap();
+    assert_eq!(reply.accepted[0].group_id, None);
+    assert_eq!(reply.rejected[0].group_id, None);
 }
 
 #[test]
@@ -94,7 +134,7 @@ fn published_entries_match_the_center_wire_form() {
     let entry = Published {
         resource_kind: ResourceKind::Workspace,
         resource_key: "ws_1".into(),
-        group_id: Uuid::nil(),
+        group_id: Some(Uuid::nil()),
         permission: "operate".into(),
         audience: Audience::Members,
         recipients: vec![Uuid::max()],

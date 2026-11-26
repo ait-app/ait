@@ -194,8 +194,6 @@ function shares(payload: Uint8Array): HubShare[] {
       record(share) &&
       strings(share, [
         "shareId",
-        "groupId",
-        "groupName",
         "hostId",
         "nodeId",
         "hostName",
@@ -203,6 +201,8 @@ function shares(payload: Uint8Array): HubShare[] {
         "displayName",
         "permission",
       ]) &&
+      ((typeof share.groupId === "string" && typeof share.groupName === "string") ||
+        (share.groupId === null && share.groupName === null)) &&
       (share.resourceKind === "workspace" ||
         share.resourceKind === "project" ||
         share.resourceKind === "node") &&

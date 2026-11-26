@@ -26,11 +26,13 @@ const share: HubShare = {
   permission: "operate",
   state: "online",
 };
+const otherGrant: HubShare = { ...share, shareId: "other-grant", hostId: "other-host" };
 const shares: HubShare[] = [
   share,
   { ...share, shareId: "workspace-grant", resourceKind: "workspace", resourceKey: "workspace" },
   { ...share, shareId: "host-grant", resourceKind: "node", resourceKey: "", groupName: "Friends" },
-  { ...share, shareId: "other-grant", hostId: "other-host" },
+  { ...share, shareId: "direct-grant", groupId: null, groupName: null },
+  otherGrant,
 ];
 
 function memoryStorage() {
@@ -73,7 +75,7 @@ function createHub() {
 describe("incoming shared Hosts", () => {
   it("groups grants by Host identity, including identically named Hosts", () => {
     expect(groupIncomingSharedHosts(shares)).toEqual([
-      { hostId: "host", label: "Owner · Workstation", groupNames: ["Team", "Friends"] },
+      { hostId: "host", label: "Owner · Workstation", groupNames: ["Team", "Friends", null] },
       { hostId: "other-host", label: "Owner · Workstation", groupNames: ["Team"] },
     ]);
   });
@@ -125,7 +127,7 @@ describe("incoming shared Hosts", () => {
 
     preferences.getState().setHostEnabled(account, share.hostId, false);
     expect(runtime.setSharedAccountRelayResources).toHaveBeenLastCalledWith(
-      [shares[3]],
+      [otherGrant],
       account.center,
     );
     expect(hub.snapshot().shares).toBe(shares);
@@ -133,7 +135,7 @@ describe("incoming shared Hosts", () => {
     // Reconnection and fresh grants on the same Host must respect the existing choice.
     hub.publish({ linkId: "new-link", shares: [...shares, { ...share, shareId: "new-grant" }] });
     expect(runtime.setSharedAccountRelayResources).toHaveBeenLastCalledWith(
-      [shares[3]],
+      [otherGrant],
       account.center,
     );
     preferences.getState().setHostEnabled(account, share.hostId, true);
@@ -175,7 +177,7 @@ describe("incoming shared Hosts", () => {
     );
     await vi.waitFor(() => expect(preferences.getState().hydrated).toBe(true));
     expect(runtime.setSharedAccountRelayResources).toHaveBeenLastCalledWith(
-      [shares[3]],
+      [otherGrant],
       account.center,
     );
     stop();

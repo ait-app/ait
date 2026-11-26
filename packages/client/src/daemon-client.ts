@@ -2703,7 +2703,7 @@ export class DaemonClient {
   setShare(input: {
     resourceKind: ShareResourceKind;
     resourceKey: string;
-    groupId: string;
+    groupId?: string;
     audience?: ShareAudience;
     recipients?: string[];
     displayName?: string;
@@ -2714,7 +2714,7 @@ export class DaemonClient {
         type: "share.set.request",
         resourceKind: input.resourceKind,
         resourceKey: input.resourceKey,
-        groupId: input.groupId,
+        ...(input.groupId === undefined ? {} : { groupId: input.groupId }),
         permission: "operate",
         audience: input.audience ?? "group",
         recipients: input.recipients ?? [],
@@ -2727,7 +2727,7 @@ export class DaemonClient {
   removeShare(input: {
     resourceKind: ShareResourceKind;
     resourceKey: string;
-    groupId: string;
+    groupId?: string;
   }): Promise<ShareRemoveResponse["payload"]> {
     return this.sendNamespacedCorrelatedSessionRequest({
       message: { type: "share.remove.request", ...input },

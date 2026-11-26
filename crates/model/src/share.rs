@@ -1,7 +1,8 @@
 //! Resource sharing ports shared by the hub serve link, the local API and the daemon.
 //!
-//! A Host owns its share settings. Each share grants one group access to a workspace, a
-//! project, or the whole node (Host). The daemon publishes the settings to the center over
+//! A Host owns its share settings. Each share grants one group, or the people the owner
+//! invited through the center (a direct share), access to a workspace, a project, or the
+//! whole node (Host). The daemon publishes the settings to the center over
 //! the hub serve link (`hub.shares.publish`) and applies the center's outcome. Guest
 //! sessions arrive on the same link with a [`Visitor`]; the bridge hands the visitor to
 //! the local API in [`GUEST_HEADER`], and the API confines that connection to the shared
@@ -113,8 +114,9 @@ pub struct Visitor {
     /// that have not chosen one. Never used for authorization.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
-    /// Group through which the share is granted.
-    pub group_id: Uuid,
+    /// Group through which the share is granted; absent for a direct share.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<Uuid>,
     /// Center share identity.
     pub share_id: Uuid,
     /// Kind of the shared resource.
@@ -150,7 +152,7 @@ impl Visitor {
     }
 }
 
-/// Who may see a share within its group.
+/// Who may see a share.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Audience {
@@ -158,6 +160,9 @@ pub enum Audience {
     Group,
     /// Only the listed recipients.
     Members,
+    /// A direct share outside any group: the center admits the people who accepted the
+    /// owner's invitation, so the Host lists neither a group nor recipients.
+    People,
 }
 
 /// One share setting as the daemon publishes it.
@@ -168,11 +173,12 @@ pub struct Published {
     pub resource_kind: ResourceKind,
     /// Workspace or project ID, unique on this Host; empty for a node share.
     pub resource_key: String,
-    /// Group the resource is shared into.
-    pub group_id: Uuid,
+    /// Group the resource is shared into; absent for [`Audience::People`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<Uuid>,
     /// Granted permission; only `operate` exists today.
     pub permission: String,
-    /// Whole group or listed members.
+    /// Whole group, listed members, or invited people.
     pub audience: Audience,
     /// Recipients for [`Audience::Members`]; empty otherwise.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -220,8 +226,9 @@ pub struct Accepted {
     pub resource_kind: ResourceKind,
     /// Resource key of the entry.
     pub resource_key: String,
-    /// Group of the entry.
-    pub group_id: Uuid,
+    /// Group of the entry; absent for a direct share.
+    #[serde(default)]
+    pub group_id: Option<Uuid>,
     /// Setting the outcome is for.
     pub setting_id: Uuid,
     /// Recipients that are not active members right now; they are not admitted.
@@ -237,8 +244,9 @@ pub struct Rejected {
     pub resource_kind: ResourceKind,
     /// Resource key of the entry.
     pub resource_key: String,
-    /// Group of the entry.
-    pub group_id: Uuid,
+    /// Group of the entry; absent for a direct share.
+    #[serde(default)]
+    pub group_id: Option<Uuid>,
     /// Setting the outcome is for.
     pub setting_id: Uuid,
     /// Reason: `group_inactive`, `not_member`, `revoked`, `missing_name` or `no_recipients`.

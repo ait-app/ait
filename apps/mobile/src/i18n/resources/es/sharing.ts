@@ -4,7 +4,12 @@ const sharedSharing = {
     "Los hosts habilitados y sus proyectos y espacios compartidos aparecen en tus listas.",
   showHostInHosts: "Mostrar {{host}} en Hosts",
   sharedByMeCount: "Compartido por mí ({{count}})",
-  action: "Compartir con grupos",
+  action: "Compartir…",
+  direct: "Compartir con personas",
+  directHint: "Invita por correo electrónico o nombre de usuario.",
+  openInvitations: "Gestionar invitaciones en la web",
+  openInvitationsError: "No se pudo abrir la página para compartir.",
+  directUnsupported: "Este servicio no admite el uso compartido directo.",
   manage: "Gestionar",
   refresh: "Actualizar",
   stop: "Dejar de compartir",
@@ -12,11 +17,12 @@ const sharedSharing = {
   loading: "Cargando recursos compartidos…",
   hostSection: "Compartir",
   hostTitle: "Compartir este nodo",
-  hostHint: "Da a un grupo acceso a todos los proyectos y espacios de trabajo de este host.",
+  hostHint:
+    "Da a personas o grupos acceso a todos los proyectos y espacios de trabajo de este host.",
   shareTitle: "Compartir {{name}}",
   resourceTitle: "Compartir recurso",
   intro:
-    "Los miembros del grupo pueden abrir este recurso en AIT mientras el propietario esté conectado.",
+    "Las personas invitadas y los miembros de los grupos pueden abrir este recurso mientras el host esté en línea.",
   projectHostHint: "Comparte este proyecto y sus espacios de trabajo en el host seleccionado.",
   hostUnavailable: "Este host no está disponible. Conéctate para gestionar el uso compartido.",
   scope: { node: "Nodo", project: "Proyecto", workspace: "Espacio de trabajo" },
@@ -32,9 +38,6 @@ const sharedSharing = {
     groupAdmin: "Gestionas este grupo",
     groupMember: "Miembro del grupo",
   },
-  noGroupsTitle: "No hay grupos disponibles",
-  noGroupsHint:
-    "Conecta este nodo al servicio en línea desde Ajustes del host → Conexiones y comprueba que el propietario pertenezca a un grupo.",
   nodeSettingsOnly:
     "Estos ajustes requieren compartir el nodo completo. Esta compartición solo da acceso a su proyecto o espacio de trabajo.",
   ownerOnly:
@@ -45,7 +48,8 @@ const sharedSharing = {
   updateError: "No se pudo actualizar la compartición.",
   stopError: "No se pudo detener la compartición.",
   emptyIncomingTitle: "Aún no se ha compartido nada contigo",
-  emptyIncomingHint: "Aquí aparecerán los recursos compartidos por miembros de tus grupos.",
+  emptyIncomingHint:
+    "Aquí aparecerán los recursos compartidos contigo directamente o mediante un grupo.",
   emptyOutgoingTitle: "No estás compartiendo nada",
   emptyOutgoingHint:
     "Usa el menú de un espacio de trabajo o proyecto, o abre los ajustes del host para compartir un nodo completo.",

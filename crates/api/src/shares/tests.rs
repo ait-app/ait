@@ -64,7 +64,7 @@ fn set(workspace: &str, group: Uuid, recipients: &[Uuid]) -> SetRequest {
 fn setting(shares: &Shares, workspace: &str, group: Uuid) -> Uuid {
     let book = lock(&shares.book);
     let index = book
-        .position(ResourceKind::Workspace, workspace, group)
+        .position(ResourceKind::Workspace, workspace, Some(group))
         .unwrap();
     book.settings[index].id
 }
@@ -76,7 +76,7 @@ fn accepted(shares: &Shares, workspace: &str, group: Uuid, share_id: Uuid) -> Ou
             share_id,
             resource_kind: ResourceKind::Workspace,
             resource_key: workspace.into(),
-            group_id: group,
+            group_id: Some(group),
             setting_id: setting(shares, workspace, group),
             missing_recipients: Vec::new(),
         }],
@@ -97,7 +97,7 @@ fn rejected(shares: &Shares, workspace: &str, group: Uuid, code: &str) -> Outcom
         rejected: vec![Rejected {
             resource_kind: ResourceKind::Workspace,
             resource_key: workspace.into(),
-            group_id: group,
+            group_id: Some(group),
             setting_id: setting(shares, workspace, group),
             code: code.into(),
         }],
@@ -110,7 +110,7 @@ fn visitor(share_id: Uuid, group: Uuid, user_id: Uuid) -> Visitor {
         user_id,
         display_name: None,
         username: None,
-        group_id: group,
+        group_id: Some(group),
         share_id,
         resource_kind: ResourceKind::Workspace,
         resource_key: "w".into(),
@@ -285,7 +285,7 @@ async fn revoked_shares_stay_as_unpublished_tombstones() {
     shares.apply(rejected(&shares, "w", group, REVOKED));
     let revision = shares.publication().revision;
     let removed = shares
-        .remove(ResourceKind::Workspace, "w", group)
+        .remove(ResourceKind::Workspace, "w", Some(group))
         .await
         .unwrap();
     assert_eq!(removed["removed"], true);
@@ -377,7 +377,7 @@ async fn removal_ends_guests_immediately() {
         .unwrap();
     assert!(registration.record_terminal("terminal".into()));
     let removed = shares
-        .remove(ResourceKind::Workspace, "w", group)
+        .remove(ResourceKind::Workspace, "w", Some(group))
         .await
         .unwrap();
     assert_eq!(removed["removed"], true);
@@ -386,7 +386,7 @@ async fn removal_ends_guests_immediately() {
     assert_eq!((publication.revision, publication.shares), (2, Vec::new()));
     assert!(!registration.record_terminal("late".into()));
     let missing = shares
-        .remove(ResourceKind::Workspace, "w", group)
+        .remove(ResourceKind::Workspace, "w", Some(group))
         .await
         .unwrap();
     assert_eq!(missing["removed"], false);
@@ -419,7 +419,7 @@ async fn revocation_cleanup_survives_a_dropped_request() {
     // A disconnect drops the request after its first poll, once the grant is already gone.
     assert!(
         shares
-            .remove(ResourceKind::Workspace, "w", group)
+            .remove(ResourceKind::Workspace, "w", Some(group))
             .now_or_never()
             .is_none()
     );
@@ -477,7 +477,7 @@ async fn shares_are_keyed_by_kind_and_projects_are_forgotten_separately() {
     assert_eq!(published.len(), 1);
     assert_eq!(published[0].resource_kind, ResourceKind::Workspace);
     let removed = shares
-        .remove(ResourceKind::Project, "w", group)
+        .remove(ResourceKind::Project, "w", Some(group))
         .await
         .unwrap();
     assert_eq!(
@@ -523,7 +523,7 @@ async fn late_outcomes_never_touch_a_newer_setting() {
     let revoked = rejected(&shares, "w", group, REVOKED);
     let accepted_first = accepted(&shares, "w", group, Uuid::new_v4());
     shares
-        .remove(ResourceKind::Workspace, "w", group)
+        .remove(ResourceKind::Workspace, "w", Some(group))
         .await
         .unwrap();
     // The user shares again: a new setting the old outcomes do not name.
@@ -588,6 +588,78 @@ async fn denied_visitors_lose_access_while_the_share_stays_accepted() {
         }]
     );
     assert_eq!(shares.list()["shares"][0]["state"], "accepted");
+}
+
+#[tokio::test]
+async fn direct_guests_are_scoped_and_removed_without_affecting_group_shares() {
+    let shares = shares(None);
+    let group = Uuid::new_v4();
+    let grouped_share = Uuid::new_v4();
+    let direct_share = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+    shares.set(set("w", group, &[])).await.unwrap();
+    let direct: SetRequest = serde_json::from_value(json!({
+        "resourceKind": "workspace", "resourceKey": "w", "permission": "operate",
+        "audience": "people"
+    }))
+    .unwrap();
+    shares.set(direct).await.unwrap();
+    let publication = shares.publication();
+    let entry = publication
+        .shares
+        .iter()
+        .find(|entry| entry.group_id.is_none())
+        .expect("direct publication");
+    let mut outcome = accepted(&shares, "w", group, grouped_share);
+    outcome.accepted.push(Accepted {
+        share_id: direct_share,
+        resource_kind: ResourceKind::Workspace,
+        resource_key: "w".into(),
+        group_id: None,
+        setting_id: entry.setting_id,
+        missing_recipients: Vec::new(),
+    });
+    let direct_visitor = Visitor {
+        group_id: None,
+        ..visitor(direct_share, group, user_id)
+    };
+    assert!(shares.admit(&direct_visitor).is_none());
+    shares.apply(outcome.clone());
+
+    let admitted = shares
+        .admit(&direct_visitor)
+        .expect("direct guest admitted");
+    assert!(
+        shares
+            .admit(&visitor(direct_share, group, user_id))
+            .is_none()
+    );
+    assert!(
+        shares
+            .admit(&Visitor {
+                resource_key: "other".into(),
+                ..direct_visitor.clone()
+            })
+            .is_none()
+    );
+    let grouped = shares
+        .admit(&visitor(grouped_share, group, user_id))
+        .expect("group guest admitted");
+
+    outcome.denied.push(VisitorGrant {
+        share_id: direct_share,
+        user_id,
+    });
+    shares.apply(outcome);
+    assert!(admitted.cancellation().is_cancelled());
+    assert!(shares.admit(&direct_visitor).is_none());
+    assert!(!grouped.cancellation().is_cancelled());
+    shares
+        .remove(ResourceKind::Workspace, "w", None)
+        .await
+        .unwrap();
+    assert_eq!(shares.publication().shares.len(), 1);
+    assert!(!grouped.cancellation().is_cancelled());
 }
 
 #[tokio::test]
@@ -710,7 +782,7 @@ async fn terminal_tracking_keeps_live_owners_and_prunes_only_confirmed_exits() {
     assert_eq!(shares.terminal_ids().len(), 2);
     assert!(shares.grants(registration.grant()));
     shares
-        .remove(ResourceKind::Workspace, "w", group)
+        .remove(ResourceKind::Workspace, "w", Some(group))
         .await
         .unwrap();
     assert!(!shares.grants(registration.grant()));

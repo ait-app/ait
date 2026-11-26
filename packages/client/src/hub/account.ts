@@ -81,8 +81,9 @@ export type HubShareResourceKind = "workspace" | "project" | "node";
 /** A resource another account shares with this one, from `share_presence` snapshots. */
 export interface HubShare {
   shareId: string;
-  groupId: string;
-  groupName: string;
+  /** Both group fields are null for a direct share. */
+  groupId: string | null;
+  groupName: string | null;
   hostId: string;
   /** Serve endpoint to open the guest session to, together with `shareId`. */
   nodeId: string;

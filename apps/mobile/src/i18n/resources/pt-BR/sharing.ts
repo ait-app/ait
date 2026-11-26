@@ -4,7 +4,12 @@ const sharedSharing = {
     "Hosts ativados e seus projetos e workspaces compartilhados aparecem nas suas listas.",
   showHostInHosts: "Mostrar {{host}} em Hosts",
   sharedByMeCount: "Compartilhado por mim ({{count}})",
-  action: "Compartilhar com grupos",
+  action: "Compartilhar…",
+  direct: "Compartilhar com pessoas",
+  directHint: "Convide por e-mail ou nome de usuário.",
+  openInvitations: "Gerenciar convites na web",
+  openInvitationsError: "Não foi possível abrir a página de compartilhamento.",
+  directUnsupported: "Este serviço não oferece compartilhamento direto.",
   manage: "Gerenciar",
   refresh: "Atualizar",
   stop: "Parar compartilhamento",
@@ -12,10 +17,11 @@ const sharedSharing = {
   loading: "Carregando recursos compartilhados…",
   hostSection: "Compartilhamento",
   hostTitle: "Compartilhar este nó",
-  hostHint: "Dê a um grupo acesso a todos os projetos e workspaces neste host.",
+  hostHint: "Dê a pessoas ou grupos acesso a todos os projetos e espaços de trabalho deste host.",
   shareTitle: "Compartilhar {{name}}",
   resourceTitle: "Compartilhar recurso",
-  intro: "Membros do grupo podem abrir este recurso no AIT enquanto o proprietário estiver online.",
+  intro:
+    "As pessoas convidadas e os membros dos grupos podem abrir este recurso enquanto o host estiver online.",
   projectHostHint: "Compartilhe este projeto e seus workspaces no host selecionado.",
   hostUnavailable: "Este host está indisponível. Conecte-se para gerenciar o compartilhamento.",
   scope: { node: "Nó", project: "Projeto", workspace: "Workspace" },
@@ -31,9 +37,6 @@ const sharedSharing = {
     groupAdmin: "Você gerencia este grupo",
     groupMember: "Membro do grupo",
   },
-  noGroupsTitle: "Nenhum grupo disponível",
-  noGroupsHint:
-    "Conecte este nó ao serviço online em Configurações do host → Conexões e verifique se o proprietário pertence a um grupo.",
   nodeSettingsOnly:
     "Estas configurações exigem o compartilhamento do nó inteiro. Este compartilhamento dá acesso apenas ao projeto ou workspace.",
   ownerOnly:
@@ -44,7 +47,8 @@ const sharedSharing = {
   updateError: "Não foi possível atualizar o compartilhamento.",
   stopError: "Não foi possível parar o compartilhamento.",
   emptyIncomingTitle: "Nada foi compartilhado com você ainda",
-  emptyIncomingHint: "Recursos compartilhados por membros dos seus grupos aparecerão aqui.",
+  emptyIncomingHint:
+    "Os recursos compartilhados diretamente com você ou por um grupo aparecerão aqui.",
   emptyOutgoingTitle: "Você não está compartilhando nada",
   emptyOutgoingHint:
     "Use o menu de um workspace ou projeto, ou abra as configurações do host para compartilhar um nó inteiro.",

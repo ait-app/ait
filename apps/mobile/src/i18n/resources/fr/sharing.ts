@@ -4,7 +4,12 @@ const sharedSharing = {
     "Les hôtes activés ainsi que leurs projets et espaces partagés apparaissent dans vos listes.",
   showHostInHosts: "Afficher {{host}} dans les hôtes",
   sharedByMeCount: "Partagé par moi ({{count}})",
-  action: "Partager avec des groupes",
+  action: "Partager…",
+  direct: "Partager avec des personnes",
+  directHint: "Invitez par e-mail ou nom d’utilisateur.",
+  openInvitations: "Gérer les invitations sur le Web",
+  openInvitationsError: "Impossible d’ouvrir la page de partage.",
+  directUnsupported: "Ce service ne prend pas en charge le partage direct.",
   manage: "Gérer",
   refresh: "Actualiser",
   stop: "Arrêter le partage",
@@ -12,11 +17,12 @@ const sharedSharing = {
   loading: "Chargement des ressources partagées…",
   hostSection: "Partage",
   hostTitle: "Partager ce nœud",
-  hostHint: "Donnez à un groupe l’accès à tous les projets et espaces de travail de cet hôte.",
+  hostHint:
+    "Donnez à des personnes ou à des groupes accès à tous les projets et espaces de travail de cet hôte.",
   shareTitle: "Partager {{name}}",
   resourceTitle: "Partager la ressource",
   intro:
-    "Les membres du groupe peuvent ouvrir cette ressource dans AIT tant que le propriétaire est en ligne.",
+    "Les personnes invitées et les membres des groupes peuvent ouvrir cette ressource lorsque l’hôte est en ligne.",
   projectHostHint: "Partagez ce projet et ses espaces de travail sur l’hôte sélectionné.",
   hostUnavailable: "Cet hôte est indisponible. Connectez-vous-y pour gérer le partage.",
   scope: { node: "Nœud", project: "Projet", workspace: "Espace de travail" },
@@ -32,9 +38,6 @@ const sharedSharing = {
     groupAdmin: "Vous gérez ce groupe",
     groupMember: "Membre du groupe",
   },
-  noGroupsTitle: "Aucun groupe disponible",
-  noGroupsHint:
-    "Connectez ce nœud au service en ligne dans Paramètres de l’hôte → Connexions, puis vérifiez que le propriétaire appartient à un groupe.",
   nodeSettingsOnly:
     "Ces paramètres nécessitent le partage complet du nœud. Ce partage donne uniquement accès à son projet ou à son espace de travail.",
   ownerOnly:
@@ -45,7 +48,8 @@ const sharedSharing = {
   updateError: "Impossible de mettre à jour le partage.",
   stopError: "Impossible d’arrêter le partage.",
   emptyIncomingTitle: "Rien ne vous a encore été partagé",
-  emptyIncomingHint: "Les ressources partagées par les membres de vos groupes apparaîtront ici.",
+  emptyIncomingHint:
+    "Les ressources partagées avec vous directement ou via un groupe apparaîtront ici.",
   emptyOutgoingTitle: "Vous ne partagez rien",
   emptyOutgoingHint:
     "Utilisez le menu d’un espace de travail ou d’un projet, ou ouvrez les paramètres de l’hôte pour partager un nœud entier.",

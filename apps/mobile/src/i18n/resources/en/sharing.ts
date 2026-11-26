@@ -4,7 +4,12 @@ export const sharing = {
   incomingHostHint: "Enabled Hosts and their shared projects and workspaces appear in your lists.",
   showHostInHosts: "Show {{host}} in Hosts",
   sharedByMeCount: "Shared by me ({{count}})",
-  action: "Share with groups",
+  action: "Share…",
+  direct: "Share with people",
+  directHint: "Invite people by email or username.",
+  openInvitations: "Manage invitations on the web",
+  openInvitationsError: "Could not open the sharing page.",
+  directUnsupported: "This service does not support direct sharing.",
   manage: "Manage",
   refresh: "Refresh",
   stop: "Stop sharing",
@@ -12,10 +17,10 @@ export const sharing = {
   loading: "Loading shared resources…",
   hostSection: "Sharing",
   hostTitle: "Share this node",
-  hostHint: "Give a group access to every project and workspace on this Host.",
+  hostHint: "Give people or groups access to every project and workspace on this Host.",
   shareTitle: "Share {{name}}",
   resourceTitle: "Share resource",
-  intro: "Group members can open this resource in AIT while the sharing owner is online.",
+  intro: "People you invite and group members can open this resource while the Host is online.",
   projectHostHint: "Share this project and its workspaces on the selected Host.",
   hostUnavailable: "This Host is unavailable. Connect to it to manage sharing.",
   scope: {
@@ -35,9 +40,6 @@ export const sharing = {
     groupAdmin: "You manage this group",
     groupMember: "Group member",
   },
-  noGroupsTitle: "No groups available",
-  noGroupsHint:
-    "Connect this node to the online service in Host settings → Connections, then check that the node owner belongs to a group.",
   nodeSettingsOnly:
     "These settings require a whole-node share. This share only grants access to its project or workspace.",
   ownerOnly:
@@ -48,7 +50,7 @@ export const sharing = {
   listError: "Could not load shared resources.",
   stopError: "Could not stop sharing.",
   emptyIncomingTitle: "Nothing shared with you yet",
-  emptyIncomingHint: "Resources shared by members of your groups will appear here.",
+  emptyIncomingHint: "Resources shared with you directly or through a group will appear here.",
   emptyOutgoingTitle: "You are not sharing anything",
   emptyOutgoingHint:
     "Use the menu on a workspace or project, or open Host settings to share a whole node.",

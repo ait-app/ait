@@ -121,6 +121,17 @@ describe("hub link group and share snapshots", () => {
     h.link.stop();
   });
 
+  it("keeps direct shares with null group fields", async () => {
+    const { h, socket } = await online();
+    const stop = h.link.subscribeShares();
+    accept(socket, 1);
+    const direct = { ...SHARE, shareId: "direct", groupId: null, groupName: null };
+    shares(socket, 2, [SHARE, direct, { ...direct, groupName: "Unexpected group" }]);
+    expect(h.link.shares).toEqual([SHARE, direct]);
+    stop();
+    h.link.stop();
+  });
+
   it("keeps the subscription across a resume and renews it on a fresh link", async () => {
     const { h, socket } = await online();
     h.link.subscribeShares();
