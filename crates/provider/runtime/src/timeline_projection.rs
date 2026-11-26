@@ -54,6 +54,23 @@ pub(crate) struct Entry {
     collapsed: Vec<Collapse>,
 }
 
+impl Entry {
+    /// Check whether a canonical source sequence position is covered by this entry.
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - Source timeline sequence number to check
+    ///
+    /// # Returns
+    ///
+    /// `true` if any of this entry's `source_seq_ranges` includes `seq`
+    pub(crate) fn contains_seq(&self, seq: u64) -> bool {
+        self.source_seq_ranges
+            .iter()
+            .any(|range| range.start_seq <= seq && seq <= range.end_seq)
+    }
+}
+
 impl From<&Row> for Entry {
     fn from(row: &Row) -> Self {
         Self {

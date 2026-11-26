@@ -3,6 +3,7 @@ import invariant from "tiny-invariant";
 import { describe, expect, it } from "vitest";
 
 import {
+  appendSubmittedUserMessage,
   applyStreamEvent,
   createUserMessage,
   handoffCreatedAgentUserMessageToStream,
@@ -2658,5 +2659,171 @@ describe("Ait-generated input origins", () => {
         origin: { kind: "bot_wake" },
       }),
     ]);
+  });
+});
+
+// A streamed reply is stored as deltas and then one committed row whose text is only the
+// suffix the deltas did not cover, usually "". The projection merges them into one entry
+// ending at the committed row, which is the only boundary agent.fork_context accepts.
+describe("empty committed stream rows", () => {
+  const epoch = "epoch-1";
+  const at = (seq: number) => new Date(1_000 + seq);
+
+  type Lanes = { tail: StreamItem[]; head: StreamItem[] };
+
+  function applyLive(lanes: Lanes, event: AgentStreamEventPayload, seq: number) {
+    return applyStreamEvent({
+      tail: lanes.tail,
+      head: lanes.head,
+      event,
+      timestamp: at(seq),
+      source: "live",
+      timelineCursor: { epoch, seq },
+    });
+  }
+
+  function streamLive(events: AgentStreamEventPayload[]): Lanes {
+    return events.reduce<Lanes>((lanes, event, index) => applyLive(lanes, event, index + 1), {
+      tail: [],
+      head: [],
+    });
+  }
+
+  function reply(text: string, messageId = "reply-1"): AgentStreamEventPayload {
+    return {
+      type: "timeline",
+      provider: "codex",
+      turnId: "turn-1",
+      item: { type: "assistant_message", text, messageId },
+    };
+  }
+
+  function reasoning(text: string): AgentStreamEventPayload {
+    return {
+      type: "timeline",
+      provider: "codex",
+      turnId: "turn-1",
+      item: { type: "reasoning", text },
+    };
+  }
+
+  it("ends a streamed reply at its committed row, as its canonical entry does", () => {
+    const streamed = streamLive([reply("Hel"), reply("lo")]);
+    const committed = applyLive(streamed, reply(""), 3);
+    const canonical = hydrateStreamState(
+      [{ event: reply("Hello"), timestamp: at(3), timelineCursor: { epoch, seq: 3 } }],
+      { source: "canonical" },
+    );
+
+    expect(committed.changedHead).toBe(true);
+    expect(committed.tail).toEqual([]);
+    expect(committed.head).toEqual([
+      expect.objectContaining({
+        kind: "assistant_message",
+        id: streamed.head[0]?.id,
+        messageId: "reply-1",
+        text: "Hello",
+        timelineCursor: { epoch, seq: 3 },
+        timestamp: at(3),
+      }),
+    ]);
+    expect(committed.head).toEqual([
+      expect.objectContaining({
+        text: canonical[0]?.kind === "assistant_message" ? canonical[0].text : undefined,
+        timelineCursor: canonical[0]?.timelineCursor,
+        timestamp: canonical[0]?.timestamp,
+      }),
+    ]);
+  });
+
+  it("ends streamed reasoning at its committed row without reopening it", () => {
+    const streamed = streamLive([reasoning("Plan"), reasoning(" steps")]);
+    const committed = applyLive(streamed, reasoning(""), 3);
+
+    expect(committed.tail).toEqual([]);
+    expect(committed.head).toEqual([
+      expect.objectContaining({
+        kind: "thought",
+        id: streamed.head[0]?.id,
+        text: "Plan steps",
+        status: "loading",
+        timelineCursor: { epoch, seq: 3 },
+        timestamp: at(3),
+      }),
+    ]);
+  });
+
+  it("keeps a thought finalized before its empty committed row ready", () => {
+    const streamed = reduceStreamUpdate([], reasoning("Plan"), at(1), {
+      timelineCursor: { epoch, seq: 1 },
+    });
+    const paused = reduceStreamUpdate(streamed, { type: "turn_started", provider: "codex" }, at(2));
+    const committed = reduceStreamUpdate(paused, reasoning(""), at(3), {
+      timelineCursor: { epoch, seq: 3 },
+    });
+
+    expect(committed).toEqual([
+      expect.objectContaining({
+        kind: "thought",
+        text: "Plan",
+        status: "ready",
+        timelineCursor: { epoch, seq: 3 },
+      }),
+    ]);
+  });
+
+  it("ends the streamed reply behind a prompt submitted while it streamed", () => {
+    const streamed = streamLive([reply("Hel"), reply("lo")]);
+    const submitted = createUserMessage({
+      clientMessageId: "client-steer",
+      text: "Also cover tests",
+      timestamp: at(2),
+    });
+    const steered = appendSubmittedUserMessage({ ...streamed, message: submitted });
+    const committed = applyLive(steered, reply(""), 3);
+
+    expect(committed.tail).toEqual([]);
+    expect(committed.head).toEqual([
+      expect.objectContaining({
+        kind: "assistant_message",
+        text: "Hello",
+        timelineCursor: { epoch, seq: 3 },
+      }),
+      submitted,
+    ]);
+    expect(committed.head[1]).toBe(submitted);
+  });
+
+  it("leaves another message's cursor alone when the empty row names a different message", () => {
+    const streamed = streamLive([reply("Hel"), reply("lo")]);
+    const committed = applyLive(streamed, reply("", "reply-2"), 3);
+
+    expect([...committed.tail, ...committed.head]).toEqual([
+      expect.objectContaining({
+        kind: "assistant_message",
+        messageId: "reply-1",
+        text: "Hello",
+        timelineCursor: { epoch, seq: 2 },
+        timestamp: at(2),
+      }),
+    ]);
+  });
+
+  it.each([
+    ["assistant", reply("")],
+    ["reasoning", reasoning("")],
+  ])("does not create a row for an empty %s row without a streamed target", (_, event) => {
+    const committed = applyLive({ tail: [], head: [] }, event, 1);
+
+    expect(committed).toMatchObject({ tail: [], head: [], changedTail: false, changedHead: false });
+  });
+
+  it.each([
+    ["assistant", [reply("Hel"), reply("lo")], reply("")],
+    ["reasoning", [reasoning("Plan"), reasoning(" steps")], reasoning("")],
+  ])("ignores an empty %s row that carries no timeline cursor", (_, deltas, empty) => {
+    const streamed = streamLive(deltas);
+
+    expect(reduceStreamUpdate(streamed.head, empty, at(3))).toBe(streamed.head);
   });
 });

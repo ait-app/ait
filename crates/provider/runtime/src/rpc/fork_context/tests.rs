@@ -3,6 +3,7 @@ use crate::protocol::timeline::Cursor;
 use provider_core::protocol::timeline::NativeItem;
 
 mod paseo;
+mod streamed;
 mod upstream;
 
 fn row(seq: u64, item: Value) -> Row {
@@ -71,7 +72,15 @@ fn attachments_use_inclusive_boundaries_and_omit_private_payloads() {
         Err(ErrorCode::InvalidMessage)
     );
     boundary.boundary_cursor.as_mut().unwrap().seq = 99;
-    assert!(export(&boundary, "epoch", &rows, &agent).is_err());
+    assert_eq!(
+        export(&boundary, "epoch", &rows, &agent).unwrap()["itemCount"],
+        2
+    );
+    boundary.boundary_message_id = None;
+    assert_eq!(
+        export(&boundary, "epoch", &rows, &agent),
+        Err(ErrorCode::InvalidMessage)
+    );
     boundary.boundary_cursor = None;
     boundary.boundary_message_id = Some("unknown".to_owned());
     assert!(export(&boundary, "epoch", &rows, &agent).is_err());

@@ -140,8 +140,8 @@ impl BoundedText {
 ///
 /// # Errors
 ///
-/// Returns `InvalidMessage` for a stale epoch or a boundary that no projected entry ends at, and
-/// `ResourceExhausted` when the response cannot fit its budget.
+/// Returns `InvalidMessage` for a stale epoch or an unresolvable boundary, and `ResourceExhausted`
+/// when the response cannot fit its budget.
 pub(crate) fn export(
     request: &ForkRequest,
     epoch: &str,
@@ -183,28 +183,56 @@ pub(crate) fn export(
 }
 
 /// Return the inclusive source sequence that ends the requested projected entry, if any.
-/// The cursor takes precedence over `message`, the last assistant message with that ID.
+///
+/// A cursor from another epoch is rejected immediately. Within the current epoch, resolution
+/// prefers an entry ending at `cursor.seq`, then a merged assistant/reasoning text entry whose
+/// source span covers `cursor.seq` (requiring the same `messageId` when `message` is given), and
+/// finally the last assistant entry matching `message`.
 fn resolve_boundary(
     request: &ForkRequest,
     message: Option<&str>,
     epoch: &str,
     projected: &[Entry],
 ) -> Result<Option<u64>, ErrorCode> {
-    let entry = if let Some(cursor) = &request.boundary_cursor {
+    if request.boundary_cursor.is_none() && message.is_none() {
+        return Ok(None);
+    }
+    if let Some(cursor) = &request.boundary_cursor {
         if cursor.epoch != epoch {
             return Err(ErrorCode::InvalidMessage);
         }
-        projected.iter().find(|entry| entry.seq_end == cursor.seq)
-    } else if let Some(message) = message {
-        projected.iter().rfind(|entry| {
-            entry.item["type"] == "assistant_message" && entry.item["messageId"] == message
+        if let Some(entry) = projected
+            .iter()
+            .find(|entry| entry.seq_end == cursor.seq)
+            .or_else(|| {
+                projected
+                    .iter()
+                    .find(|entry| matches_text_span(entry, cursor.seq, message))
+            })
+        {
+            return Ok(Some(entry.seq_end));
+        }
+    }
+    if let Some(message) = message
+        && let Some(entry) = projected.iter().rfind(|entry| {
+            entry.item["type"] == "assistant_message"
+                && entry.item["messageId"].as_str() == Some(message)
         })
-    } else {
-        return Ok(None);
-    };
-    entry
-        .map(|entry| Some(entry.seq_end))
-        .ok_or(ErrorCode::InvalidMessage)
+    {
+        return Ok(Some(entry.seq_end));
+    }
+    Err(ErrorCode::InvalidMessage)
+}
+
+fn matches_text_span(entry: &Entry, seq: u64, message: Option<&str>) -> bool {
+    if !entry.contains_seq(seq) {
+        return false;
+    }
+    match (entry.item["type"].as_str(), message) {
+        (Some("assistant_message"), Some(id)) => entry.item["messageId"].as_str() == Some(id),
+        (Some("assistant_message" | "reasoning"), None) => true,
+        _ => false,
+    }
 }
 
 fn append_body(text: &mut BoundedText, selected: &[Entry]) {

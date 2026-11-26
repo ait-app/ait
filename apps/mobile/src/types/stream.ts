@@ -991,7 +991,7 @@ function appendAssistantMessage(
   timelineCursor?: TimelinePosition,
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!chunk) {
+  if (!chunk && !timelineCursor) {
     return state;
   }
 
@@ -1053,7 +1053,7 @@ function appendThought(
   turnId?: string,
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!chunk) {
+  if (!chunk && !timelineCursor) {
     return state;
   }
 
@@ -1067,7 +1067,7 @@ function appendThought(
       ...(timelineCursor ? { timelineCursor } : {}),
       text: `${last.text}${chunk}`,
       timestamp,
-      status: "loading",
+      status: chunk ? "loading" : last.status,
     };
     return [...state.slice(0, -1), updated];
   }
@@ -1750,7 +1750,12 @@ export function reduceStreamUpdate(
         options?.reservedItemIds,
         options?.timelineCursor,
       );
-      if (event.item.type === "reasoning" && reduced === state) return state;
+      if (
+        (event.item.type === "reasoning" || event.item.type === "assistant_message") &&
+        reduced === state
+      ) {
+        return state;
+      }
       return applyTimelineTurnId(reduced, event);
     }
     case "thread_started":
@@ -1789,7 +1794,14 @@ function applyTimelineTurnId(
   }
 
   if (!event.turnId || items.length === 0) return items;
-  const index = items.length - 1;
+  let index = items.length - 1;
+  if (
+    event.item.type === "assistant_message" &&
+    items[index]?.kind === "user_message" &&
+    items[index - 1]?.kind === "assistant_message"
+  ) {
+    index -= 1;
+  }
   const last = items[index];
   if (!last || last.turnId === event.turnId) return items;
   return [
@@ -1935,11 +1947,20 @@ function getTailAssistantToResume(params: {
   event: AgentStreamEventPayload;
   nextHead: StreamItem[];
   tailAssistant: StreamItem | undefined;
+  timelineCursor?: TimelinePosition;
 }): AssistantMessageItem | null {
   if (params.incomingKind !== "assistant_message" || params.nextHead.length !== 0) {
     return null;
   }
   if (params.tailAssistant?.kind !== "assistant_message") {
+    return null;
+  }
+  if (
+    params.event.type === "timeline" &&
+    params.event.item.type === "assistant_message" &&
+    !normalizeChunk(params.event.item.text).chunk &&
+    !params.timelineCursor
+  ) {
     return null;
   }
   const incomingMessageId = getIncomingAssistantMessageId(params.event);
@@ -2191,6 +2212,7 @@ export function applyStreamEvent(params: {
     event,
     nextHead,
     tailAssistant: nextTail.at(-1),
+    timelineCursor: params.timelineCursor,
   });
   if (tailAssistant) {
     nextTail = nextTail.slice(0, -1);

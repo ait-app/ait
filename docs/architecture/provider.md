@@ -267,9 +267,13 @@ Composer 的“功能”入口使用与模式选择相同的搜索下拉菜单�
   片段（assistant 还需 `messageId` 一致）；跨工具调用的每轮单一 Thinking 由共享客户端组合
   （[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)、
   [ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)）。
-- `agent.fork_context.request` 的边界（cursor 或 assistant `messageId`）在完整投影中定位，再只投影该序号及之前的源行：
-  边界之后仍在更新的工具生命周期按边界时的状态导出，不再像 Paseo 那样拒绝。Codex 的长时命令会在 assistant
-  评论之后继续输出，拒绝会让同一轮内多数位置无法分叉。
+- `agent.fork_context.request` 的边界在完整投影中依次定位：cursor 不属于当前 epoch 时拒绝（替换后的旧边界仍失效）；
+  取恰好结束于 cursor 的条目；再取源行包含 cursor 的 assistant/reasoning 文本条目的末尾，请求带 `messageId`
+  时该条目须是同一条 assistant 消息；再取最后一个同 `messageId` 的 assistant 条目；都不满足时拒绝，
+  因此落在工具生命周期中间且没有可用 `messageId` 的 cursor 仍被拒绝。按包含关系取末尾是因为流式文本提交时
+  只保存尚未流出的后缀（通常为空），未收到提交行或旧客户端跳过空事件后持有的 cursor 会停在条目末尾之前；Paseo 拒绝这类 cursor。
+- 定位后只投影该序号及之前的源行：边界之后仍在更新的工具生命周期按边界时的状态导出，不再像 Paseo 那样拒绝。
+  Codex 的长时命令会在 assistant 评论之后继续输出，拒绝会让同一轮内多数位置无法分叉。
 - Ait 自己写入的输入（定时任务与心跳运行、Bot 指令前缀与唤醒通知）统一为 `<ait-input kind=…>` 信封。
   runtime 在发布、读取投影与会话标题处调用 `domain::input_envelope`，把信封内的正文与 `origin`
   一并输出；存储行保留发送时的原文，重放与原生历史导入得到同样投影

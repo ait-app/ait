@@ -77,8 +77,10 @@ fn fork_context_matches_recorded_upstream_cases() {
     }
 }
 
+/// Paseo rejects a cursor inside a merged reply; Ait resolves it to the end of that merged reply
+/// because streamed completions append an empty committed row after the last text delta.
 #[test]
-fn rejects_a_cursor_inside_a_message_that_has_since_grown() {
+fn resolves_a_cursor_inside_a_merged_message_to_its_completed_entry() {
     let rows = [
         row(
             1,
@@ -88,16 +90,22 @@ fn rejects_a_cursor_inside_a_message_that_has_since_grown() {
             2,
             json!({"type":"assistant_message","messageId":"reply","text":"B"}),
         ),
+        row(
+            3,
+            json!({"type":"assistant_message","messageId":"later","text":"Later reply."}),
+        ),
     ];
     let mut request = request();
     request.boundary_cursor = Some(Cursor {
         epoch: "e".to_owned(),
         seq: 1,
     });
-    assert_eq!(
-        export(&request, "e", &rows, &Value::Null),
-        Err(ErrorCode::InvalidMessage)
-    );
+    let early = export(&request, "e", &rows, &Value::Null).unwrap();
+    assert_eq!(early["itemCount"], 1);
+    let early_text = early["attachment"]["text"].as_str().unwrap();
+    assert!(early_text.contains("[Assistant] AB"), "{early_text}");
+    assert!(!early_text.contains("Later reply."), "{early_text}");
+
     request.boundary_cursor.as_mut().unwrap().seq = 2;
     let result = export(&request, "e", &rows, &Value::Null).unwrap();
     assert_eq!(result["itemCount"], 1);

@@ -115,22 +115,27 @@ fn attachment_over_the_limit_is_trimmed_and_marked() {
     assert!(text.ends_with("</chat-history-summary>"));
 }
 
+/// Paseo rejects a cursor before the final fragment; Ait resolves a cursor inside a merged
+/// assistant entry to that entry's end so live-streamed cursors remain forkable while excluding
+/// later messages.
 #[test]
-fn cursor_boundary_rejects_a_message_with_fragments_after_that_position() {
+fn cursor_boundary_inside_merged_message_resolves_to_its_end_and_excludes_later_messages() {
     let rows = [
         fragment(1, "a", "part"),
         fragment(2, "a", "ial"),
         fragment(3, "a", " later"),
+        fragment(4, "b", "excluded"),
     ];
     let mut boundary = request();
     boundary.boundary_cursor = Some(Cursor {
         epoch: "epoch".to_owned(),
         seq: 2,
     });
-    assert_eq!(
-        export(&boundary, "epoch", &rows, &json!({})),
-        Err(ErrorCode::InvalidMessage)
-    );
+    let result = export(&boundary, "epoch", &rows, &json!({})).unwrap();
+    let text = result["attachment"]["text"].as_str().unwrap();
+    assert!(text.contains("[Assistant] partial later\n"), "{text}");
+    assert!(!text.contains("excluded"), "{text}");
+    assert_eq!(result["itemCount"], 1);
 }
 
 #[test]

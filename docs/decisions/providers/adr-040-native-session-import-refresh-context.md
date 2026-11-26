@@ -15,6 +15,9 @@ paths:
   Session handlers 和 activity-curator；本机 Codex 0.153.4 app-server schema。
 - 修订说明（2026-11-23）：“上下文附件”的边界语义已偏离 Paseo：边界之后仍更新的工具生命周期按边界时的状态导出，
   不再拒绝；现状见 [Provider 规格](../../architecture/provider.md#时间线与历史投影)。
+- 修订说明（2026-11-26）：同 epoch 的边界 cursor 若落在合并后的 assistant/reasoning 文本条目内（带 `messageId`
+  时须为同一条 assistant 消息）则取该条目的末尾，仍未命中时回退按 `messageId` 定位最后一个匹配的 assistant 条目；
+  现状见 [Provider 规格](../../architecture/provider.md#时间线与历史投影)。
 
 ## 所有权
 
