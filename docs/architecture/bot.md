@@ -36,7 +36,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 ## 对话与执行
 
 - Bot 以单一原生上下文接收所有入口的输入，按持久化 Bot 顺序串行执行。Conversation 保留 Channel、peer、sender、thread，作为来源、历史与回执路由，不再各自拥有独立模型上下文。子 Agent 仍可并发。
-- 重置通过 Bot 级接口改变共享上下文，取消旧队列并保留历史与会话设置；有执行中的轮次时拒绝重置。旧单 Conversation 重置接口不再发布。迁移保留历史供回读，不重放旧输入（[ADR-306](../decisions/bot/adr-306-shared-bot-context-and-chat-reception.md)）。
+- 重置通过 Bot 级接口改变共享上下文，取消旧队列并保留历史与会话设置；有执行中的轮次时拒绝重置。旧单 Conversation 重置接口保留能力协商，校验归属后返回版本不兼容错误且不修改状态，使旧客户端仍能打开 Bot 页；不能把单对话确认扩大为共享上下文重置。迁移保留历史供回读，不重放旧输入（[ADR-306](../decisions/bot/adr-306-shared-bot-context-and-chat-reception.md)、[ADR-309](../decisions/bot/adr-309-bot-legacy-client-negotiation.md)）。
 - 输入按 Channel 与 `messageId` 去重：内容、目标相同返回 `duplicate:true`，不同返回 `IdempotencyConflict`。
   轮次落盘后才返回接纳；外部消息在持久接纳后才确认或推进游标，全局积压时不确认、等待重投，
   单个 Conversation 积压时确认并丢弃该条
@@ -300,6 +300,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)，修订
   [ADR-148](../decisions/daemon/adr-148-daemon-mcp.md)）。
 - 作用域调用的每个工具必须在 `api::mcp::scope` 登记规则才会执行；`cwd` 一律拒绝，目标解析为规范 ID 后回写。
+  作用域工具目录省略 `cwd`，工作目录由允许的 Workspace 确定；旧调用传入目录时返回可修正的参数提示。
+  终端授权使用保留记录中的 Workspace 归属，自然退出但未被淘汰的终端仍可读取输出；显式关闭或淘汰后不再可访问。
   作用域为根 Workspace 加上 `Bot.workspaces` 中已记录且未归档的 worktree；违规以 `isError` 工具结果返回 `Forbidden`
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、
   [ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。

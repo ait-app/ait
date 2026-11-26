@@ -393,6 +393,15 @@ impl Terminals {
         Ok(observation)
     }
 
+    /// Return the owning Workspace of a retained terminal, including naturally exited ones.
+    /// Missing, explicitly closed and evicted terminals have no accessible ownership.
+    pub(crate) fn workspace_id(&self, id: &str) -> Option<&str> {
+        self.entries
+            .get(id)
+            .filter(|entry| !entry.closed)
+            .map(|entry| entry.info.workspace_id.as_str())
+    }
+
     /// Capture all retained rendered rows; a missing/exited-and-evicted terminal is empty.
     ///
     /// # Errors

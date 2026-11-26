@@ -2,6 +2,8 @@ use crate::test_support::bots::service as bots;
 
 use super::*;
 
+mod compatibility;
+
 async fn connect(fixture: &Fixture) -> Socket {
     let mut socket = fixture.socket().await;
     let mut offer = hello();

@@ -189,6 +189,33 @@ fn closed_terminal_keeps_tail_only_for_existing_observers() {
 mod activity;
 
 #[test]
+fn retained_terminal_ownership_survives_natural_exit_until_close_or_eviction() {
+    let (mut service, _, calls) = fixture();
+    let terminal = service.create(&request()).unwrap();
+    assert_eq!(service.workspace_id(&terminal.id), Some("w"));
+    assert_eq!(service.workspace_id("unknown"), None);
+
+    calls.lock().unwrap().exited = true;
+    assert!(service.list(&ListRequest::default()).unwrap().is_empty());
+    assert_eq!(
+        service.capture(&terminal.id).unwrap(),
+        ["first", "second", "last"]
+    );
+    assert_eq!(service.workspace_id(&terminal.id), Some("w"));
+
+    for _ in 0..MAX_TERMINALS {
+        service.create(&request()).unwrap();
+    }
+    assert_eq!(service.workspace_id(&terminal.id), None);
+    assert!(service.capture(&terminal.id).unwrap().is_empty());
+
+    let closed = service.create(&request()).unwrap();
+    service.kill(&closed.id).unwrap();
+    assert_eq!(service.workspace_id(&closed.id), None);
+    assert!(service.capture(&closed.id).unwrap().is_empty());
+}
+
+#[test]
 fn batched_listings_share_one_registry_snapshot_and_keep_per_filter_results() {
     let (mut service, registry, _) = fixture();
     let terminal = service.create(&request()).unwrap();

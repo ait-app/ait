@@ -64,6 +64,24 @@ pub async fn dispatch(
         .map_err(Into::into)
 }
 
+/// Resolve a retained terminal's Workspace without requiring its process to be running.
+///
+/// # Arguments
+/// * `state` - Terminal service and its bounded task admission.
+/// * `terminal_id` - Exact identity of the terminal being authorized.
+///
+/// # Returns
+/// The owning Workspace, or `None` for a missing, explicitly closed or evicted terminal.
+///
+/// # Errors
+/// Returns terminal service, shutdown, admission or locking errors.
+pub async fn workspace_id(state: &State, terminal_id: String) -> Result<Option<String>, ErrorCode> {
+    crate::connection::run(state, move |terminals| {
+        Ok(terminals.workspace_id(&terminal_id).map(str::to_owned))
+    })
+    .await
+}
+
 /// Finish an admitted cross-capability close after the provider has closed its Agents.
 /// # Errors
 /// Returns terminal task admission or I/O errors, preserving per-terminal success results.

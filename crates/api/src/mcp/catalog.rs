@@ -89,8 +89,33 @@ impl Tool {
     /// Return public MCP metadata for `scope`'s caller without exposing internal RPC method
     /// mappings.
     pub(super) fn descriptor(&self, scope: Option<&Scope>) -> Value {
+        let description = match (scope.is_some(), self.name.as_str()) {
+            (true, "agent_create") => {
+                "Create and start an agent using a provider/model pair from provider_model_list. \
+                 workspaceId defaults to your allowed workspace. Omit cwd; Ait resolves the \
+                 directory. Omit settings.modeId to use the configured Bot mode. Returns after \
+                 initial prompt admission. Reuse idempotencyKey on retries."
+            }
+            (true, "terminal_create") => {
+                "Create a managed PTY in an allowed workspace. workspaceId defaults to your \
+                 workspace. Omit cwd; Ait resolves the directory."
+            }
+            (true, "terminal_list") => {
+                "List managed terminals in an allowed workspace. workspaceId defaults to your \
+                 workspace. Omit cwd."
+            }
+            (true, "provider_model_list") => {
+                "Discover models for one provider in the Bot's root workspace. Omit cwd; \
+                 Ait resolves the directory."
+            }
+            (true, "provider_get") => {
+                "Inspect provider modes and draft features in the Bot's root workspace. \
+                 Omit cwd; Ait resolves the directory."
+            }
+            _ => self.description.as_str(),
+        };
         json!({
-            "name":self.name,"title":self.title,"description":self.description,
+            "name":self.name,"title":self.title,"description":description,
             "inputSchema":self.schema(scope),
             "annotations":{"title":self.title,"readOnlyHint":self.read_only,
                 "destructiveHint":self.destructive,"openWorldHint":false}
@@ -105,20 +130,25 @@ impl Tool {
 
     /// The input schema `scope`'s caller sees and is validated against: without arguments
     /// reserved for Bot sessions unless the caller is one, and, for host callers of a tool
-    /// marked for peers, with the optional `hostId` that runs it on another Host.
+    /// marked for peers, with the optional `hostId` that runs it on another Host. Scoped
+    /// callers cannot choose `cwd`; their Workspace determines the directory.
     pub(super) fn schema(&self, scope: Option<&Scope>) -> Cow<'_, Value> {
         let bot = scope.is_some_and(|scope| scope.caller.kind.holder() == Holder::Bot);
         let withheld = !bot && BOT_ARGUMENTS.iter().any(|(tool, _)| *tool == self.name);
         let routable = self.routable(scope);
-        if !withheld && !routable {
+        let omit_cwd = scope.is_some() && self.input_schema["properties"].get("cwd").is_some();
+        if !withheld && !routable && !omit_cwd {
             return Cow::Borrowed(&self.input_schema);
         }
         let mut schema = self.input_schema.clone();
         if let Some(properties) = schema["properties"].as_object_mut() {
-            // Bot sessions returned above (`withheld` and `routable` are both false for them),
-            // so every caller here is one the Bot-only arguments are withheld from.
-            for (_, argument) in BOT_ARGUMENTS.iter().filter(|(tool, _)| *tool == self.name) {
-                properties.remove(*argument);
+            if withheld {
+                for (_, argument) in BOT_ARGUMENTS.iter().filter(|(tool, _)| *tool == self.name) {
+                    properties.remove(*argument);
+                }
+            }
+            if omit_cwd {
+                properties.remove("cwd");
             }
             if routable {
                 properties.insert(

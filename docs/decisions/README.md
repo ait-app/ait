@@ -13,8 +13,9 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Bot
 
+- [ADR-309：保留旧客户端的 Bot 能力协商](bot/adr-309-bot-legacy-client-negotiation.md)
 - [ADR-307：Bot 重启换代与有限回执排空](bot/adr-307-bot-restart-recovery-and-delivery-drain.md)
-- [ADR-306：Bot 共享执行上下文与外部会话接收策略](bot/adr-306-shared-bot-context-and-chat-reception.md)（经 [ADR-307](bot/adr-307-bot-restart-recovery-and-delivery-drain.md) 修订）
+- [ADR-306：Bot 共享执行上下文与外部会话接收策略](bot/adr-306-shared-bot-context-and-chat-reception.md)（经 [ADR-307](bot/adr-307-bot-restart-recovery-and-delivery-drain.md)、[ADR-309](bot/adr-309-bot-legacy-client-negotiation.md) 修订）
 - [ADR-292：按平台能力投递 Bot 图片回复](bot/adr-292-rich-media-channel-delivery.md)
 - [ADR-290：所有消息 Channel 对任意发送者开放](bot/adr-290-open-channel-senders.md)（经 [ADR-306](bot/adr-306-shared-bot-context-and-chat-reception.md) 修订）
 - [ADR-289：QQ 群聊接纳所有成员对机器人的提及](bot/adr-289-qq-group-mention-admission.md)（已由 [ADR-290](bot/adr-290-open-channel-senders.md) 取代）
