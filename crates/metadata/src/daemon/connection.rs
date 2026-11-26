@@ -28,6 +28,15 @@ pub(crate) async fn dispatch(
         state.request_lifecycle(request.intent);
         return Ok(request.value);
     }
+    if method == "daemon.host_stats.request" {
+        let daemon = state
+            .daemon
+            .as_ref()
+            .ok_or(ErrorCode::UnsupportedCapability)?;
+        rpc::validate_host_stats(&params)?;
+        daemon.refresh_host_stats(&state.runtime);
+        return Ok(rpc::execute(daemon, method, params)?.value);
+    }
     let method = method.to_owned();
     let events = state.session_events.clone();
     state

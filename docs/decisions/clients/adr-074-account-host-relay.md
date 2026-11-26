@@ -11,6 +11,8 @@ paths:
 
 # ADR-074：账户发现与按需反向中继
 
+- 后续调度与恢复修订：[ADR-313](../daemon/adr-313-connection-cleanup-and-sampling.md)。
+
 > 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
 
 > 普通业务传输已由 [ADR-204](../clients/adr-204-hub-only-online-business-transport.md) 修订：仅使用 Hub，传统 Relay 仅保留独立下载与控制。

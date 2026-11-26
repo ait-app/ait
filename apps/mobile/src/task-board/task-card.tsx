@@ -20,6 +20,7 @@ import {
 import { getProviderIcon } from "@/components/provider-icons";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { PermissionRequestCard } from "@/components/permission-request-card";
+import { useRetainedPermissions } from "@/agent-stream/use-retained-permissions";
 import { Button } from "@/components/ui/button";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -120,6 +121,7 @@ export const TaskCard = memo(function TaskCard({
   const [hovered, setHovered] = useState(false);
   const descendants = taskDescendants(task);
   const client = useHostRuntimeClient(task.agent.serverId);
+  const permissions = useRetainedPermissions(client, task.agent.id, task.agent.pendingPermissions);
   const { action, allowed, disabled, open } = useTaskActions(task, online);
   const observed = task.agent.management === "observed" || Boolean(task.agent.observation);
   const select = () => onSelect(task.key);
@@ -182,13 +184,14 @@ export const TaskCard = memo(function TaskCard({
           </View>
         </View>
       </Pressable>
-      {(allowed.approve ? task.agent.pendingPermissions : []).map((request) => (
+      {(allowed.approve ? permissions : []).map((request) => (
         <View style={styles.permission} key={request.id}>
           <PermissionRequestCard
             compact
             permission={{ key: request.id, agentId: task.agent.id, request }}
             client={online ? client : null}
             onOpenDetails={select}
+            onOpenSession={open}
           />
         </View>
       ))}

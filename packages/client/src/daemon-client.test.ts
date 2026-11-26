@@ -6823,7 +6823,7 @@ test("keeps the original disconnect reason when a subscription release is pendin
   expect(parseSentFrame(mock.sent[1]).type).toBe("subscription.release.request");
 
   mock.triggerClose({ code: 1006, reason: "Hub link reset (grace_expired)." });
-  await expect(release).rejects.toThrow("Hub link reset (grace_expired).");
+  await expect(release).resolves.toBeUndefined();
   expect(client.getConnectionState()).toEqual({
     status: "disconnected",
     reason: "Hub link reset (grace_expired).",
@@ -8148,6 +8148,9 @@ test("host resource statistics gate old hosts and correlate a typed snapshot", a
       continue;
     }
     const pending = client.getHostStats(true);
+    const summary = client.getHostStats(false);
+    await Promise.resolve();
+    expect(mock.sent).toHaveLength(1);
     const request = parseSentFrame(mock.sent[0]);
     expect(request).toMatchObject({ type: "daemon.host_stats.request", includeHistory: true });
     mock.triggerMessage(
@@ -8175,7 +8178,77 @@ test("host resource statistics gate old hosts and correlate a typed snapshot", a
       platform: "linux",
       current: { cpuPercent: null, txBytesPerSecond: 0 },
     });
+    await expect(summary).resolves.toMatchObject({ current: { at: 123 }, history: [] });
+    const snapshot = await pending;
+    const summaryFirst = client.getHostStats();
+    const detailAfter = client.getHostStats(true);
+    await Promise.resolve();
+    expect(mock.sent).toHaveLength(2);
+    const summaryRequest = parseSentFrame(mock.sent[1]);
+    expect(summaryRequest.includeHistory).toBe(false);
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "daemon.host_stats.response",
+        payload: { ...snapshot, requestId: summaryRequest.requestId },
+      }),
+    );
+    await summaryFirst;
+    await vi.waitFor(() => expect(mock.sent).toHaveLength(3));
+    const detailRequest = parseSentFrame(mock.sent[2]);
+    expect(detailRequest.includeHistory).toBe(true);
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "daemon.host_stats.response",
+        payload: { ...snapshot, requestId: detailRequest.requestId },
+      }),
+    );
+    await detailAfter;
   }
+});
+
+test("approval confirmation can take more than fifteen seconds without a second submission", async () => {
+  vi.useFakeTimers();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "approval-budget",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const response = { behavior: "allow" as const };
+  const first = client.respondToPermissionAndWait("agent", "approval", response);
+  const duplicate = client.respondToPermissionAndWait("agent", "approval", response);
+  let settled = false;
+  void first.then(
+    () => {
+      settled = true;
+    },
+    () => {
+      settled = true;
+    },
+  );
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(settled).toBe(false);
+  expect(
+    mock.sent
+      .map((frame) => JSON.parse(assertStr(frame)))
+      .filter((frame) => frame.type === "session")
+      .map((frame) => frame.message)
+      .filter((frame) => frame.type === "agent.permission.resolve.request"),
+  ).toHaveLength(1);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.permission.resolved",
+      payload: { agentId: "agent", requestId: "approval", resolution: response },
+    }),
+  );
+  await expect(first).resolves.toMatchObject({ resolution: response });
+  await expect(duplicate).resolves.toMatchObject({ resolution: response });
 });
 
 test("prefers command ownership v2 and preserves separate owners", async () => {

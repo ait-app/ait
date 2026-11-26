@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/contexts/toast-api-context";
 import { useAccountState } from "./account-state";
 import { useHubServices } from "./hub-service-store";
+import { useHostRuntimeClient, useHostRuntimeConnectionStatus } from "./host-runtime";
+import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 
 /** Keep automatic recovery neutral; notify each phase once without repeating on retries. */
 export function useOnlineServiceConnectionNotice(): void {
@@ -12,45 +14,58 @@ export function useOnlineServiceConnectionNotice(): void {
   const center = useAccountState((state) => state.center);
   const connection = useHubServices((state) => state.connection);
   const state = useHubServices((state) => state.snapshot?.state);
-  const notice = useRef({ center, connection, reconnectingShown: false, unavailableShown: false });
+  const active = useActiveWorkspaceSelection();
+  const hostStatus = useHostRuntimeConnectionStatus(active?.serverId ?? "");
+  const client = useHostRuntimeClient(active?.serverId ?? "");
+  const restoring = useSyncExternalStore(
+    useCallback((listener) => client?.subscribeRecoveryStatus(listener) ?? (() => {}), [client]),
+    () => client?.isRestoringSubscriptions ?? false,
+  );
+  const hostRecovering = Boolean(active && (hostStatus !== "online" || restoring));
+  const recovering =
+    signedIn && (hostRecovering || Boolean(state && state !== "online" && state !== "stopped"));
+  const notice = useRef({ center, connection, shown: false, wasOnline: state === "online" });
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const dismiss = useRef<(() => void) | void>(undefined);
 
   useEffect(() => {
     if (notice.current.center !== center || notice.current.connection !== connection) {
+      clearTimeout(timer.current);
+      timer.current = undefined;
       dismiss.current?.();
       dismiss.current = undefined;
-      notice.current = { center, connection, reconnectingShown: false, unavailableShown: false };
+      notice.current = { center, connection, shown: false, wasOnline: state === "online" };
     }
-    if (!signedIn || !state || state === "online" || state === "stopped") {
+    useHubServices.setState({ connectionRecovering: recovering });
+    if (!recovering) {
+      clearTimeout(timer.current);
+      timer.current = undefined;
       dismiss.current?.();
       dismiss.current = undefined;
-      notice.current.reconnectingShown = false;
-      notice.current.unavailableShown = false;
+      notice.current.shown = false;
+      if (state === "online") notice.current.wasOnline = true;
       return;
     }
-    if (
-      state === "reconnecting" &&
-      !notice.current.reconnectingShown &&
-      !notice.current.unavailableShown
-    ) {
-      notice.current.reconnectingShown = true;
-      dismiss.current = toast.show(t("onlineService.reconnecting"), { variant: "loading" });
-    } else if (state === "unavailable" && !notice.current.unavailableShown) {
-      notice.current.unavailableShown = true;
-      dismiss.current?.();
-      dismiss.current = toast.show(t("onlineService.retrying"), {
-        variant: "loading",
-        durationMs: 3200,
-      });
+    if (!notice.current.shown && !timer.current) {
+      timer.current = setTimeout(() => {
+        timer.current = undefined;
+        notice.current.shown = true;
+        dismiss.current = toast.show(
+          t(notice.current.wasOnline ? "onlineService.reconnecting" : "onlineService.retrying"),
+          { variant: "loading" },
+        );
+      }, 2_000);
     }
-  }, [signedIn, center, connection, state, t, toast]);
+  }, [recovering, center, connection, state, t, toast]);
 
   useEffect(
     () => () => {
+      clearTimeout(timer.current);
+      timer.current = undefined;
       dismiss.current?.();
       dismiss.current = undefined;
-      notice.current.reconnectingShown = false;
-      notice.current.unavailableShown = false;
+      notice.current.shown = false;
+      useHubServices.setState({ connectionRecovering: false });
     },
     [],
   );

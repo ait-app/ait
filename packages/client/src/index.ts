@@ -1,4 +1,8 @@
-export { AgentConfigUncertainError } from "./daemon-client.js";
+export {
+  AgentConfigUncertainError,
+  PermissionOutcomeUnknownError,
+  PERMISSION_RESPONSE_TIMEOUT_MS,
+} from "./daemon-client.js";
 import type { OwnedSubscription } from "./connection/index.js";
 export type { OwnedSubscription, SubscriptionObserver } from "./connection/index.js";
 import type { DaemonClientConfig } from "./daemon-client.js";
@@ -353,6 +357,7 @@ export interface PaseoAgentHandle {
   current(): PaseoAgent | null;
   refresh(requestId?: string): Promise<PaseoAgentRefetchResult | null>;
   send(text: string, options?: PaseoAgentSendOptions): Promise<void>;
+  /** Submit once and wait for host confirmation; unknown outcomes stay locked for reconciliation. */
   respondToPermission(options: PaseoAgentRespondToPermissionOptions): Promise<void>;
   /** Sends a prompt and resolves when that turn finishes or needs attention. */
   run(text: string, options?: PaseoAgentRunOptions): Promise<PaseoAgentRunResult>;

@@ -22,6 +22,16 @@ struct HostStatsRequest {
     include_history: bool,
 }
 
+/// Validate monitor input before triggering an asynchronous sample.
+/// Returns `InvalidMessage` for non-object or unknown parameters.
+pub(crate) fn validate_host_stats(params: &Value) -> Result<(), ErrorCode> {
+    if !params.is_object() {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    let _: HostStatsRequest = decode(params.clone())?;
+    Ok(())
+}
+
 /// Response and associated host lifecycle intent.
 pub(crate) struct LifecycleRequest {
     /// Serialized acknowledgement.

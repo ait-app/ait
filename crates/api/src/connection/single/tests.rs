@@ -4,7 +4,7 @@ use super::*;
 fn rejected_releases_preserve_the_request_id_for_both_budget_categories() {
     for (resource, limit) in [
         ("subscription_releases", 32),
-        ("subscription_release_queue", WORKER_QUEUE_CAPACITY),
+        ("subscription_release_queue", RELEASE_QUEUE_CAPACITY),
     ] {
         let (outbound, mut receiver) = Outbound::new();
         reject_release(&outbound, "release-request", resource, limit).unwrap();
@@ -17,6 +17,79 @@ fn rejected_releases_preserve_the_request_id_for_both_budget_categories() {
         assert_eq!(response["code"], "resource_exhausted");
         assert!(response["retryable"].as_bool().unwrap());
     }
+}
+
+#[tokio::test]
+async fn full_business_queues_do_not_reject_cleanup_or_block_ping() {
+    let fixture = crate::test_support::Workspaces::new(crate::test_support::address());
+    let state = &fixture.api.shared;
+    let (outbound, mut responses) = Outbound::new();
+    let cancel = CancellationToken::new();
+    let capabilities = vec![
+        "subscription.release.request".to_owned(),
+        "connection.ping".to_owned(),
+    ];
+    let context = WorkerContext {
+        state,
+        outbound: &outbound,
+        peer: Peer {
+            capabilities: &capabilities,
+            guest: None,
+            automation: false,
+        },
+        cancel: &cancel,
+    };
+    let channels: [_; 4] = std::array::from_fn(|_| mpsc::channel(WORKER_QUEUE_CAPACITY));
+    let (senders, _receivers): (Vec<_>, Vec<_>) = channels.into_iter().unzip();
+    let senders: [_; 4] = senders.try_into().unwrap();
+    for sender in &senders {
+        for _ in 0..WORKER_QUEUE_CAPACITY {
+            sender
+                .try_send(Work::Message(Incoming::Binary(vec![]), Instant::now()))
+                .unwrap();
+        }
+    }
+    let channels: [_; 4] = std::array::from_fn(|_| mpsc::channel(RELEASE_QUEUE_CAPACITY));
+    let (cleanup, mut receivers): (Vec<_>, Vec<_>) = channels.into_iter().unzip();
+    let cleanup: [_; 4] = cleanup.try_into().unwrap();
+    let stream = futures_util::stream::iter([
+        serde_json::json!({"type":"request","request_id":"release","method":"subscription.release.request","params":{"subscriptionId":"interest"}}),
+        serde_json::json!({"type":"request","request_id":"ping","method":"connection.ping","params":{"nonce":"live"}}),
+    ].map(|value| Ok(axum::extract::ws::Message::Text(value.to_string().into()))))
+        .chain(futures_util::stream::pending()).boxed();
+    let routing = route(stream, &context, senders, cleanup);
+    tokio::pin!(routing);
+    let check = async {
+        let response = responses.recv().await.unwrap();
+        let model::outbound::Frame::Text(text) = response.message else {
+            panic!("text response");
+        };
+        let response: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(response["request_id"], "ping");
+        let mut acknowledgements = Vec::new();
+        for receiver in &mut receivers {
+            let Work::Release(id, done) = receiver.recv().await.unwrap() else {
+                panic!("cleanup");
+            };
+            assert_eq!(id, "interest");
+            acknowledgements.push(done);
+        }
+        for done in acknowledgements.drain(..3) {
+            done.send(()).unwrap();
+        }
+        assert!(responses.try_recv().is_err());
+        acknowledgements.pop().unwrap().send(()).unwrap();
+        let response = responses.recv().await.unwrap();
+        let model::outbound::Frame::Text(text) = response.message else {
+            panic!("text response");
+        };
+        let response: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(response["request_id"], "release");
+        assert_eq!(response["result"]["subscriptionId"], "interest");
+        cancel.cancel();
+    };
+    tokio::select! { result = &mut routing => panic!("routing ended early: {result:?}"), () = check => {} }
+    routing.await.unwrap();
 }
 
 #[test]

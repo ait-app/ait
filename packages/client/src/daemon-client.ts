@@ -17,6 +17,13 @@ import {
 } from "./connection/index.js";
 import type { ObservationRequest } from "./connection/legacy.js";
 import { CreationClient } from "./creation/index.js";
+import { SubscriptionCleanup } from "./connection/cleanup.js";
+import { PermissionResponses, PERMISSION_RESPONSE_TIMEOUT_MS } from "./permission-response.js";
+export {
+  PermissionResponses,
+  PermissionOutcomeUnknownError,
+  PERMISSION_RESPONSE_TIMEOUT_MS,
+} from "./permission-response.js";
 import type { CreationSnapshot } from "@ait/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@ait/protocol/messages";
@@ -1111,6 +1118,100 @@ interface PingProbe {
 }
 
 export class DaemonClient {
+  readonly permissionResponses = new PermissionResponses({
+    send: (agentId, requestId, response, timeout) =>
+      this.sendPermissionResponse(agentId, requestId, response, timeout),
+    definitive: (error) => error instanceof DaemonRpcError && error.code !== "timeout",
+    failed: (error, unconfirmed) =>
+      this.logger.warn(
+        {
+          outcome: unconfirmed ? "pending_confirmation" : "rejected",
+          cause:
+            error instanceof DaemonRpcError
+              ? error.code
+              : error instanceof DaemonConnectionError && error.code === "DAEMON_REQUEST_TIMEOUT"
+                ? "request_timeout"
+                : "transport_interrupted",
+          generation: this.transportGeneration,
+        },
+        "Permission response outcome",
+      ),
+    check: async (agentId, requestId) => {
+      if (!this.isConnected) return null;
+      const snapshot = await this.fetchAgent({ agentId, timeout: 5_000 });
+      if (
+        !snapshot ||
+        snapshot.agent.pendingPermissions.some((request) => request.id === requestId)
+      )
+        return null;
+      const timeline = await this.fetchAgentTimeline(agentId, { limit: 100, timeout: 5_000 });
+      for (const { item } of timeline.entries) {
+        if (
+          item.type !== "tool_call" ||
+          item.callId !== requestId ||
+          item.name !== "plan_approval" ||
+          item.status !== "completed"
+        )
+          continue;
+        const resolution = item.metadata?.resolution;
+        if (resolution === "approved" || resolution === "dismissed")
+          return {
+            agentId,
+            requestId,
+            resolution: {
+              behavior: resolution === "approved" ? ("allow" as const) : ("deny" as const),
+            },
+          };
+      }
+      return null;
+    },
+  });
+  private hostStatsInFlight: {
+    promise: Promise<import("@ait/protocol/host-monitor").HostSnapshot>;
+    includeHistory: boolean;
+  } | null = null;
+  private restoringSubscriptions = false;
+  private readonly recoveryListeners = new Set<() => void>();
+
+  get isRestoringSubscriptions(): boolean {
+    return this.restoringSubscriptions;
+  }
+
+  subscribeRecoveryStatus(listener: () => void): () => void {
+    this.recoveryListeners.add(listener);
+    return () => {
+      this.recoveryListeners.delete(listener);
+    };
+  }
+  private readonly subscriptionCleanup = new SubscriptionCleanup({
+    release: (subscriptionId, timeout) =>
+      this.sendCorrelatedSessionRequest({
+        message: { type: "subscription.release.request", subscriptionId },
+        responseType: "subscription.release.response",
+        timeout,
+      }),
+    retryable: (error) =>
+      error instanceof DaemonRpcError
+        ? error.code === "resource_exhausted" || error.code === "timeout"
+        : error instanceof DaemonConnectionError,
+    expired: () => {
+      if (!this.transport || !this.isConnected) return;
+      this.logger.warn(
+        { reason: "cleanup_deadline", generation: this.transportGeneration },
+        "Subscription cleanup deadline exceeded",
+      );
+      this.disposeTransport(1000, "Subscription cleanup deadline exceeded");
+      this.scheduleReconnect({
+        reason: "Subscription cleanup deadline exceeded",
+        reasonCode: "cleanup_deadline",
+      });
+    },
+    completed: (elapsedMs, attempts) =>
+      this.logger.info(
+        { elapsedMs, attempts, generation: this.transportGeneration },
+        "Subscription cleanup completed",
+      ),
+  });
   private readonly providerSnapshotUpdates = new ProviderSnapshotUpdates({
     active: (message) => this.owned.owns(message),
     fetch: (cwd) => this.requestProvidersSnapshot({ cwd }),
@@ -1118,6 +1219,10 @@ export class DaemonClient {
     failed: (error) => this.logger.error({ err: error }, "Failed to resolve provider snapshot"),
   });
   private readonly owned = new ConnectionSubscriptions({
+    restoring: (active) => {
+      this.restoringSubscriptions = active;
+      for (const listener of this.recoveryListeners) listener();
+    },
     send: (message) =>
       this.sendSessionMessageOrThrow(
         SessionInboundMessageSchema.parse({
@@ -1125,22 +1230,10 @@ export class DaemonClient {
           requestId: this.createRequestId(),
         }),
       ),
-    release: async (subscriptionId) => {
-      const transport = this.transport;
-      if (!transport || !this.isConnected) return;
-      try {
-        await this.sendCorrelatedSessionRequest({
-          message: { type: "subscription.release.request", subscriptionId },
-          responseType: "subscription.release.response",
-        });
-      } catch (error) {
-        if (this.transport === transport && this.isConnected) {
-          this.disposeTransport(1000, "Subscription release failed");
-          this.scheduleReconnect({ reason: "Subscription release failed" });
-        }
-        throw error;
-      }
-    },
+    release: (subscriptionId) =>
+      !this.transport || !this.isConnected
+        ? Promise.resolve()
+        : this.subscriptionCleanup.release(subscriptionId),
     failed: (error) =>
       this.logger.error(
         {
@@ -1152,6 +1245,7 @@ export class DaemonClient {
       ),
   });
   private transport: DaemonConnection | null = null;
+  private transportGeneration = 0;
   private uploadTail: Promise<void> = Promise.resolve();
   private queuedUploadCount = 0;
   private queuedUploadBytes = 0;
@@ -1287,6 +1381,7 @@ export class DaemonClient {
         trace: this.config.trace,
       });
       this.transport = transport;
+      this.transportGeneration++;
       this.connectStartedAt = Date.now();
       this.lastServerInfoMessage = null;
 
@@ -5488,11 +5583,28 @@ export class DaemonClient {
     if (this.lastServerInfoMessage?.features?.hostStats !== true) {
       throw new Error("Update the host to read resource statistics.");
     }
-    return this.sendCorrelatedSessionRequest({
-      message: { type: "daemon.host_stats.request", includeHistory },
-      responseType: "daemon.host_stats.response",
-      timeout: 5_000,
-    });
+    const transport = this.transport;
+    await this.owned.whenRestored();
+    if (!this.isConnected || this.transport !== transport)
+      throw new DaemonConnectionError("Host connection changed");
+    if (this.hostStatsInFlight && includeHistory && !this.hostStatsInFlight.includeHistory) {
+      await this.hostStatsInFlight.promise;
+      return this.getHostStats(true);
+    }
+    const task =
+      this.hostStatsInFlight?.promise ??
+      this.sendCorrelatedSessionRequest({
+        message: { type: "daemon.host_stats.request", includeHistory },
+        responseType: "daemon.host_stats.response",
+        timeout: 5_000,
+      });
+    this.hostStatsInFlight ??= { promise: task, includeHistory };
+    try {
+      const snapshot = await task;
+      return includeHistory ? snapshot : { ...snapshot, history: [] };
+    } finally {
+      if (this.hostStatsInFlight?.promise === task) this.hostStatsInFlight = null;
+    }
   }
 
   async getDaemonStatus(options?: DaemonStatusOptions): Promise<DaemonStatusPayload> {
@@ -5776,12 +5888,7 @@ export class DaemonClient {
     requestId: string,
     response: AgentPermissionResponse,
   ): Promise<void> {
-    this.sendSessionMessage({
-      type: "agent.permission.resolve.request",
-      agentId,
-      requestId,
-      response,
-    });
+    await this.respondToPermissionAndWait(agentId, requestId, response);
   }
 
   async getAgentSkillsStatus(): Promise<AgentSkillsStatus> {
@@ -5843,8 +5950,28 @@ export class DaemonClient {
     agentId: string,
     requestId: string,
     response: AgentPermissionResponse,
-    timeout = 15000,
+    timeout = PERMISSION_RESPONSE_TIMEOUT_MS,
+    options?: { kind: "question" },
   ): Promise<AgentPermissionResolvedPayload> {
+    // Structured question forms retain their independent, explicitly supplied deadline.
+    if (options?.kind === "question")
+      return this.sendPermissionResponse(agentId, requestId, response, timeout);
+    return this.permissionResponses.submit(agentId, requestId, response, timeout);
+  }
+
+  private async sendPermissionResponse(
+    agentId: string,
+    requestId: string,
+    response: AgentPermissionResponse,
+    timeout: number,
+  ): Promise<AgentPermissionResolvedPayload> {
+    if (!this.isConnected)
+      throw new DaemonRpcError({
+        requestId,
+        requestType: "agent.permission.resolve.request",
+        code: "not_connected",
+        error: "Host is not connected",
+      });
     const message = SessionInboundMessageSchema.parse({
       type: "agent.permission.resolve.request",
       agentId,
@@ -6438,6 +6565,8 @@ export class DaemonClient {
 
   // Browsers throw InvalidAccessError for any close code but 1000 or 3000-4999.
   private disposeTransport(code = 1000, reason = "Reconnecting"): void {
+    this.subscriptionCleanup.reset();
+    this.hostStatsInFlight = null;
     this.owned.disconnected();
     this.providerSnapshotUpdates.clear();
     this.stopLivenessHeartbeat();
@@ -6698,6 +6827,8 @@ export class DaemonClient {
     event?: string;
     reasonCode?: string;
   }): void {
+    this.subscriptionCleanup.reset();
+    this.hostStatsInFlight = null;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -6826,15 +6957,39 @@ export class DaemonClient {
           this.reconnectAttempt = 0;
           this.updateConnectionState({ status: "connected" }, { event: "HELLO_SERVER_INFO" });
           this.startLivenessHeartbeat();
+          const restoreStartedAt = Date.now();
+          const generation = this.transportGeneration;
           this.owned.restore(serverInfo, {
             ...DEFAULT_CLIENT_CAPABILITIES,
             ...this.config.capabilities,
           });
           this.creations.reconnect();
+          void this.owned.whenRestored().then(() => {
+            if (!this.isConnected || this.transportGeneration !== generation) return;
+            this.logger.info(
+              { generation, restoreMs: Date.now() - restoreStartedAt },
+              "Business subscriptions restored",
+            );
+            return this.permissionResponses.reconnect();
+          });
           this.flushPendingSendQueue();
           this.resolveConnect();
         }
       }
+    }
+
+    if (consumerMessage.type === "agent.permission.resolved")
+      this.permissionResponses.confirm(consumerMessage.payload);
+    if (
+      consumerMessage.type === "agent.stream" &&
+      consumerMessage.payload.event.type === "permission_resolved"
+    ) {
+      const { agentId, event } = consumerMessage.payload;
+      this.permissionResponses.confirm({
+        agentId,
+        requestId: event.requestId,
+        resolution: event.resolution,
+      });
     }
 
     if (this.rawMessageListeners.size > 0) {

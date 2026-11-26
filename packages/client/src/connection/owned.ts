@@ -17,7 +17,8 @@ export interface OwnedSubscription<T> {
 }
 
 interface Registration {
-  start(): void;
+  priority: number;
+  start(): Promise<void> | null;
   disconnected(): void;
   receive(message: SessionOutboundMessage): void;
   release(): Promise<void>;
@@ -26,6 +27,7 @@ interface Registration {
 export interface OwnedSubscriptionsHost {
   release(subscriptionId: string): Promise<void>;
   failed(error: unknown): void;
+  restoring?(active: boolean): void;
 }
 
 const MAX_BOOTSTRAP_UPDATES = 128;
@@ -36,6 +38,10 @@ export class OwnedSubscriptions {
   private readonly routes = new Map<string, Registration>();
   private generation = 0;
   private connected = false;
+  private readonly queued = new Set<Registration>();
+  private readonly active = new Map<Registration, Promise<void>>();
+  private readonly idle = new Set<() => void>();
+  private restoring = false;
 
   constructor(private readonly host: OwnedSubscriptionsHost) {}
 
@@ -43,10 +49,12 @@ export class OwnedSubscriptions {
     request: (accept: (snapshot: T) => void) => Promise<T>,
     signal?: AbortSignal,
     requestFailed?: () => void,
+    priority = 2,
   ): OwnedSubscription<T> {
     let id: string | null = null;
     let snapshot: SubscriptionSnapshot<T> | undefined;
     let pending: Promise<void> | null = null;
+    let attempt = 0;
     let teardown: Promise<void> | null = null;
     let disposed = false;
     let overflow = false;
@@ -79,9 +87,11 @@ export class OwnedSubscriptions {
       await this.host.release(released);
     };
     const registration: Registration = {
+      priority,
       start: () => {
-        if (disposed || pending || id || !this.connected) return;
+        if (disposed || pending || id || !this.connected) return null;
         const generation = this.generation;
+        const currentAttempt = ++attempt;
         pending = request((value) => {
           if (generation !== this.generation) return;
           assertSubscriptionSnapshot(value);
@@ -116,11 +126,13 @@ export class OwnedSubscriptions {
             return undefined;
           })
           .finally(() => {
-            pending = null;
-            if (generation !== this.generation && !disposed) registration.start();
+            if (currentAttempt === attempt) pending = null;
           });
+        return pending;
       },
       disconnected: () => {
+        attempt++;
+        pending = null;
         id = null;
         snapshot = undefined;
         buffered.length = 0;
@@ -138,6 +150,7 @@ export class OwnedSubscriptions {
       release: () => {
         if (teardown) return teardown;
         disposed = true;
+        this.queued.delete(registration);
         signal?.removeEventListener("abort", abort);
         observers.clear();
         buffered.length = 0;
@@ -171,7 +184,7 @@ export class OwnedSubscriptions {
           snapshot = undefined;
           void releaseId()
             .then(() => {
-              registration.start();
+              this.enqueue(registration);
               return undefined;
             })
             .catch(this.host.failed);
@@ -188,7 +201,7 @@ export class OwnedSubscriptions {
     if (signal?.aborted) abort();
     else {
       signal?.addEventListener("abort", abort, { once: true });
-      registration.start();
+      this.enqueue(registration);
     }
     return handle;
   }
@@ -210,12 +223,61 @@ export class OwnedSubscriptions {
 
   restore(): void {
     this.connected = true;
-    for (const registration of this.registrations) registration.start();
+    for (const registration of this.registrations) this.queued.add(registration);
+    this.reportRestoring(this.queued.size > 0);
+    this.drain();
+  }
+
+  /** Resolves when the current business subscriptions finish restoring, or disconnect. */
+  whenRestored(): Promise<void> {
+    if (!this.queued.size && !this.active.size) return Promise.resolve();
+    return new Promise((resolve) => this.idle.add(resolve));
+  }
+
+  private enqueue(registration: Registration): void {
+    this.queued.add(registration);
+    this.drain();
+  }
+
+  private drain(): void {
+    if (!this.connected) return;
+    while (this.active.size < 4 && this.queued.size) {
+      let registration = this.queued.values().next().value!;
+      for (const candidate of this.queued) {
+        if (candidate.priority < registration.priority) registration = candidate;
+        if (registration.priority === 0) break;
+      }
+      this.queued.delete(registration);
+      const task = registration.start();
+      if (!task) continue;
+      this.active.set(registration, task);
+      void task.finally(() => {
+        if (this.active.get(registration) !== task) return;
+        this.active.delete(registration);
+        this.drain();
+      });
+    }
+    if (!this.queued.size && !this.active.size) this.resolveIdle();
+  }
+
+  private resolveIdle(): void {
+    this.reportRestoring(false);
+    for (const resolve of this.idle) resolve();
+    this.idle.clear();
+  }
+
+  private reportRestoring(active: boolean): void {
+    if (this.restoring === active) return;
+    this.restoring = active;
+    this.host.restoring?.(active);
   }
 
   disconnected(): void {
     this.connected = false;
     this.generation++;
+    this.queued.clear();
+    this.active.clear();
+    this.resolveIdle();
     this.routes.clear();
     for (const registration of this.registrations) registration.disconnected();
   }

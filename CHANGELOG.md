@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Busy hosts no longer disconnect just because a subscription could not be released immediately.
+  Recovery keeps saved chats and drafts visible, restores subscriptions gradually, and groups
+  connection notices. Host resource monitoring no longer holds up other host requests, and desktop
+  connection diagnostics are saved in the application log.
+
+- Approval cards wait up to one minute for host confirmation. A lost response keeps the result
+  unconfirmed and prevents duplicate submission; you can check its status or open the session.
+  Structured questions retain their separate timeout.
+
 - Fixed completed replies keeping the running animation and Stop button when a submitted
   message's confirmation arrives outside the viewed history or after its local row is replaced.
 

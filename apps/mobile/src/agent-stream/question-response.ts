@@ -22,6 +22,7 @@ export async function respondToQuestionWithTimeout(
         input.requestId,
         input.response,
         QUESTION_RESPONSE_TIMEOUT_MS,
+        { kind: "question" },
       ),
       deadline,
     ]);

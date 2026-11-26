@@ -173,3 +173,61 @@ test("close settles every registration even when one release rejects", async () 
   await expect(failing.close()).resolves.toBeUndefined();
   expect(released).toEqual(["a", "b"]);
 });
+
+test("restores four at a time, prioritizes session interests and cancels queued handles", async () => {
+  const subscriptions = new OwnedSubscriptions({ release: async () => {}, failed: () => {} });
+  const started: number[] = [];
+  const finish = new Map<number, () => void>();
+  const startedSignals = Array.from({ length: 8 }, () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((accept) => {
+      resolve = accept;
+    });
+    return { promise, resolve };
+  });
+  const handles = Array.from({ length: 8 }, (_, index) =>
+    subscriptions.observe<Snapshot>(
+      (accept) =>
+        new Promise((resolve) => {
+          started.push(index);
+          startedSignals[index]!.resolve();
+          finish.set(index, () => {
+            const value = { subscriptionId: `id-${index}`, requestId: "request" };
+            accept(value);
+            resolve(value);
+          });
+        }),
+      undefined,
+      undefined,
+      index === 7 ? 0 : index === 6 ? 1 : 2,
+    ),
+  );
+  subscriptions.restore();
+  expect(started).toEqual([7, 6, 0, 1]);
+  await handles[5]!.release();
+  finish.get(7)!();
+  await handles[7]!.ready;
+  await startedSignals[2]!.promise;
+  expect(started).toEqual([7, 6, 0, 1, 2]);
+  for (const index of [6, 0, 1, 2]) finish.get(index)!();
+  await Promise.all([6, 0, 1, 2].map((index) => handles[index]!.ready));
+  await startedSignals[4]!.promise;
+  expect(started).toEqual([7, 6, 0, 1, 2, 3, 4]);
+  for (const index of [3, 4]) finish.get(index)!();
+  await subscriptions.whenRestored();
+  await subscriptions.close();
+});
+
+test("a stale bootstrap cannot overwrite or release the new generation's subscription", async () => {
+  const c = connection();
+  const handle = c.observe();
+  c.subscriptions.disconnected();
+  c.subscriptions.restore();
+  c.requests[1]!("new-id");
+  await handle.ready;
+  c.requests[0]!("old-id");
+  await Promise.resolve();
+  expect(handle.subscriptionId).toBe("new-id");
+  await handle.release();
+  expect(c.released).toEqual(["new-id"]);
+});

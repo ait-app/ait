@@ -1,5 +1,6 @@
 import { VoiceTimelineEntry } from "@/components/voice-timeline-entry";
 import { PermissionRequestCard } from "@/components/permission-request-card";
+import { useRetainedPermissions } from "./use-retained-permissions";
 import { ChatFind, ChatFindExpansion } from "@/agent-stream/chat-find";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
@@ -873,9 +874,22 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ],
     );
 
-    const pendingPermissionItems = useMemo(
-      () => Array.from(pendingPermissions.values()).filter((perm) => perm.agentId === agentId),
+    const permissionRequests = useMemo(
+      () =>
+        Array.from(pendingPermissions.values())
+          .filter((perm) => perm.agentId === agentId)
+          .map((perm) => perm.request),
       [pendingPermissions, agentId],
+    );
+    const retainedPermissions = useRetainedPermissions(client, agentId, permissionRequests);
+    const pendingPermissionItems = useMemo(
+      () =>
+        retainedPermissions.map((request) => ({
+          key: `${agentId}:${request.id}`,
+          agentId,
+          request,
+        })),
+      [retainedPermissions, agentId],
     );
 
     const pendingPermissionsNode = useMemo(

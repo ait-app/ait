@@ -7,6 +7,10 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { i18n } from "@/i18n/i18next";
 import type { PendingPermission } from "@/types/shared";
 import { PermissionRequestCard } from "./permission-request-card";
+import {
+  PermissionOutcomeUnknownError,
+  PermissionResponses,
+} from "@ait/client/internal/daemon-client";
 
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("@/components/tool-call-details", () => ({
@@ -79,7 +83,12 @@ afterEach(() => {
 function mount(
   client: unknown,
   request = permission,
-  options: { panel?: boolean; compact?: boolean; onOpenDetails?: () => void } = {},
+  options: {
+    panel?: boolean;
+    compact?: boolean;
+    onOpenDetails?: () => void;
+    onOpenSession?: () => void;
+  } = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -163,12 +172,10 @@ describe("shared permission card", () => {
     mount({ respondToPermissionAndWait });
     fireEvent.click(screen.getByText("Allow once"));
     await waitFor(() =>
-      expect(respondToPermissionAndWait).toHaveBeenCalledWith(
-        "agent-1",
-        "request-1",
-        { behavior: "allow", selectedActionId: "provider-allow-once" },
-        15000,
-      ),
+      expect(respondToPermissionAndWait).toHaveBeenCalledWith("agent-1", "request-1", {
+        behavior: "allow",
+        selectedActionId: "provider-allow-once",
+      }),
     );
     expect((screen.getByText("Deny") as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByText("Allow once"));
@@ -197,6 +204,67 @@ describe("shared permission card", () => {
       selectedActionId: "provider-deny",
       message: "Denied by user",
     });
+  });
+
+  it("keeps unknown outcomes locked and offers a read-only check and session entry", async () => {
+    const respondToPermissionAndWait = vi
+      .fn()
+      .mockRejectedValue(new PermissionOutcomeUnknownError());
+    const check = vi.fn().mockResolvedValue(undefined);
+    const onOpenDetails = vi.fn();
+    const onOpenSession = vi.fn();
+    mount(
+      {
+        respondToPermissionAndWait,
+        permissionResponses: {
+          check,
+          remember: vi.fn(),
+          subscribe: () => () => {},
+          snapshot: () => undefined,
+        },
+      },
+      permission,
+      { onOpenDetails, onOpenSession },
+    );
+    fireEvent.click(screen.getByText("Allow once"));
+    await screen.findByText("Check status");
+    expect((screen.getByText("Allow once") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText("Allow once"));
+    fireEvent.click(screen.getByText("Check status"));
+    expect(check).toHaveBeenCalledWith("agent-1", "request-1");
+    expect(respondToPermissionAndWait).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByText("View session"));
+    expect(onOpenSession).toHaveBeenCalledOnce();
+    expect(onOpenDetails).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("clears the old unknown-outcome message when a read-only check finds confirmation", async () => {
+    const send = vi.fn().mockRejectedValue(new Error("response lost"));
+    const operations = new PermissionResponses({
+      send,
+      definitive: () => false,
+      check: async () => ({
+        agentId: "agent-1",
+        requestId: "request-1",
+        resolution: { behavior: "allow" },
+      }),
+    });
+    mount({
+      permissionResponses: operations,
+      respondToPermissionAndWait: (
+        agentId: string,
+        requestId: string,
+        response: Parameters<DaemonClient["respondToPermissionAndWait"]>[2],
+      ) => operations.submit(agentId, requestId, response, 60_000),
+    });
+    fireEvent.click(screen.getByText("Allow once"));
+    await screen.findByText("Check status");
+    fireEvent.click(screen.getByText("Check status"));
+    await waitFor(() => expect(screen.queryByText("Check status")).toBeNull());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((screen.getByText("Allow once") as HTMLButtonElement).disabled).toBe(true);
+    expect(send).toHaveBeenCalledOnce();
   });
 
   it("disables approval and question submission without a connected client", () => {
@@ -298,6 +366,7 @@ describe("shared permission card", () => {
         "request-1",
         { behavior: "allow", updatedInput: { answers: { choice: "yes" } } },
         5000,
+        { kind: "question" },
       ),
     );
   });

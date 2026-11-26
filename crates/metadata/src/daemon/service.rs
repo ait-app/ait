@@ -41,8 +41,8 @@ pub enum DaemonError {
 /// Application coordinator for daemon-level WebSocket operations.
 #[derive(Debug)]
 pub struct Daemon {
-    /// Sample cache with its own lock, so a counter read never excludes configuration writes.
-    monitor: Option<std::sync::Mutex<host_monitor::HostMonitor>>,
+    /// Sampling and published counters use separate locks; reads never wait for OS sampling.
+    monitor: Option<std::sync::Arc<host_monitor::Monitor>>,
     runtime: DaemonRuntime,
     config: Box<dyn DaemonConfigStore>,
     diagnostics: Option<std::sync::Arc<dyn crate::daemon::ports::DaemonDiagnostics>>,
@@ -68,17 +68,14 @@ impl Daemon {
         mut self,
         sampler: Box<dyn crate::daemon::ports::host_monitor::HostSampler>,
     ) -> Self {
-        self.monitor = Some(std::sync::Mutex::new(host_monitor::HostMonitor::new(
-            sampler,
-        )));
+        self.monitor = Some(std::sync::Arc::new(host_monitor::Monitor::new(sampler)));
         self
     }
 
-    /// Read host counters, sampling only when the cache is stale.
+    /// Read the most recent completed host sample without waiting for OS sampling.
     ///
     /// # Errors
-    /// Returns an error when no sampler is installed, its lock is poisoned, or the OS counters
-    /// cannot be read.
+    /// Returns an error when no completed sample is available or the cache lock is poisoned.
     pub(crate) fn host_stats(
         &self,
         include_history: bool,
@@ -90,10 +87,14 @@ impl Daemon {
             .monitor
             .as_ref()
             .ok_or(crate::daemon::ports::host_monitor::HostMonitorError)?;
-        monitor
-            .lock()
-            .map_err(|_| crate::daemon::ports::host_monitor::HostMonitorError)?
-            .read(std::time::Instant::now(), include_history)
+        monitor.read(include_history)
+    }
+
+    /// Request a stale sample on the independent, tracked single-sampler budget.
+    pub(crate) fn refresh_host_stats(&self, runtime: &model::Runtime) {
+        if let Some(monitor) = &self.monitor {
+            monitor.request(runtime);
+        }
     }
 
     /// Attach the host's bounded incident collector without transferring provider ownership.

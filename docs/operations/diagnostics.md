@@ -60,6 +60,18 @@ Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/l
 
 ## 资源预算拒绝
 
+桌面主进程的 Hub 日志进入应用持久日志。连接记录包含来源、原因、`generation` 和恢复的
+`recoveryMs`；相同重试按倍增次数汇总，恢复记录保留最终 `retryCount`。
+`Subscription cleanup completed` 的耗时与尝试次数区分短暂拥堵和清理期限到期。
+超过清理总期限触发的重连标记 `cleanup_deadline`，不能与原生执行超时混为一谈。
+
+单连接请求以请求 ID 关联三个阶段：`queue_ms` 是入站 worker 排队时间，`execution_ms` 是
+分发执行时间；`RPC response delivery` 的 `response_queue_ms` 和 `write_ms` 分别表示出站排队及
+实际传输写入。已异步接纳的 Provider 操作，其原生执行耗时继续查看 Provider 诊断，
+不能把接纳耗时当作模型执行时间。审批的 `pending_confirmation` 表示缺少结果证据，
+`request_timeout` 与 `transport_interrupted` 分别定位等待到期和传输中断；明确拒绝保留原 RPC 类别。
+采样尚未完成时的监控不可用不代表业务连接失效。
+
 `Resource budget exhausted` 记录具体的 `resource`、`limit`、`available`，大消息还记录
 `requested`。`short_jobs` 是 daemon 共享短任务额度（3）；`terminal_jobs` 是终端任务额度（4）；
 `message_assembly_bytes` 是全局大消息组装字节预算；`push_registrations` 是推送登记数量限制。

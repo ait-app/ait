@@ -1,6 +1,6 @@
 //! Four bounded capability workers behind one physical, connection-owned socket.
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_util::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use metadata::server::protocol::HEARTBEAT_METHOD;
@@ -15,9 +15,10 @@ use crate::Shared;
 
 // Workspace bootstrap sends several reads per group before the first response arrives.
 const WORKER_QUEUE_CAPACITY: usize = 16;
+const RELEASE_QUEUE_CAPACITY: usize = 32;
 
 enum Work {
-    Message(Incoming),
+    Message(Incoming, Instant),
     Release(String, oneshot::Sender<()>),
 }
 
@@ -36,6 +37,12 @@ pub(super) async fn read(
     let (terminal_tx, terminal_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
     let (files_tx, files_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
     let (provider_tx, provider_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
+    let [
+        (metadata_release, metadata_cleanup),
+        (terminal_release, terminal_cleanup),
+        (files_release, files_cleanup),
+        (provider_release, provider_cleanup),
+    ] = std::array::from_fn(|_| mpsc::channel(RELEASE_QUEUE_CAPACITY));
     let cancel = CancellationToken::new();
     let contexts = lanes.each_ref().map(|outbound| WorkerContext {
         state,
@@ -48,6 +55,12 @@ pub(super) async fn read(
             stream,
             &contexts[0],
             [metadata_tx, terminal_tx, files_tx, provider_tx],
+            [
+                metadata_release,
+                terminal_release,
+                files_release,
+                provider_release,
+            ],
         )
         .await;
         cancel.cancel();
@@ -55,14 +68,20 @@ pub(super) async fn read(
     };
     tokio::try_join!(
         reader,
-        worker(metadata_rx, subscriptions, &contexts[0]),
+        worker(metadata_rx, metadata_cleanup, subscriptions, &contexts[0]),
         worker(
             terminal_rx,
+            terminal_cleanup,
             ConnectionSubscriptions::default(),
             &contexts[1]
         ),
-        worker(files_rx, ConnectionSubscriptions::default(), &contexts[2]),
-        worker(provider_rx, provider, &contexts[3])
+        worker(
+            files_rx,
+            files_cleanup,
+            ConnectionSubscriptions::default(),
+            &contexts[2]
+        ),
+        worker(provider_rx, provider_cleanup, provider, &contexts[3])
     )?;
     Ok(())
 }
@@ -76,6 +95,7 @@ struct WorkerContext<'a> {
 
 async fn worker(
     mut receiver: mpsc::Receiver<Work>,
+    mut cleanup: mpsc::Receiver<Work>,
     mut subscriptions: ConnectionSubscriptions,
     context: &WorkerContext<'_>,
 ) -> Result<(), QueueError> {
@@ -86,6 +106,7 @@ async fn worker(
         let work = tokio::select! {
             biased;
             () = context.cancel.cancelled() => return Ok(()),
+            work = cleanup.recv() => match work { Some(work) => work, None => return Ok(()) },
             _ = poll.tick(), if !subscriptions.terminals.is_empty() || !subscriptions.voice.is_empty() => {
                 subscriptions.terminals.poll(&context.state.terminal, context.outbound).await?;
                 if let Some(speech) = &context.state.voice.speech {
@@ -101,12 +122,38 @@ async fn worker(
                 subscriptions.release(&id);
                 let _ = done.send(());
             }
-            Work::Message(message) => {
+            Work::Message(message, admitted_at) => {
+                let started = Instant::now();
+                let span = match &message {
+                    Incoming::Text(
+                        ClientMessage::Request {
+                            request_id, method, ..
+                        },
+                        _,
+                    ) => {
+                        tracing::info_span!(
+                            "dispatch",
+                            request_id,
+                            method,
+                            queue_ms = admitted_at.elapsed().as_secs_f64() * 1000.0
+                        )
+                    }
+                    _ => tracing::Span::none(),
+                };
                 let result = tokio::select! {
                     () = context.cancel.cancelled() => return Ok(()),
                     result = process_message(Some(Ok(message)), context.state, context.outbound,
                         context.peer, &mut subscriptions) => result?,
                 };
+                if !span.is_disabled() {
+                    span.in_scope(|| {
+                        tracing::info!(
+                            phase = "execution",
+                            execution_ms = started.elapsed().as_secs_f64() * 1000.0,
+                            "RPC execution completed"
+                        );
+                    });
+                }
                 if result.is_break() {
                     context.cancel.cancel();
                     return Ok(());
@@ -120,6 +167,7 @@ async fn route(
     mut stream: Frames,
     context: &WorkerContext<'_>,
     senders: [mpsc::Sender<Work>; 4],
+    cleanup: [mpsc::Sender<Work>; 4],
 ) -> Result<(), QueueError> {
     let mut assembly = chunks::Assembly::default();
     let mut releases: FuturesUnordered<BoxFuture<'static, Result<(), QueueError>>> =
@@ -178,43 +226,70 @@ async fn route(
                     )?;
                     continue;
                 }
-                if releases.len() >= 32 {
-                    reject_release(context.outbound, request_id, "subscription_releases", 32)?;
-                    continue;
-                }
-                let slots: Result<Vec<_>, _> =
-                    senders.iter().map(mpsc::Sender::try_reserve).collect();
-                let Ok(slots) = slots else {
-                    reject_release(
-                        context.outbound,
-                        request_id,
-                        "subscription_release_queue",
-                        WORKER_QUEUE_CAPACITY,
-                    )?;
-                    continue;
-                };
-                let mut done = Vec::with_capacity(4);
-                for slot in slots {
-                    let (tx, rx) = oneshot::channel();
-                    slot.send(Work::Release(release.subscription_id.clone(), tx));
-                    done.push(rx);
-                }
-                let outbound = context.outbound.clone();
-                let request_id = request_id.clone();
-                releases.push(Box::pin(async move {
-                    for receiver in done {
-                        receiver.await.map_err(|_| QueueError::Full)?;
-                    }
-                    outbound.respond(
-                        request_id,
-                        Ok(serde_json::json!({"subscriptionId":release.subscription_id})),
-                    )
-                }));
+                enqueue_release(
+                    request_id,
+                    release,
+                    &cleanup,
+                    &mut releases,
+                    context.outbound,
+                )?;
                 continue;
             }
         }
         admit(&senders, message, context.outbound)?;
     }
+}
+
+fn enqueue_release(
+    request_id: &str,
+    release: SubscriptionReleaseRequest,
+    cleanup: &[mpsc::Sender<Work>; 4],
+    releases: &mut FuturesUnordered<BoxFuture<'static, Result<(), QueueError>>>,
+    outbound: &Outbound,
+) -> Result<(), QueueError> {
+    if releases.len() >= RELEASE_QUEUE_CAPACITY {
+        reject_release(
+            outbound,
+            request_id,
+            "subscription_releases",
+            RELEASE_QUEUE_CAPACITY,
+        )?;
+        return Ok(());
+    }
+    let slots: Result<Vec<_>, _> = cleanup.iter().map(mpsc::Sender::try_reserve).collect();
+    let Ok(slots) = slots else {
+        reject_release(
+            outbound,
+            request_id,
+            "subscription_release_queue",
+            RELEASE_QUEUE_CAPACITY,
+        )?;
+        return Ok(());
+    };
+    let mut done = Vec::with_capacity(4);
+    for slot in slots {
+        let (tx, rx) = oneshot::channel();
+        slot.send(Work::Release(release.subscription_id.clone(), tx));
+        done.push(rx);
+    }
+    let outbound = outbound.clone();
+    let request_id = request_id.to_owned();
+    let started = Instant::now();
+    releases.push(Box::pin(async move {
+        for receiver in done {
+            receiver.await.map_err(|_| QueueError::Full)?;
+        }
+        tracing::info!(
+            method = "subscription.release.request",
+            elapsed_ms = started.elapsed().as_secs_f64() * 1000.0,
+            "Subscription cleanup completed"
+        );
+        outbound.respond(
+            request_id,
+            Ok(serde_json::json!({"subscriptionId":release.subscription_id})),
+        )
+    }));
+    Ok(())
 }
 
 fn reject_release(
@@ -273,24 +348,27 @@ fn admit(
     outbound: &Outbound,
 ) -> Result<(), QueueError> {
     let lane = lane(&message);
-    let refused = match senders[lane].try_send(Work::Message(message)) {
+    let refused = match senders[lane].try_send(Work::Message(message, Instant::now())) {
         Ok(()) => return Ok(()),
-        Err(mpsc::error::TrySendError::Full(Work::Message(Incoming::Text(
-            ClientMessage::Event { method, .. },
+        Err(mpsc::error::TrySendError::Full(Work::Message(
+            Incoming::Text(ClientMessage::Event { method, .. }, _),
             _,
-        )))) if method == HEARTBEAT_METHOD => {
+        ))) if method == HEARTBEAT_METHOD => {
             // The next heartbeat carries a complete activity snapshot again.
             return Ok(());
         }
         Err(failure) => failure.into_inner(),
     };
     match refused {
-        Work::Message(Incoming::Text(
-            ClientMessage::Request {
-                request_id, method, ..
-            },
+        Work::Message(
+            Incoming::Text(
+                ClientMessage::Request {
+                    request_id, method, ..
+                },
+                _,
+            ),
             _,
-        )) => tracing::info_span!(
+        ) => tracing::info_span!(
             "rpc",
             method = %method,
             request_id = %request_id,
@@ -302,10 +380,14 @@ fn admit(
         work => {
             // Log only method names from the daemon's declared catalog.
             let method = match work {
-                Work::Message(Incoming::Text(
-                    ClientMessage::Event { method, .. } | ClientMessage::Response { method, .. },
+                Work::Message(
+                    Incoming::Text(
+                        ClientMessage::Event { method, .. }
+                        | ClientMessage::Response { method, .. },
+                        _,
+                    ),
                     _,
-                )) => super::validation::lookup(&method).map(|spec| spec.capability),
+                ) => super::validation::lookup(&method).map(|spec| spec.capability),
                 _ => None,
             };
             tracing::warn!(

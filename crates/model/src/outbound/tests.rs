@@ -12,6 +12,16 @@ fn message(length: usize) -> ServerMessage {
 }
 
 #[test]
+fn queued_responses_carry_only_correlation_and_admission_time() {
+    let (queue, mut receiver) = Outbound::new();
+    let started = std::time::Instant::now();
+    queue.send(&message(1)).unwrap();
+    let queued = receiver.try_recv().unwrap();
+    assert_eq!(queued.request_id.as_deref(), Some("1"));
+    assert!(queued.enqueued_at >= started);
+}
+
+#[test]
 fn count_budget_rejects_slow_consumer_and_releases_on_drop() {
     let (queue, mut receiver) = Outbound::new();
     for _ in 0..MAX_QUEUE_MESSAGES {

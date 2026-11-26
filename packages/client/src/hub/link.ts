@@ -233,6 +233,7 @@ export class HubLink implements HubAccountConnection {
   private socket: WebSocketLike | null = null;
   private detach: (() => void)[] = [];
   private generation = 0;
+  private recoveryStartedAt: number | null = null;
   private welcomed = false;
   private link: LinkIdentity | null = null;
   private sent = 0;
@@ -241,6 +242,8 @@ export class HubLink implements HubAccountConnection {
   private recv = 0;
   private acked = 0;
   private failures = 0;
+  private repeatedRetry: { reason: string; count: number } | null = null;
+  private retryCount = 0;
   private tokenFailures = 0;
   private useTicket = false;
   /** Account Hosts from `hosts` frames, by host ID; null before the first full snapshot. */
@@ -493,6 +496,9 @@ export class HubLink implements HubAccountConnection {
       }
     }
     this.generation += 1;
+    this.recoveryStartedAt = null;
+    this.repeatedRetry = null;
+    this.retryCount = 0;
     this.paused = false;
     this.closeSocket();
     this.clearTimer("retry");
@@ -951,10 +957,20 @@ export class HubLink implements HubAccountConnection {
     this.sendState();
     if (generation !== this.generation) return;
     this.logger.info(
-      { link: welcome.link, resumed: welcome.resumed, resent: this.unacked.length },
+      {
+        link: welcome.link,
+        generation,
+        resumed: welcome.resumed,
+        resent: this.unacked.length,
+        recoveryMs: this.recoveryStartedAt === null ? 0 : Date.now() - this.recoveryStartedAt,
+        retryCount: this.retryCount,
+      },
       "[Hub] link online",
     );
     this.setState("online");
+    this.recoveryStartedAt = null;
+    this.repeatedRetry = null;
+    this.retryCount = 0;
     this.scheduleHeartbeat();
   }
 
@@ -1025,6 +1041,7 @@ export class HubLink implements HubAccountConnection {
   private drop(generation: number, reason: string): void {
     if (generation !== this.generation || this.current === "stopped") return;
     const welcomed = this.welcomed;
+    this.recoveryStartedAt ??= Date.now();
     this.generation += 1;
     this.closeSocket();
     const link = this.link;
@@ -1043,14 +1060,21 @@ export class HubLink implements HubAccountConnection {
         }, link.graceMs);
       }
     }
-    this.logger.info({ link: link?.id, reason, welcomed }, "[Hub] connection lost");
+    this.logger.info(
+      { link: link?.id, generation, source: "transport", reason, welcomed },
+      "[Hub] connection lost",
+    );
     // The first reconnect after a live connection is immediate; later ones back off.
     this.retry(reason, welcomed ? 0 : undefined);
   }
 
   /** Error frames end the link on the center: reconnect with a fresh ticket. */
   private serverError(code: string): void {
-    this.logger.warn({ link: this.link?.id, code }, "[Hub] center rejected the link");
+    this.recoveryStartedAt ??= Date.now();
+    this.logger.warn(
+      { link: this.link?.id, generation: this.generation, source: "center", code },
+      "[Hub] center rejected the link",
+    );
     this.generation += 1;
     this.closeSocket();
     this.resetLink(code);
@@ -1067,6 +1091,7 @@ export class HubLink implements HubAccountConnection {
       return;
     }
     const unavailable = status(reason) === 404;
+    this.retryCount++;
     const answered = rejected || status(reason) !== undefined;
     const wait =
       delay ??
@@ -1077,11 +1102,17 @@ export class HubLink implements HubAccountConnection {
             RECONNECT_BASE_MS * 2 ** Math.min(this.failures++, 10),
           ) *
           (0.8 + Math.random() * 0.4));
-    if (delay === undefined)
+    const reasonText = reason instanceof Error ? reason.message : String(reason);
+    const repetition = this.repeatedRetry?.reason === reasonText ? ++this.repeatedRetry.count : 1;
+    if (repetition === 1) this.repeatedRetry = { reason: reasonText, count: 1 };
+    // Repeated outages are summarized at powers of two and with the final recovery record.
+    if (delay === undefined && Number.isInteger(Math.log2(repetition)))
       this.logger.warn(
         {
           link: this.link?.id,
-          reason: reason instanceof Error ? reason.message : String(reason),
+          generation: this.generation,
+          reason: reasonText,
+          repetitions: repetition,
           retryMs: Math.round(wait),
         },
         "[Hub] connection attempt failed",

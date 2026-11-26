@@ -14,3 +14,4 @@ export {
   type HubShareResourceKind,
 } from "./account.js";
 export { observeHubEvents } from "./subscription.js";
+export { formatDiagnosticFields } from "../diagnostic-log.js";

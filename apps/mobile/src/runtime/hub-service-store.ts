@@ -10,10 +10,12 @@ interface HubServicesState {
   snapshot: HubAccountSnapshot | null;
   agents: HubDirectoryItem[];
   eventsActive: boolean;
+  connectionRecovering: boolean;
 }
 export const useHubServices = create<HubServicesState>(() => ({
   connection: null,
   snapshot: null,
   agents: [],
   eventsActive: false,
+  connectionRecovering: false,
 }));

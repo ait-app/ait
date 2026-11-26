@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ArrowUpRight, Check, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
-import type { DaemonClient } from "@ait/client/internal/daemon-client";
+import {
+  PermissionOutcomeUnknownError,
+  type DaemonClient,
+} from "@ait/client/internal/daemon-client";
 import type {
   AgentPermissionAction,
   AgentPermissionResponse,
@@ -95,10 +98,12 @@ export function PermissionRequestCard({
   panel = false,
   compact = false,
   onOpenDetails,
+  onOpenSession,
 }: {
   panel?: boolean;
   compact?: boolean;
   onOpenDetails?: () => void;
+  onOpenSession?: () => void;
   permission: PendingPermission;
   client: DaemonClient | null;
 }) {
@@ -106,6 +111,7 @@ export function PermissionRequestCard({
   const isMobile = useIsCompactFormFactor();
 
   const { request } = permission;
+  const openSession = onOpenSession ?? onOpenDetails;
   const isPlanRequest = request.kind === "plan";
   const isCommand = request.name === "commandExecution";
   const title = isPlanRequest
@@ -178,6 +184,13 @@ export function PermissionRequestCard({
 
   const mutationKey = ["permission-response", permission.agentId, request.id];
   const pendingResponses = useIsMutating({ mutationKey });
+  const operation = useSyncExternalStore(
+    useCallback(
+      (listener) => client?.permissionResponses?.subscribe(listener) ?? (() => {}),
+      [client],
+    ),
+    () => client?.permissionResponses?.snapshot(permission.agentId, request.id),
+  );
   const permissionMutation = useMutation({
     mutationKey,
     networkMode: "always",
@@ -193,12 +206,7 @@ export function PermissionRequestCard({
       if (request.kind === "question") {
         return respondToQuestionWithTimeout(client, input);
       }
-      return client.respondToPermissionAndWait(
-        input.agentId,
-        input.requestId,
-        input.response,
-        15000,
-      );
+      return client.respondToPermissionAndWait(input.agentId, input.requestId, input.response);
     },
   });
   const {
@@ -207,6 +215,21 @@ export function PermissionRequestCard({
     isPending: isOwnResponsePending,
   } = permissionMutation;
   const isResponding = isOwnResponsePending || pendingResponses > 0;
+  const uncertain = operation
+    ? operation.phase === "uncertain"
+    : permissionMutation.error instanceof PermissionOutcomeUnknownError;
+  const blocked =
+    isResponding || uncertain || operation?.phase === "confirmed" || permissionMutation.isSuccess;
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setSlow(false);
+    if (!isResponding) return;
+    const timer = setTimeout(
+      () => setSlow(true),
+      Math.max(0, 5_000 - (Date.now() - (operation?.startedAt ?? permissionMutation.submittedAt))),
+    );
+    return () => clearTimeout(timer);
+  }, [isResponding, operation?.startedAt, permissionMutation.submittedAt]);
 
   const [respondingActionId, setRespondingActionId] = useState<string | null>(null);
 
@@ -216,15 +239,19 @@ export function PermissionRequestCard({
   }, [permission.request.id, resetPermissionMutation]);
   const handleResponse = useCallback(
     (response: AgentPermissionResponse) => {
+      if (request.kind !== "question" && blocked) return;
+      if (request.kind !== "question")
+        client?.permissionResponses?.remember(permission.agentId, request);
       respondToPermission({
         agentId: permission.agentId,
         requestId: permission.request.id,
         response,
       }).catch((error) => {
+        if (error instanceof PermissionOutcomeUnknownError) return;
         console.error("[PermissionRequestCard] Failed to respond to permission:", error);
       });
     },
-    [permission.agentId, permission.request.id, respondToPermission],
+    [permission.agentId, permission.request.id, respondToPermission, blocked, client, request],
   );
   const handleActionPress = useCallback(
     (action: AgentPermissionAction) => {
@@ -297,7 +324,37 @@ export function PermissionRequestCard({
         </Text>
       ) : null}
 
-      {permissionMutation.isError ? (
+      {slow || uncertain ? (
+        <Text accessibilityLiveRegion="polite" style={permissionStyles.description}>
+          {t(
+            uncertain
+              ? "agentStream.permission.unconfirmed"
+              : "agentStream.permission.waitingForHost",
+          )}
+        </Text>
+      ) : null}
+      {uncertain ? (
+        <View style={optionsContainerStyle}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!client || operation?.checking}
+            onPress={() => {
+              void client?.permissionResponses
+                ?.check(permission.agentId, request.id)
+                .catch(() => {});
+            }}
+          >
+            {t("agentStream.permission.checkStatus")}
+          </Button>
+          {openSession ? (
+            <Button size="sm" variant="outline" onPress={openSession}>
+              {t("agentStream.permission.viewSession")}
+            </Button>
+          ) : null}
+        </View>
+      ) : null}
+      {permissionMutation.isError && !uncertain && operation?.phase !== "confirmed" ? (
         <Text accessibilityRole="alert" style={permissionStyles.error}>
           {toErrorMessage(permissionMutation.error)}
         </Text>
@@ -336,7 +393,7 @@ export function PermissionRequestCard({
                 }
                 testID={testID}
                 loading={isResponding && isRespondingAction}
-                disabled={!client || isResponding || permissionMutation.isSuccess}
+                disabled={!client || blocked}
                 onPress={() => handleActionPress(action)}
               >
                 {action.label}
@@ -348,7 +405,7 @@ export function PermissionRequestCard({
               key={action.id}
               action={action}
               isRespondingAction={isRespondingAction}
-              isResponding={isResponding || !client || permissionMutation.isSuccess}
+              isResponding={blocked || !client}
               isPrimary={isPrimary}
               Icon={Icon}
               testID={testID}

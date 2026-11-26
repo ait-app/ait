@@ -1,4 +1,5 @@
 import { UploadAcknowledgements } from "./upload-acks.js";
+import { PERMISSION_RESPONSE_TIMEOUT_MS } from "../permission-response.js";
 import { parseDaemonTransportUrl } from "./transport-url.js";
 import { ClientMessageChunks } from "./chunks.js";
 import { METHODS, type MethodSpec } from "./methods.js";
@@ -402,7 +403,9 @@ export function createDaemonConnection(
     ) {
       subscriptions.delete(item.request.subscriptionId);
     }
-    if (item.rawPing) publish({ type: "connection.pong" });
+    if (item.spec.method === "agent.permission.resolve.request" && result.resolution)
+      publish(eventMessage("agent_permission_resolved", result));
+    else if (item.rawPing) publish({ type: "connection.pong" });
     else if (item.spec.response)
       publish(responseMessage(item.spec.response, id, result, item.request));
   }
@@ -488,9 +491,8 @@ export function createDaemonConnection(
             clearTimeout(timedOut?.retryTimer);
             emit(rpcError(id, name, "timeout", "Rust daemon request timed out"));
           },
-          // Release the permission ID when its UI deadline expires so a user can retry.
           spec.method === "agent.permission.resolve.request"
-            ? 5_000
+            ? PERMISSION_RESPONSE_TIMEOUT_MS
             : spec.method === "file.upload.request"
               ? 30 * 60_000
               : 300_000,

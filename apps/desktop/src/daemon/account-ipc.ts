@@ -2,7 +2,8 @@ import { displayAppVersion } from "../app-version.js";
 import { app, BrowserWindow, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
-import { HubLink } from "@ait/client/internal/hub";
+import { HubLink, formatDiagnosticFields } from "@ait/client/internal/hub";
+import log from "electron-log/main";
 import type { WebSocketLike } from "@ait/client/internal/daemon-client-transport-types";
 import { readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
@@ -134,6 +135,10 @@ export function createAccountIpc(
   };
   account = manager;
   hub = new HubLink({
+    logger: {
+      info: (fields, message) => log.info(message, formatDiagnosticFields(fields)),
+      warn: (fields, message) => log.warn(message, formatDiagnosticFields(fields)),
+    },
     ticket: () => manager.openHubTicket(),
     webSocketFactory: (url, options) =>
       new WebSocket(url, options?.protocols, {

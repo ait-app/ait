@@ -197,10 +197,16 @@ impl crate::daemon::ports::host_monitor::HostSampler for TestHostSampler {
     }
 }
 
-#[test]
-fn host_monitor_rpc_validates_input_and_returns_opt_in_history() {
+#[tokio::test]
+async fn host_monitor_rpc_validates_input_and_returns_opt_in_history() {
     let daemon = daemon().with_host_sampler(Box::new(TestHostSampler));
+    let runtime = monitor_runtime();
+    assert!(daemon.host_stats(false).is_err());
+    daemon.refresh_host_stats(&runtime);
+    runtime.tasks.close();
+    runtime.tasks.wait().await;
     let call = |daemon: &Daemon, params| {
+        crate::daemon::rpc::validate_host_stats(&params)?;
         crate::daemon::rpc::execute(daemon, "daemon.host_stats.request", params)
             .map(|executed| executed.value)
     };
@@ -256,8 +262,8 @@ impl crate::daemon::ports::host_monitor::HostSampler for HeldSampler {
 /// 8 ms durability write wait behind a `/proc` and `statfs` sweep that the client triggers every
 /// two seconds. The sampler here blocks until released, so the write can only pass if it does not
 /// queue behind the monitor's own lock.
-#[test]
-fn config_patch_completes_while_a_host_sample_is_in_flight() {
+#[tokio::test]
+async fn config_patch_completes_while_a_host_sample_is_in_flight() {
     let (entered, entered_rx) = std::sync::mpsc::channel();
     let (release, release_rx) = std::sync::mpsc::channel();
     let daemon = std::sync::Arc::new(daemon().with_host_sampler(Box::new(HeldSampler {
@@ -265,13 +271,17 @@ fn config_patch_completes_while_a_host_sample_is_in_flight() {
         release: release_rx,
     })));
 
-    let sampling = {
-        let daemon = daemon.clone();
-        std::thread::spawn(move || daemon.host_stats(false))
-    };
+    let runtime = monitor_runtime();
+    daemon.refresh_host_stats(&runtime);
     entered_rx
         .recv_timeout(std::time::Duration::from_secs(5))
         .expect("the sampler should reach `sample()`");
+    assert!(daemon.host_stats(false).is_err());
+    assert_eq!(runtime.jobs.available_permits(), 3);
+    for _ in 0..10 {
+        daemon.refresh_host_stats(&runtime);
+    }
+    assert_eq!(runtime.tasks.len(), 1);
 
     // The write runs on its own thread so a blocked one fails the assertion instead of hanging.
     let (patched, patched_rx) = std::sync::mpsc::channel();
@@ -288,5 +298,22 @@ fn config_patch_completes_while_a_host_sample_is_in_flight() {
 
     release.send(()).unwrap();
     writing.join().unwrap();
-    sampling.join().unwrap().unwrap();
+    runtime.tasks.close();
+    runtime.tasks.wait().await;
+    assert_eq!(daemon.host_stats(false).unwrap().current.at, 123);
+}
+
+fn monitor_runtime() -> model::Runtime {
+    model::Runtime::new(model::ServerInfo {
+        server_id: "host".to_owned(),
+        version: None,
+        instance_id: "instance".to_owned(),
+        listen: "127.0.0.1:1".to_owned(),
+        lifecycle: model::Lifecycle::Ready,
+        protocol: model::VERSION,
+        capabilities: vec![],
+        implemented_capabilities: vec![],
+        features: vec![],
+        limits: model::Limits::default(),
+    })
 }

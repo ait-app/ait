@@ -452,6 +452,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 0,
     response: "agent.message.send.response",
+    retryAdmission: false,
   },
   "agent.finish.wait.request": {
     method: "agent.finish.wait.request",
@@ -561,6 +562,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 0,
     response: null,
+    retryAdmission: false,
   },
   "agent.timeline.get.request": {
     method: "agent.timeline.get.request",
@@ -1210,6 +1212,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 0,
     response: "subscription.release.response",
+    retryAdmission: false,
   },
   "creation.subscribe.request": {
     method: "creation.subscribe.request",

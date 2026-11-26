@@ -78,6 +78,7 @@ import {
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { useArchiveFinishedSubagents, useSubagentsForParent } from "@/subagents";
 import { TimelineSyncStatus } from "@/components/timeline-sync-status";
+import { useHubServices } from "@/runtime/hub-service-store";
 import type { ViewedTimelineStatus, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem, TodoEntry } from "@/types/stream";
@@ -1104,6 +1105,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const showsComposer =
     usePaneContext().host !== "sheet" && agentState.capabilities?.supportsMessageSend !== false;
   // The dock lays out fullscreen for the same session the composer edits in.
+  const connectionRecovering = useHubServices((state) => state.connectionRecovering);
   const composerEditingSession = useComposerEditingSession("chat");
   const isComposerFullscreen = useComposerFullscreen(composerEditingSession);
   const subagentRows = useSubagentsForParent({ serverId, parentAgentId: agentId });
@@ -1224,7 +1226,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     <View style={styles.contentContainer}>
       {streamContent}
 
-      {showHistorySyncError ? (
+      {showHistorySyncError && !connectionRecovering ? (
         <TimelineSyncErrorCallout isRetrying={isRetryingHistorySync} onRetry={retryTimelineSync} />
       ) : null}
     </View>

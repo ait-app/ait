@@ -197,6 +197,9 @@ Electron 的 `rust-daemon.ts` 继续只负责本机进程管理。见
 Hub feature 协商与旧版本兼容见
 [ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)。
 单连接将客户端活动心跳作为可丢弃的周期快照，worker 队列满时仍保留业务连接。
+订阅清理拥有独立准入，主机采样独占一个受追踪任务并发布缓存，均不争抢普通业务容量。
+SDK 负责按连接代次退避清理、限制订阅恢复并发，并持有审批的待确认状态，禁止未知结果重发。
+见 [ADR-313](../decisions/daemon/adr-313-connection-cleanup-and-sampling.md)。
 见 [连接与传输规格](connection.md#准入与分发)。
 同账号的 daemon 还经 Hub 的 `peer` 会话互相调用部分 MCP 工具，接收方默认不接受（`mcp.acceptPeers`），
 见 [ADR-305](../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md)、[连接规格](connection.md#跨主机-peer-会话)与

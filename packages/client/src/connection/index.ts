@@ -92,6 +92,11 @@ export class ConnectionSubscriptions extends OwnedSubscriptions {
       },
       signal,
       failed,
+      typeof input === "object" && input.type === "agent.timeline.set_subscription.request"
+        ? 1
+        : typeof input === "function" || input.type === "session.events.set_subscription.request"
+          ? 0
+          : 2,
     );
   }
 

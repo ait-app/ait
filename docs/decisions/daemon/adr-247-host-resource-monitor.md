@@ -12,6 +12,8 @@ paths:
 
 # ADR-247：按需采样主机资源并在侧栏展示
 
+- 后续修订：[ADR-313](adr-313-connection-cleanup-and-sampling.md) 将采样移出共享短任务额度，读取不再等待采样。
+
 ## 背景
 
 用户需要从当前工作区确认 daemon 所在主机的资源状态。Ait 已移除旧插件运行时，

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ScrollView } from "@/components/ui/scroll-view";
 import { PermissionRequestCard } from "@/components/permission-request-card";
+import { useRetainedPermissions } from "@/agent-stream/use-retained-permissions";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { toErrorMessage } from "@/utils/error-messages";
 import { taskDescendants, type BoardTask } from "./model";
@@ -73,6 +74,7 @@ export function TaskDetail({
   const { theme } = useUnistyles();
   const { agent } = task;
   const client = useHostRuntimeClient(agent.serverId);
+  const permissions = useRetainedPermissions(client, agent.id, agent.pendingPermissions);
   const children = useMemo(() => taskDescendants(task), [task]);
   const running =
     agent.status === "running" || agent.status === "initializing" || agent.turn.phase === "open";
@@ -168,13 +170,14 @@ export function TaskDetail({
               <Text style={styles.error}>{agent.lastError}</Text>
             </View>
           ) : null}
-          {(allowed.approve ? agent.pendingPermissions : []).map((request) => (
+          {(allowed.approve ? permissions : []).map((request) => (
             <View key={request.id} style={styles.approval}>
               <Text style={styles.sectionTitle}>{t("taskBoard.needsYourInput")}</Text>
               <PermissionRequestCard
                 panel
                 permission={{ key: request.id, agentId: agent.id, request }}
                 client={online ? client : null}
+                onOpenDetails={open}
               />
             </View>
           ))}

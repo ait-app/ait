@@ -44,6 +44,7 @@ describe("question response deadline", () => {
       "question-a",
       input.response,
       5_000,
+      { kind: "question" },
     );
     expect(vi.getTimerCount()).toBe(0);
   });

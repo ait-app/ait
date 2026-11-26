@@ -21,7 +21,9 @@ export function tailFile(filePath: string, lines = 50, options: TailFileOptions 
 function readTailLines(filePath: string, lines: number): string {
   const descriptor = openSync(filePath, "r");
   try {
-    const { size } = fstatSync(descriptor);
+    const info = fstatSync(descriptor);
+    if (!info.isFile()) throw new Error("Diagnostic log is not a regular file");
+    const { size } = info;
     const length = Math.min(size, TAIL_READ_LIMIT_BYTES);
     const buffer = Buffer.alloc(length);
     const bytesRead = readSync(descriptor, buffer, 0, length, size - length);

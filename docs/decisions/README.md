@@ -38,13 +38,14 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-313：连接清理独立准入、采样隔离与有界恢复](daemon/adr-313-connection-cleanup-and-sampling.md)
 - [ADR-305：跨主机 MCP——peer 会话与对端调用者](daemon/adr-305-cross-host-mcp-peer-sessions.md)
 - [ADR-295：MCP 工具按“域在前”命名，旧名字作为别名保留](daemon/adr-295-mcp-tool-naming-and-aliases.md)（经 [ADR-305](daemon/adr-305-cross-host-mcp-peer-sessions.md) 修订）
 - [ADR-294：创建回执按键存入 SQLite](daemon/adr-294-sqlite-creation-receipts.md)
 - [ADR-291：单连接的活动心跳允许过载丢弃](daemon/adr-291-best-effort-activity-heartbeats.md)
 - [ADR-288：Agent 状态延迟写入 `agents.json`，启动时由 Timeline 补齐](daemon/adr-288-deferred-agent-status-writes.md)
 - [ADR-282：单连接能力提议预算随方法目录扩容](daemon/adr-282-single-connection-capability-budget.md)
-- [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)
+- [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)（经 [ADR-313](daemon/adr-313-connection-cleanup-and-sampling.md) 修订）
 - [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
 - [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
 - [ADR-201：daemon 统一拥有节点发布与机器授权](daemon/adr-201-daemon-owned-publication.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
@@ -284,7 +285,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-077：Android APK 的 GitHub Release 发布](clients/adr-077-android-apk-release.md)（经 [ADR-078](clients/adr-078-optional-android-release.md) 修订）
 - [ADR-076：Android 账户与中继客户端](clients/adr-076-android-account-relay.md)（经 [ADR-084](clients/adr-084-ios-account-relay.md)、[ADR-086](clients/adr-086-authing-native-login.md)、[ADR-122](clients/adr-122-persistent-online-service-hosts.md) 修订）
 - [ADR-075：Relay 协议定义与连接执行分离](clients/adr-075-relay-protocol-modules.md)（经 [ADR-098](clients/adr-098-acknowledged-client-chunks.md) 修订）
-- [ADR-074：账户发现与按需反向中继](clients/adr-074-account-host-relay.md)（经 [ADR-075](clients/adr-075-relay-protocol-modules.md)、[ADR-076](clients/adr-076-android-account-relay.md)、[ADR-083](clients/adr-083-online-service-host-sync.md)、[ADR-086](clients/adr-086-authing-native-login.md)、[ADR-108](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)、[ADR-120](daemon/adr-120-single-connection-startup-admission.md)、[ADR-122](clients/adr-122-persistent-online-service-hosts.md)、[ADR-154](clients/adr-154-account-status-channel.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-204](clients/adr-204-hub-only-online-business-transport.md)、[ADR-282](daemon/adr-282-single-connection-capability-budget.md) 修订）
+- [ADR-074：账户发现与按需反向中继](clients/adr-074-account-host-relay.md)（经 [ADR-075](clients/adr-075-relay-protocol-modules.md)、[ADR-076](clients/adr-076-android-account-relay.md)、[ADR-083](clients/adr-083-online-service-host-sync.md)、[ADR-086](clients/adr-086-authing-native-login.md)、[ADR-108](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)、[ADR-120](daemon/adr-120-single-connection-startup-admission.md)、[ADR-122](clients/adr-122-persistent-online-service-hosts.md)、[ADR-154](clients/adr-154-account-status-channel.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-204](clients/adr-204-hub-only-online-business-transport.md)、[ADR-282](daemon/adr-282-single-connection-capability-budget.md)、[ADR-313](daemon/adr-313-connection-cleanup-and-sampling.md) 修订）
 - [ADR-073：桌面主窗口的导航信任边界](clients/adr-073-desktop-renderer-navigation.md)
 - [ADR-070：Ait iOS TestFlight 手动发布工作流](clients/adr-070-ios-testflight-release.md)（已由 [ADR-183](clients/adr-183-ios-xcode-cloud-release.md) 取代）
 - [ADR-063：Ait 本地 UI 包与原生测试连接](clients/adr-063-ait-local-ui-packages.md)

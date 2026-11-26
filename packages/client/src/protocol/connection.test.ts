@@ -1798,7 +1798,44 @@ describe("Rust v1 connection", () => {
       vi.useRealTimers();
     }
   });
-  it("releases a permission ID after five seconds so the response can be retried", () => {
+  it.each([
+    "agent.permission.resolve.request",
+    "agent.message.send.request",
+    "subscription.release.request",
+  ])("does not stack generic admission retries for %s", (type) => {
+    vi.useFakeTimers();
+    const h = harness();
+    try {
+      h.ready();
+      h.send({
+        type,
+        requestId: "one-attempt",
+        agentId: "agent",
+        subscriptionId: "interest",
+        text: "message",
+        response: { behavior: "allow" },
+      });
+      const sent = h.sockets[0].send.mock.calls.length;
+      h.sockets[0].message({
+        type: "error",
+        request_id: "one-attempt",
+        code: "resource_exhausted",
+        message: "Busy",
+        retryable: true,
+      });
+      expect(h.received.at(-1)).toMatchObject({
+        type: "rpc_error",
+        payload: { code: "resource_exhausted" },
+      });
+      vi.advanceTimersByTime(10_000);
+      expect(h.sockets[0].send.mock.calls).toHaveLength(sent);
+      expect(h.errors).not.toHaveBeenCalled();
+    } finally {
+      h.transport.close();
+      vi.useRealTimers();
+    }
+  });
+  it("retains a permission request for the full sixty-second confirmation budget", () => {
     vi.useFakeTimers();
     const h = harness();
     try {
@@ -1810,7 +1847,7 @@ describe("Rust v1 connection", () => {
         response: { behavior: "deny" },
       };
       h.send(request);
-      vi.advanceTimersByTime(4999);
+      vi.advanceTimersByTime(59_999);
       expect(h.received.at(-1)).not.toMatchObject({ type: "rpc_error" });
       vi.advanceTimersByTime(1);
       expect(h.received.at(-1)).toMatchObject({

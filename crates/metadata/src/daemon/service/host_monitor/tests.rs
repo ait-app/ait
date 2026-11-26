@@ -83,3 +83,49 @@ fn failed_sampling_does_not_publish_a_successful_timestamp() {
     assert!(monitor.sampled_at.is_none());
     assert!(monitor.history.is_empty());
 }
+
+#[derive(Debug)]
+struct BlockingAfterFirst {
+    calls: usize,
+    entered: std::sync::mpsc::Sender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+}
+
+impl HostSampler for BlockingAfterFirst {
+    fn sample(&mut self, _: bool) -> Result<HostSnapshot, HostMonitorError> {
+        self.calls += 1;
+        if self.calls > 1 {
+            self.entered.send(()).unwrap();
+            self.release.recv().unwrap();
+        }
+        let mut snapshot = Sampler(Arc::new(Mutex::new(Vec::new()))).sample(false)?;
+        snapshot.current.at = i64::try_from(self.calls).unwrap();
+        Ok(snapshot)
+    }
+}
+
+#[test]
+fn reads_keep_the_previous_sample_and_timestamp_while_os_sampling_is_blocked() {
+    let (entered, entered_rx) = std::sync::mpsc::channel();
+    let (release, release_rx) = std::sync::mpsc::channel();
+    let monitor = Arc::new(Monitor::new(Box::new(BlockingAfterFirst {
+        calls: 0,
+        entered,
+        release: release_rx,
+    })));
+    let now = Instant::now();
+    monitor.sample(now).unwrap();
+    let sampling = {
+        let monitor = monitor.clone();
+        std::thread::spawn(move || monitor.sample(now + SAMPLE_INTERVAL))
+    };
+    entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    let cached = monitor.read(true).unwrap();
+    assert_eq!(cached.current.at, 1);
+    assert_eq!(cached.history.len(), 1);
+    assert!(monitor.read(false).unwrap().history.is_empty());
+    release.send(()).unwrap();
+    sampling.join().unwrap().unwrap();
+    assert_eq!(monitor.read(true).unwrap().current.at, 2);
+    assert_eq!(monitor.read(true).unwrap().history.len(), 2);
+}

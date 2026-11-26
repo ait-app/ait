@@ -276,10 +276,10 @@ test("createPaseoApi borrows daemon capabilities without exposing connection own
   expect("skills" in paseo.agents).toBe(false);
 });
 
-test("agent handles send permission responses for their agent", async () => {
+test("agent handles wait for confirmation of permission responses for their agent", async () => {
   const { client, ws } = await connectClient();
 
-  await client.agents.ref("agent_sdk").respondToPermission({
+  const pending = client.agents.ref("agent_sdk").respondToPermission({
     requestId: "permission-request",
     response: {
       behavior: "deny",
@@ -303,6 +303,23 @@ test("agent handles send permission responses for their agent", async () => {
       },
     },
   });
+
+  ws.message(
+    sessionMessage({
+      type: "agent.permission.resolved",
+      payload: {
+        agentId: "agent_sdk",
+        requestId: "permission-request",
+        resolution: {
+          behavior: "deny",
+          selectedActionId: "deny-once",
+          message: "Not approved",
+          interrupt: true,
+        },
+      },
+    }),
+  );
+  await pending;
 
   await client.close();
 });

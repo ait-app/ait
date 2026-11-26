@@ -170,6 +170,8 @@ pub(super) async fn serve_frames<K>(
                 () = stopped.cancelled() => break,
                 queued = receiver.recv() => match queued { Some(queued) => queued, None => break },
             };
+            let response_queue_ms = queued.enqueued_at.elapsed().as_secs_f64() * 1000.0;
+            let write_started = std::time::Instant::now();
             let message = websocket_frame(queued.message);
             let sent = if let Some(limit) = write_timeout {
                 matches!(timeout(limit, sink.send(message)).await, Ok(Ok(())))
@@ -179,6 +181,16 @@ pub(super) async fn serve_frames<K>(
                     sent = sink.send(message) => sent.is_ok(),
                 }
             };
+            if let Some(request_id) = &queued.request_id {
+                tracing::info!(
+                    request_id,
+                    phase = "response",
+                    response_queue_ms,
+                    write_ms = write_started.elapsed().as_secs_f64() * 1000.0,
+                    delivered = sent,
+                    "RPC response delivery"
+                );
+            }
             if !sent {
                 break;
             }

@@ -23,6 +23,10 @@ pub enum QueueError {
 pub struct Queued {
     /// Encoded frame to write.
     pub message: Frame,
+    /// Admission time used to distinguish output queuing from the transport write.
+    pub enqueued_at: std::time::Instant,
+    /// Correlation identity for responses and errors; events and raw frames have none.
+    pub request_id: Option<String>,
     // Budget remains reserved until the active socket write completes or is dropped.
     _reservation: OutputReservation,
 }
@@ -173,6 +177,12 @@ impl Outbound {
         self.sender
             .try_send(Queued {
                 message: Frame::Text(text),
+                enqueued_at: std::time::Instant::now(),
+                request_id: match message {
+                    ServerMessage::Response { request_id, .. } => Some(request_id.clone()),
+                    ServerMessage::Error { request_id, .. } => request_id.clone(),
+                    _ => None,
+                },
                 _reservation: OutputReservation {
                     bytes: Some(bytes),
                     messages,
@@ -219,6 +229,8 @@ impl Outbound {
                 if let Ok(messages) = messages {
                     slot.send(Queued {
                         message,
+                        enqueued_at: std::time::Instant::now(),
+                        request_id: None,
                         _reservation: OutputReservation {
                             bytes: Some(bytes),
                             messages,
