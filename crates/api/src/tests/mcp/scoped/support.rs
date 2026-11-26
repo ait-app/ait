@@ -124,9 +124,9 @@ impl model::summary::SummaryGenerator for Silent {
     fn shutdown(&self) {}
 }
 
-/// Terminal processes that stay alive without an operating-system PTY.
+/// Terminal processes with a test-controlled exit signal and no operating-system PTY.
 #[derive(Debug)]
-struct Pty;
+struct Pty(Arc<AtomicBool>);
 
 impl terminal::ports::Runtime for Pty {
     fn directory(&self, path: &str) -> Result<String, terminal::Error> {
@@ -139,13 +139,17 @@ impl terminal::ports::Runtime for Pty {
         &self,
         _: &terminal::ports::Launch,
     ) -> Result<Box<dyn terminal::ports::Process>, terminal::Error> {
-        Ok(Box::new(Shell::default()))
+        Ok(Box::new(Shell {
+            killed: false,
+            exited: self.0.clone(),
+        }))
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Shell {
     killed: bool,
+    exited: Arc<AtomicBool>,
 }
 
 impl terminal::ports::Process for Shell {
@@ -154,7 +158,7 @@ impl terminal::ports::Process for Shell {
     }
 
     fn exited(&mut self) -> Result<bool, terminal::Error> {
-        Ok(self.killed)
+        Ok(self.killed || self.exited.load(Ordering::SeqCst))
     }
 
     fn send(&mut self, _: &terminal::protocol::Input) -> Result<(), terminal::Error> {
@@ -190,6 +194,8 @@ pub(super) struct Scoped {
     pub(super) bots: Bots,
     /// The Bot service's native sessions.
     pub(super) turns: Arc<Turns>,
+    /// Mark fixture terminal processes naturally exited without closing their retained screens.
+    pub(super) terminal_exited: Arc<AtomicBool>,
     store: Arc<FileStore>,
     pub(super) workspace: String,
     pub(super) cwd: PathBuf,
@@ -430,10 +436,11 @@ impl Scoped {
             Arc::new(Idle),
         )
         .unwrap();
+        let terminal_exited = Arc::new(AtomicBool::new(false));
         let terminals = Terminals::new(
             Box::new(registries.workspaces.clone()),
             Box::new(registries.projects.clone()),
-            Box::new(Pty),
+            Box::new(Pty(terminal_exited.clone())),
         );
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let mut api = Api::new(
@@ -462,6 +469,7 @@ impl Scoped {
             scopes,
             bots,
             turns,
+            terminal_exited,
             store,
             workspace,
             cwd,

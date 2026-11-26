@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Workspace Bots and their agents can read retained output after a terminal command exits.
+  Scoped tools omit directory arguments they cannot accept and explain how to correct invalid
+  directory or provider/model arguments when creating agents.
+
 - Add independent `aitd-bin` and `aitd-git` Arch packages with an opt-in systemd user service.
   Stable releases can publish both desktop and daemon binary recipes; Git recipes remain locally maintained.
 

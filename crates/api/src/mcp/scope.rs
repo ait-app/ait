@@ -562,17 +562,12 @@ fn retarget(
     Ok(())
 }
 
-/// Resolve `arguments.terminalId` among the terminals of all Workspaces and confine it.
+/// Confine a terminal by retained ownership, which survives a command's natural exit.
 async fn terminal(state: &Shared, scope: &Scope, arguments: &mut Value) -> Result<(), ErrorCode> {
     let requested = text(&arguments["terminalId"])?;
-    let listed = rpc::execute(state, "terminal.list.request", json!({})).await?;
-    let terminal = listed["terminals"]
-        .as_array()
-        .ok_or(ErrorCode::InvalidMessage)?
-        .iter()
-        .find(|terminal| terminal["id"] == requested.as_str())
+    let workspace = terminal::dispatch::workspace_id(&state.terminal, requested.clone())
+        .await?
         .ok_or(ErrorCode::Forbidden)?;
-    let workspace = text(&terminal["workspaceId"])?;
     retarget(scope, "terminalId", Some(&workspace), &requested, arguments)?;
     active(state, &workspace).await.map(drop)
 }

@@ -308,8 +308,24 @@ async fn call(
         alias.rewrite(&mut arguments);
         alias.record(&tool.name);
     }
+    if scope.is_some() && arguments.get("cwd").is_some() {
+        return Err((
+            -32602,
+            "Bot-scoped calls must omit cwd. Use an allowed workspaceId when supported; \
+             Ait selects the directory.",
+        ));
+    }
     if !validation::matches(&tool.schema(scope.as_ref()), &arguments) {
         return Err((-32602, "Arguments do not match the tool input schema"));
+    }
+    if tool.name == "agent_create"
+        && tools::creation::provider_model(&arguments["provider"], true).is_err()
+    {
+        return Err((
+            -32602,
+            "agent_create requires provider/model. Call provider_model_list to select a model, \
+             then retry with the full pair.",
+        ));
     }
     let header = auth::single_header(headers, "x-ait-agent-id")
         .map_err(|_| (-32602, "Invalid caller header"))?;

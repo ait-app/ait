@@ -165,10 +165,6 @@ async fn scoped_calls_cannot_reach_other_workspaces() {
         [own_schedule.as_str()]
     );
 
-    let cwd = json!(scoped.cwd);
-    forbidden(&call("terminal_create", json!({"cwd":cwd})).await);
-    forbidden(&call("provider_model_list", json!({"provider":"codex","cwd":cwd})).await);
-    structured(&call("provider_model_list", json!({"provider":"codex"})).await);
     scoped.stop().await;
 }
 

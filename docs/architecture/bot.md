@@ -300,6 +300,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)，修订
   [ADR-148](../decisions/daemon/adr-148-daemon-mcp.md)）。
 - 作用域调用的每个工具必须在 `api::mcp::scope` 登记规则才会执行；`cwd` 一律拒绝，目标解析为规范 ID 后回写。
+  作用域工具目录省略 `cwd`，工作目录由允许的 Workspace 确定；旧调用传入目录时返回可修正的参数提示。
+  终端授权使用保留记录中的 Workspace 归属，自然退出但未被淘汰的终端仍可读取输出；显式关闭或淘汰后不再可访问。
   作用域为根 Workspace 加上 `Bot.workspaces` 中已记录且未归档的 worktree；违规以 `isError` 工具结果返回 `Forbidden`
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、
   [ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
