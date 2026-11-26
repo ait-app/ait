@@ -125,22 +125,29 @@ fn ilink_errors_separate_expired_sessions_from_rate_limits() {
     assert_eq!(classify(&json!({"ret":5})), Reply::Rejected);
 }
 
-async fn registered_channel(fixture: &Fixture, bots: &Bots) -> Channel {
+async fn registered_channel(fixture: &Fixture, bots: &Bots, enabled: bool) -> Channel {
     bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
-    let created = bots
-        .execute(
-            "bot.channel.create.request",
-            json!({
-                "workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":true,
-                "config":{"kind":"weixin","accountId":ACCOUNT,"baseUrl":API,
-                    "tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":[SENDER]},
-            }),
-        )
-        .await
-        .unwrap();
-    fixture.channel(&created["channel"])
+    let id = ChannelId::generate();
+    bots.execute(
+        "bot.channel.create.request",
+        json!({
+            "workspaceId":WORKSPACE,"channelId":id,"enabled":enabled,
+            "config":{"kind":"weixin","accountId":ACCOUNT,"baseUrl":API,
+                "tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":[SENDER]},
+        }),
+    )
+    .await
+    .unwrap();
+    fixture
+        .store
+        .catalog()
+        .unwrap()
+        .channels
+        .into_iter()
+        .find(|channel| channel.id == id)
+        .unwrap()
 }
 
 async fn serve(app: Router) -> String {
@@ -158,7 +165,7 @@ fn plain_client() -> reqwest::Client {
 async fn an_inbound_message_is_queued_answered_and_its_position_saved() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
-    let channel = registered_channel(&fixture, &bots).await;
+    let channel = registered_channel(&fixture, &bots, true).await;
     let polls = Arc::new(AtomicUsize::new(0));
     let sent = Arc::new(StdMutex::new(Vec::new()));
     let delivered = Arc::new(Notify::new());
@@ -334,7 +341,7 @@ async fn an_http_failure_is_never_a_delivered_send() {
 async fn a_failed_poll_retries_from_the_position_already_reached() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
-    let channel = registered_channel(&fixture, &bots).await;
+    let channel = registered_channel(&fixture, &bots, true).await;
     let buffers = Arc::new(StdMutex::new(Vec::new()));
     let finished = Arc::new(Notify::new());
     let app = Router::new().route(
@@ -397,7 +404,9 @@ async fn an_ambiguous_poll_error_does_not_claim_the_session_ended() {
 async fn an_expired_session_is_reported_on_the_channel() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
-    let channel = registered_channel(&fixture, &bots).await;
+    // Only the receiver under test may publish status. The supervisor would otherwise
+    // overwrite expiry while retrying this fixture's deliberately unavailable credentials.
+    let channel = registered_channel(&fixture, &bots, false).await;
     let app = Router::new().route(
         "/ilink/bot/getupdates",
         post(|| async { Json(json!({"ret":-14})) }),
@@ -405,8 +414,14 @@ async fn an_expired_session_is_reported_on_the_channel() {
     let base = serve(app).await;
     let client = plain_client();
     let token = SecretString::from("offline-token".to_owned());
-    let cancel = CancellationToken::new();
-    let driver = run_at(&bots, &channel, (&client, &token, &base), &cancel);
+    let connection = Connection {
+        bots: &bots,
+        channel: &channel,
+        client: &client,
+        token: &token,
+        base: &base,
+        account_id: ACCOUNT,
+    };
     let verify = async {
         loop {
             let status = bots
@@ -420,15 +435,17 @@ async fn an_expired_session_is_reported_on_the_channel() {
                 assert_eq!(status["connection"]["error"], EXPIRED_NOTICE);
                 break;
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        cancel.cancel();
     };
-    let (result, ()) = Box::pin(tokio::time::timeout(Duration::from_secs(5), async {
-        tokio::join!(driver, verify)
+    Box::pin(tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::select! {
+            result = connection.receive() => {
+                panic!("receiver ended before reporting expiry: {result:?}");
+            }
+            () = verify => {}
+        }
     }))
     .await
     .unwrap();
-    result.unwrap();
     bots.shutdown().await.unwrap();
 }
