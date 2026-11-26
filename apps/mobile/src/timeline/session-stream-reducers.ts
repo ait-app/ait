@@ -1467,6 +1467,18 @@ export function processTimelineResponse(
   const nextCursor = timelineResult.cursor;
   const cursorChanged = timelineResult.cursorChanged;
   sideEffects.push(...timelineResult.sideEffects);
+  // History can repair a missed receipt even when its row is outside the retained window.
+  const acknowledgedClientMessageIds = new Set(timelineResult.acknowledgedClientMessageIds);
+  const sendingIds = new Set(sendingClientMessageIds);
+  for (const { item } of payload.entries) {
+    if (
+      item.type === "user_message" &&
+      item.clientMessageId &&
+      sendingIds.has(item.clientMessageId)
+    ) {
+      acknowledgedClientMessageIds.add(item.clientMessageId);
+    }
+  }
 
   // ------------------------------------------------------------------
   // Init resolution
@@ -1498,7 +1510,7 @@ export function processTimelineResponse(
     clearInitializing,
     error: null,
     sideEffects,
-    acknowledgedClientMessageIds: timelineResult.acknowledgedClientMessageIds,
+    acknowledgedClientMessageIds: [...acknowledgedClientMessageIds],
   };
 }
 
@@ -1724,6 +1736,17 @@ export function processAgentStreamEvent(
     });
   }
   const { tail, head, changedTail, changedHead } = streamResult;
+  // A canonical receipt settles its submission even when the transcript gate drops the row
+  // or a history replacement has already removed the optimistic row it would match.
+  const acknowledgedClientMessageIds = streamResult.acknowledgedClientMessageIds ?? [];
+  if (
+    event.type === "timeline" &&
+    event.item.type === "user_message" &&
+    event.item.clientMessageId &&
+    !acknowledgedClientMessageIds.includes(event.item.clientMessageId)
+  ) {
+    acknowledgedClientMessageIds.push(event.item.clientMessageId);
+  }
   const taskSnapshot = sequencing.shouldApplyStreamEvent
     ? (taskSnapshotFromStreamEvent(event) ?? (sequencing.resetLiveTimeline ? [] : undefined))
     : undefined;
@@ -1737,7 +1760,7 @@ export function processAgentStreamEvent(
     changedHead: changedHead || sequencing.resetLiveTimeline,
     cursor: sequencing.nextTimelineCursor,
     cursorChanged: sequencing.cursorChanged,
-    acknowledgedClientMessageIds: streamResult.acknowledgedClientMessageIds ?? [],
+    acknowledgedClientMessageIds,
     ...(taskSnapshot !== undefined ? { taskSnapshot } : {}),
     ...(taskSnapshotCursor ? { taskSnapshotCursor } : {}),
     sideEffects: sequencing.sideEffects,
@@ -1748,9 +1771,17 @@ export function processAgentStreamEvents(
   input: ProcessAgentStreamEventsInput,
 ): ProcessAgentStreamEventOutput {
   if (input.isDetached) {
+    const acknowledgedClientMessageIds = new Set<string>();
     let taskSnapshot: TodoEntry[] | undefined;
     let taskSnapshotCursor = input.currentTaskCursor;
     for (const { event, seq, epoch } of input.events) {
+      if (
+        event.type === "timeline" &&
+        event.item.type === "user_message" &&
+        event.item.clientMessageId
+      ) {
+        acknowledgedClientMessageIds.add(event.item.clientMessageId);
+      }
       // Canonical TODO events are complete snapshots: their ordering is independent of
       // the historical transcript window, and does not require contiguous chat coverage.
       const current =
@@ -1779,7 +1810,7 @@ export function processAgentStreamEvents(
       changedHead: false,
       cursor: input.currentCursor ?? null,
       cursorChanged: false,
-      acknowledgedClientMessageIds: [],
+      acknowledgedClientMessageIds: [...acknowledgedClientMessageIds],
       ...(taskSnapshot !== undefined ? { taskSnapshot, taskSnapshotCursor } : {}),
       sideEffects: [],
     };

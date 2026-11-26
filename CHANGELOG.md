@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed completed replies keeping the running animation and Stop button when a submitted
+  message's confirmation arrives outside the viewed history or after its local row is replaced.
+
 - Ait asks Claude, Codex and other providers for plan usage far less often: about twice an hour
   on an idle host and at most twelve times an hour while agents work, down from about fifty.
   Usage figures can now be up to five minutes behind during work; Refresh still reads at once.
