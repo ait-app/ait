@@ -221,10 +221,7 @@ async fn confined_session_cancels_and_keeps_confinement_on_reconnect() {
     );
     for launch in &session_launches {
         let args = launch["args"].as_array().unwrap();
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["--settings", "{\"enableTerminalSandbox\":false}"]),
-            "{args:?}"
-        );
+        assert!(args.contains(&json!("--sandbox=false")), "{args:?}");
+        assert!(!args.contains(&json!("--settings")), "{args:?}");
     }
 }

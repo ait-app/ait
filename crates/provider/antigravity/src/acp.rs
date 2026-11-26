@@ -120,7 +120,7 @@ async fn open_with_selection(
         command.arg("--dangerously-skip-permissions");
     }
     if spec.confinement.is_some() {
-        command.args(["--settings", "{\"enableTerminalSandbox\":false}"]);
+        command.arg("--sandbox=false");
     }
     let mut transport = Transport::spawn(command, &spec.cwd, client.deadline, PROVIDER)?;
     let initialized = config::request(

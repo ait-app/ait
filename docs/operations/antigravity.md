@@ -86,7 +86,8 @@ Ait 不自动安装或升级 CLI。
 在沙箱化 Worktree（`sandbox: worktree_writes`）中，交互会话进程（含取消或切换配置后的重连）受外层
 Seatbelt / `bubblewrap` 写入隔离约束：允许写入当前 worktree、Git 目录及 `~/.gemini/antigravity-cli`，
 但该目录下的 `builtin`、`hooks.json`、`plugins`、`settings.json` 与整个 `~/.gemini/config` 保持只读；
-启动参数自动追加不落盘的 `--settings '{"enableTerminalSandbox":false}'`，避免与外层沙箱嵌套冲突。
+启动参数追加 ACP 支持的 `--sandbox=false`，避免与外层沙箱嵌套冲突；不修改全局配置。
+ACP 参数见[官方说明](https://antigravity.google/docs/ide/extensions/acp)。
 
 ACP 工具卡片保留原生状态和错误。交互审批被拒绝后，若原生以空响应完成，
 Ait 将本轮显示为权限失败；已有响应且原生成功的轮次保留响应。
