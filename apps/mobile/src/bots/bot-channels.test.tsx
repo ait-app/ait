@@ -660,6 +660,70 @@ describe("BotChannels", () => {
       await waitFor(() => expect(screen.queryByTestId("bot-channel-form")).toBeNull());
     });
 
+    it.each([false, true])(
+      "shows polling errors and retries the same scan (previous waiting status: %s)",
+      async (previouslyWaiting) => {
+        const error = new Error(
+          "Response validation failed for bot.channel.feishu.scan.status.response",
+        );
+        scanResponses({ state: "waiting" });
+        const base = botRequest.getMockImplementation();
+        const poll = vi.fn();
+        if (previouslyWaiting) poll.mockResolvedValueOnce({ state: "waiting" });
+        poll.mockRejectedValueOnce(error);
+        let complete!: (value: unknown) => void;
+        poll.mockImplementationOnce(() => new Promise((resolve) => (complete = resolve)));
+        botRequest.mockImplementation((method: string, params: Record<string, unknown>) =>
+          method === "bot.channel.feishu.scan.status.request" ? poll() : base?.(method, params),
+        );
+        await openForm();
+        fireEvent.click(screen.getByTestId("bot-feishu-scan-start"));
+        await screen.findByTestId("bot-feishu-scan-qr");
+        if (previouslyWaiting) {
+          await waitFor(() =>
+            expect(
+              queryClient.getQueryData(["bot-feishu-scan", "host", "workspace", SCAN_ID]),
+            ).toEqual({ state: "waiting" }),
+          );
+          await act(async () => {
+            await queryClient.refetchQueries({ queryKey: ["bot-feishu-scan"] });
+          });
+        }
+
+        expect((await screen.findByTestId("bot-feishu-scan-error")).textContent).toBe(
+          error.message,
+        );
+        expect(screen.queryByText("bots.feishuScanWaiting")).toBeNull();
+        expect(screen.getByTestId("bot-feishu-scan-qr")).toBeTruthy();
+        fireEvent.click(screen.getByTestId("bot-feishu-scan-status-retry"));
+        await waitFor(() => expect(poll).toHaveBeenCalledTimes(previouslyWaiting ? 3 : 2));
+        if (previouslyWaiting) {
+          expect(
+            (screen.getByTestId("bot-feishu-scan-status-retry") as HTMLButtonElement).disabled,
+          ).toBe(true);
+        }
+        await act(async () => complete({ state: "complete", channel: channels[2] }));
+
+        await waitFor(() => expect(screen.queryByTestId("bot-channel-form")).toBeNull());
+        expect(
+          botRequest.mock.calls.filter(
+            ([method]) => method === "bot.channel.feishu.scan.start.request",
+          ),
+        ).toHaveLength(1);
+        expect(botRequest).not.toHaveBeenCalledWith(
+          "bot.channel.feishu.scan.cancel.request",
+          expect.anything(),
+        );
+        expect(botRequest).not.toHaveBeenCalledWith(
+          "bot.channel.feishu.connect.request",
+          expect.anything(),
+        );
+        expect(
+          botRequest.mock.calls.filter(([method]) => method === "bot.channel.list.request"),
+        ).toHaveLength(2);
+      },
+    );
+
     it("explains a failed scan and can try again", async () => {
       scanResponses({ state: "failed", reason: "denied" });
       await openForm();

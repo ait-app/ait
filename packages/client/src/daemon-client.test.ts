@@ -7492,6 +7492,59 @@ test("setAgentModel returns the provider notice for a deferred switch", async ()
   await expect(switching).resolves.toEqual(notice);
 });
 
+test("Feishu onboarding resolves its saved channel through the validated transport", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "feishu-onboarding",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const params = {
+    workspaceId: "workspace-a",
+    scanId: "66666666-6666-4666-8666-666666666666",
+  };
+  const channel = {
+    id: "11111111-1111-4111-8111-111111111111",
+    config: {
+      kind: "feishu",
+      appId: "cli_test",
+      secretRef: "env:AIT_SERVER_CREDENTIAL_STORED_11111111111141118111111111111111",
+      allowedSenders: ["ou_scanner"],
+      allowGroups: true,
+    },
+    enabled: true,
+    cursor: null,
+    deleted: false,
+  };
+  for (const status of [{ state: "waiting" }, { state: "complete", channel }]) {
+    const pending = client.botRequest("bot.channel.feishu.scan.status.request", params);
+    const request = parseSentFrame(mock.sent.at(-1)!);
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "bot.channel.feishu.scan.status.response",
+        payload: { requestId: request.requestId, ...status },
+      }),
+    );
+    await expect(pending).resolves.toMatchObject(status);
+  }
+
+  const listed = client.botRequest("bot.channel.list.request", { workspaceId: params.workspaceId });
+  const request = parseSentFrame(mock.sent.at(-1)!);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "bot.channel.list.response",
+      payload: { requestId: request.requestId, channels: [channel] },
+    }),
+  );
+  await expect(listed).resolves.toMatchObject({ channels: [channel] });
+});
+
 test("Bot requests validate params, correlate results and release errors", async () => {
   const mock = createMockTransport();
   const client = new DaemonClient({

@@ -54,7 +54,7 @@ export function FeishuScanSetup({
     },
     onSuccess: ({ scanId, url }) => setScan({ scanId, url }),
   });
-  const { status, stop } = useLiveSetup({
+  const { status, error, isFetching, retry, stop } = useLiveSetup({
     queryKey: ["bot-feishu-scan", serverId, workspaceId],
     sessionId: scan?.scanId,
     getStatus: async (scanId) => {
@@ -115,8 +115,23 @@ export function FeishuScanSetup({
           accessibilityLabel={t("bots.feishuScanQrLabel")}
           testID="bot-feishu-scan-qr"
         />
-        <Text style={styles.hint}>{t("bots.feishuScanWaiting")}</Text>
+        {error ? (
+          <Text style={styles.error} accessibilityRole="alert" testID="bot-feishu-scan-error">
+            {error.message}
+          </Text>
+        ) : (
+          <Text style={styles.hint}>{t("bots.feishuScanWaiting")}</Text>
+        )}
         <View style={styles.row}>
+          {error ? (
+            <Button
+              onPress={() => void retry()}
+              disabled={!active || isFetching}
+              testID="bot-feishu-scan-status-retry"
+            >
+              {t("bots.feishuScanRetry")}
+            </Button>
+          ) : null}
           <Button onPress={() => void openExternalUrl(scan.url)} testID="bot-feishu-scan-open">
             {t("bots.feishuScanOpen")}
           </Button>

@@ -92,6 +92,42 @@ describe("WS outbound zod-aot validation", () => {
       expect(GeneratedWSOutboundMessageSchema.safeParse(envelope)).toMatchObject({ success: true });
     },
   );
+  it.each([
+    ["feishu", "bot.channel.feishu.scan.status.response"],
+    ["feishu", "bot.channel.feishu.connect.response"],
+    ["lark", "bot.channel.lark.connect.response"],
+  ])("accepts the saved %s channel in %s", (kind, type) => {
+    const channel = {
+      id: "11111111-1111-4111-8111-111111111111",
+      config: {
+        kind,
+        appId: "cli_test",
+        secretRef: "env:AIT_SERVER_CREDENTIAL_STORED_11111111111141118111111111111111",
+        allowedSenders: ["ou_scanner"],
+        allowGroups: true,
+      },
+      enabled: true,
+      cursor: null,
+      deleted: false,
+    };
+    const envelope = {
+      type: "session",
+      message: {
+        type,
+        payload: {
+          requestId: "onboarding",
+          ...(type.endsWith("status.response") ? { state: "complete" } : { created: true }),
+          channel,
+        },
+      },
+    };
+
+    expect(GeneratedWSOutboundMessageSchema.safeParse(envelope)).toMatchObject({
+      success: true,
+      data: envelope,
+    });
+  });
+
   it("applies defaults inside discriminated-union branches", async () => {
     const schema = await compileInlineSchema(`
 const SourceSchema = z.discriminatedUnion("type", [

@@ -17,6 +17,8 @@
   downgrading.
 
 - Fixed Feishu and Lark channel lists being rejected by the generated WebSocket response validator.
+  Feishu QR setup now displays status-query errors and can retry the same scan without creating
+  another app.
 
 ## 0.2.27 - 2026-11-25
 

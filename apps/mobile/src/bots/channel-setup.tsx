@@ -68,5 +68,11 @@ export function useLiveSetup<Status extends { state: "waiting" | "complete" | "f
   const stopRef = useRef(stop);
   stopRef.current = stop;
   useEffect(() => () => stopRef.current(), []);
-  return { status: status.data, stop };
+  return {
+    status: status.data,
+    error: status.error,
+    isFetching: status.isFetching,
+    retry: () => status.refetch({ cancelRefetch: false }),
+    stop,
+  };
 }
