@@ -1,9 +1,9 @@
 ---
-id: ADR-315
+id: ADR-316
 status: accepted
 date: 2026-11-26
 amends:
-  - daemon/adr-314-direct-share-recipients.md
+  - daemon/adr-315-direct-share-recipients.md
 paths:
   - apps/mobile/src/components/sharing
   - apps/mobile/src/runtime/account-state.ts
@@ -11,7 +11,7 @@ paths:
   - packages/client/src/account-session.ts
 ---
 
-# ADR-315：AIT 通过当前账号签发分享邀请
+# ADR-316：AIT 通过当前账号签发分享邀请
 
 ## 背景
 

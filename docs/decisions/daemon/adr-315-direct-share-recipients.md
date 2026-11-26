@@ -1,5 +1,5 @@
 ---
-id: ADR-314
+id: ADR-315
 status: accepted
 date: 2026-11-26
 amends:
@@ -13,9 +13,9 @@ paths:
   - apps/mobile/src/components/sharing
 ---
 
-# ADR-314：中心授权直接分享的接收人
+# ADR-315：中心授权直接分享的接收人
 
-后续修订：[ADR-315](../clients/adr-315-ait-share-invitations.md) 将链接生成接入 AIT 账号会话。
+后续修订：[ADR-316](../clients/adr-316-ait-share-invitations.md) 将链接生成接入 AIT 账号会话。
 
 ## 背景
 

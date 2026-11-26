@@ -16,6 +16,7 @@ paths:
 # ADR-204：在线业务连接只使用 Hub
 
 - 修订：[ADR-074](adr-074-account-host-relay.md)、[ADR-155](../daemon/adr-155-persistent-relay-data-tunnel.md)、[ADR-180](../daemon/adr-180-hub-serve-endpoint.md)、[ADR-182](adr-182-hub-account-client.md)
+- 后续修订：[ADR-314](adr-314-hub-cross-dp-routing.md) 让会话在同一中心的其它数据面上打开：连接配置的 center 仍须是账号 center，目标 Host 由其它 DP 服务时不再失败。
 
 桌面、Android、iOS 和 Web 的在线业务会话统一通过 Hub access → 中心 → Hub serve → daemon 本地 WebSocket。Hub 尚在连接时最多等待五秒；链路不可用、服务地址不匹配或目标没有 serve presence 时明确失败，交由既有客户端重连机制重试。保留 Hub 会话的身份校验、ACK/replay、探活恢复、窗口生命周期和有界输出，不重放业务写入。
 

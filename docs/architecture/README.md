@@ -196,6 +196,8 @@ Electron 的 `rust-daemon.ts` 继续只负责本机进程管理。见
 [ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)。
 Hub feature 协商与旧版本兼容见
 [ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)。
+中心拆成多个数据面时，客户端经可选 feature `redirect` 为其它数据面的 Host 另建链路，见
+[ADR-314](../decisions/clients/adr-314-hub-cross-dp-routing.md)与[连接规格](connection.md#在线连接hub)。
 单连接将客户端活动心跳作为可丢弃的周期快照，worker 队列满时仍保留业务连接。
 订阅清理拥有独立准入，主机采样独占一个受追踪任务并发布缓存，均不争抢普通业务容量。
 SDK 负责按连接代次退避清理、限制订阅恢复并发，并持有审批的待确认状态，禁止未知结果重发。
@@ -229,11 +231,11 @@ cwd 切换中止旧刷新；generation/revision 单调保护不变。公开 SDK/
 [ADR-275](../decisions/providers/adr-275-shared-model-catalog-refresh.md)。
 
 资源分享的范围由 Host 保存。AIT 用当前账号会话签发邀请，接收人的授权由中心保存
-（[ADR-315](../decisions/clients/adr-315-ait-share-invitations.md)）。Hub 访客由 daemon 按分享范围准入。workspace/project 限制访问范围，
+（[ADR-316](../decisions/clients/adr-316-ait-share-invitations.md)）。Hub 访客由 daemon 按分享范围准入。workspace/project 限制访问范围，
 node 分享允许更广的节点操作，分享和账号授权保留给所有者，Bot 与定时任务仅可读取。
 创建访客 Agent／终端的任务在连接断开后仍完成归属记录与撤销检查；撤销逐页取消 Agent，
 终端归属按存活状态清理。共享项目的配置文件和独立分享设置受保护，Forge 查询绑定到 checkout 远端。见
-[ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)、[ADR-314](../decisions/daemon/adr-314-direct-share-recipients.md)。
+[ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)、[ADR-315](../decisions/daemon/adr-315-direct-share-recipients.md)。
 
 原生实时语音由 Provider 拥有原生 thread、SDP、上游 WebRTC、音频协议及认证，voice 拥有媒体连接
 和 PCM 消费确认，daemon 桥接端口，客户端采集与播放，见

@@ -12,7 +12,7 @@ paths:
 
 状态说明：采用。中心协议见中心仓库 `docs/hub-protocol.md` §6.1 与 `docs/hub-services.md`「资源共享」，中心侧决策见其 ADR-005。
 
-后续修订：[ADR-314](adr-314-direct-share-recipients.md) 增加由中心授权接收人的直接分享。
+后续修订：[ADR-315](adr-315-direct-share-recipients.md) 增加由中心授权接收人的直接分享。
 
 ## 背景
 

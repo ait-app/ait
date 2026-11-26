@@ -115,15 +115,22 @@
   [ADR-180](../decisions/daemon/adr-180-hub-serve-endpoint.md)、
   [ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)）。
 - 直接分享沿用同一访客连接。AIT 使用当前平台的账号会话向中心签发邀请，桌面端通过主进程执行该请求
-  （[ADR-315](../decisions/clients/adr-315-ait-share-invitations.md)）。
+  （[ADR-316](../decisions/clients/adr-316-ait-share-invitations.md)）。
   中心保存已接受邀请的接收人，并随授权变化推送 `share_status`。
   daemon 继续校验分享身份、资源范围及 `denied`。旧中心拒绝含直接分享的发布时，daemon 在当前逻辑链路
   仅发布群组分享，建立新逻辑链路时再尝试发布完整列表
-  （[ADR-314](../decisions/daemon/adr-314-direct-share-recipients.md)）。
+  （[ADR-315](../decisions/daemon/adr-315-direct-share-recipients.md)）。
 - daemon 的 serve 链路始终声明 `lease`、`credit`、`download`，能取得 bulk 票据时再声明 `bulk`；
   中心未声明或未启用其中任一项时链路失败，不降级。客户端要求中心 `hub_features` 含全部六项，
   `welcome.f` 不完整也拒绝（[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)）。
-  可选 feature `peer` 不在这六项之内，见[跨主机 peer 会话](#跨主机-peer-会话)。
+  可选 feature `peer` 不在这六项之内，见[跨主机 peer 会话](#跨主机-peer-会话)；可选 feature `redirect` 见下文跨数据面一条。
+- 中心拆成多个数据面（DP）时，`hub_features` 含 `redirect` 的中心让 main access 链路声明它；`welcome.f` 含它时，
+  `hosts` 把其它 DP 服务的 Host 列为在线并带 `dp`、`hub_url`、`center`。到这类 Host 的会话在一条到该 DP 的 access 链路上打开：
+  票据仍向账号 center 申请，连接 `hub_url`；该链路不上报 `state`、不订阅分享，60 秒无会话即关闭。
+  应用回到前台时各链路独立探测。首次握手前取消会话会丢弃待发的 `open`，连接失败时等待的会话立即失败。
+  accept 之前收到 `close{code:"redirect"}` 时，会话转到 `redirect.center` 的链路并以原业务 hello 重发 `open`；
+  同一节点、`epoch` 不回退、不指回拒绝方，至多三次，否则以 `redirect` 关闭。其它 DP 的 Host 的下载不经 bulk 链路
+  （[ADR-314](../decisions/clients/adr-314-hub-cross-dp-routing.md)）。
 - Hub 会话独立于物理链路：断线后用 `resume_token` 在中心宽限期内续传，未确认重放缓冲上限 8 MiB，
   缓冲满时暂停读取本地会话；续连按 250 ms 至 8 s 退避。收到中心 `replaced` 后让出 5 分钟再接管
   （[ADR-180](../decisions/daemon/adr-180-hub-serve-endpoint.md)、
