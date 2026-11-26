@@ -460,3 +460,10 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   （[ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)，已由
   [ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)、
   [ADR-219](../decisions/providers/adr-219-pi-slash-command-discovery.md) 修订）。
+
+### 原生命令对应宿主配置
+
+adapter 可通过 `AgentSession::command_config_patch` 将归属已确认的 slash 命令转换为配置补丁。
+runtime 提供最新持久配置，复用 configure 校验、持久化和快照发布，命令收据保持幂等，不生成
+普通用户消息或中断当前回合。返回 None 时继续原有带外执行路径；见
+[ADR-308](../decisions/providers/adr-308-omp-host-orchestration.md)。

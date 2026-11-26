@@ -17,6 +17,8 @@ chrono.workspace = true
 # Index session-file lines by id and parent without materializing whole records.
 serde.workspace = true
 serde_json.workspace = true
+# Session-private Ait orchestration endpoint over stateless Streamable HTTP.
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 sha2.workspace = true
 # Materialize the private per-session role overlay OMP reads through --config.
 tempfile.workspace = true

@@ -147,6 +147,8 @@ pub(super) struct Session {
     /// Discovered at open; absent when native metadata could not be read, which only hides roles.
     catalog: Option<std::sync::Arc<roles::Catalog>>,
     commands: command_catalog::Commands,
+    vibe: Option<super::vibe::host::Host>,
+    mcp: Option<super::mcp::Mcp>,
 }
 
 /// Start a disposable native capability reader in `cwd` that saves no session, bounded by
@@ -184,9 +186,20 @@ async fn connect(
     launch: &config::Launch<'_>,
     confinement: Option<&WriteConfinement>,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    let args = config::launch_arguments(config, launch);
+    let mut args = config::launch_arguments(config, launch);
+    let extension = client
+        .vibe_host
+        .then(super::vibe::host::Host::extension)
+        .transpose()?;
+    if let Some(file) = &extension {
+        args.extend([
+            "--extension".to_owned(),
+            file.path().to_string_lossy().into_owned(),
+        ]);
+    }
     let timeouts = config::timeouts(config, client.timeouts);
     let mut transport = Transport::spawn(client, cwd, &args, confinement, timeouts)?;
+    transport.retain_extension(extension);
     match prepare(&mut transport, launch).await {
         Ok(state) => Ok((transport, state)),
         Err(error) => {
@@ -252,24 +265,25 @@ pub(super) async fn open(
     spec: &AgentSessionSpec,
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
-    config::validate_spec(spec)?;
-    let (journal, replayed) = match handle {
-        Some(handle) => {
-            let (journal, replayed) = history::resume(client, handle, &spec.cwd).await?;
-            (Some(journal), replayed)
-        }
-        None => (None, None),
-    };
-    let path = journal
-        .as_ref()
-        .map(|journal| journal.path.to_str().ok_or(AgentSessionError::Failed))
-        .transpose()?;
-    let persisted = replayed.is_some();
-    let created_at = journal
-        .as_ref()
-        .and_then(|journal| journal.header["timestamp"].as_str())
-        .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned);
-    let session = path.filter(|_| persisted);
+    open_scoped(client, spec, handle, None).await
+}
+
+/// Open a persistent worker with a native parentSession edge, validating it again on resume.
+/// A missing or foreign journal is rejected before any worker input is sent.
+pub(super) async fn open_worker(
+    client: &OmpClient,
+    spec: &AgentSessionSpec,
+    parent: &str,
+    handle: Option<&AgentPersistenceHandle>,
+) -> Result<Session, AgentSessionError> {
+    open_scoped(client, spec, handle, Some(parent)).await
+}
+
+async fn connect_session(
+    client: &OmpClient,
+    spec: &AgentSessionSpec,
+    session: Option<&str>,
+) -> Result<(Transport, Value, Option<tempfile::NamedTempFile>), AgentSessionError> {
     // OMP refuses to start on a missing --model, so a resume keeps the session's model and
     // switches afterwards only to a listed one (D29).
     // The private startup overlay enables the RPC Goal driver and carries explicit roles;
@@ -298,7 +312,7 @@ pub(super) async fn open(
         fast: config::requested_fast_mode(&spec.config),
         ..config::Launch::default()
     };
-    let (mut transport, state) = connect(
+    let (transport, state) = connect(
         client,
         &spec.cwd,
         &spec.config,
@@ -306,6 +320,48 @@ pub(super) async fn open(
         spec.confinement.as_ref(),
     )
     .await?;
+    Ok((transport, state, overlay))
+}
+
+async fn open_scoped(
+    client: &OmpClient,
+    spec: &AgentSessionSpec,
+    handle: Option<&AgentPersistenceHandle>,
+    parent: Option<&str>,
+) -> Result<Session, AgentSessionError> {
+    config::validate_spec(spec)?;
+    let (journal, replayed) = match handle {
+        Some(handle) => {
+            let (journal, replayed) = history::resume(client, handle, &spec.cwd).await?;
+            (Some(journal), replayed)
+        }
+        None => (None, None),
+    };
+    if let (Some(parent), Some(journal)) = (parent, &journal)
+        && journal.header["parentSession"] != parent
+    {
+        return Err(AgentSessionError::Rejected);
+    }
+    let path = journal
+        .as_ref()
+        .map(|journal| journal.path.to_str().ok_or(AgentSessionError::Failed))
+        .transpose()?;
+    let persisted = replayed.is_some();
+    let created_at = journal
+        .as_ref()
+        .and_then(|journal| journal.header["timestamp"].as_str())
+        .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned);
+    let session = path.filter(|_| persisted);
+    let (mut transport, mut state, overlay) = connect_session(client, spec, session).await?;
+    if let Some(parent) = parent.filter(|_| handle.is_none()) {
+        let changed = transport
+            .request("new_session", json!({"parentSession":parent}))
+            .await?;
+        if changed["cancelled"] == true {
+            return Err(AgentSessionError::Rejected);
+        }
+        state = transport.request("get_state", json!({})).await?;
+    }
     let id = config::text(&state, "sessionId")?;
     if persisted && handle.is_some_and(|handle| handle.session_id != id) {
         return Err(AgentSessionError::Failed);
@@ -316,6 +372,23 @@ pub(super) async fn open(
         .with_identity_lookups();
     // OMP's todo state at attach, unless the replayed history already shows it (M4).
     stream.state_todos(&state);
+    let mcp = super::mcp::Mcp::open(&spec.config, &mut transport).await?;
+    let mut vibe = if client.vibe_host {
+        Some(super::vibe::host::Host::new(
+            client,
+            spec,
+            id,
+            config::text(&state, "sessionFile")?,
+            handle.and_then(|handle| handle.metadata.as_ref()?.get("aitVibeWorkers")),
+        ))
+    } else {
+        None
+    };
+    if let Some(host) = &mut vibe {
+        host.base_tools = mcp
+            .as_ref()
+            .map_or_else(Vec::new, |mcp| mcp.definitions().to_vec());
+    }
     let mut commands = command_catalog::Commands::default();
     commands.observe_state(&state);
     let _ = commands.refresh(&mut transport);
@@ -352,6 +425,8 @@ pub(super) async fn open(
         overlay,
         catalog: client.role_catalog(&spec.cwd).await.ok(),
         commands,
+        vibe,
+        mcp,
     })
 }
 
@@ -395,12 +470,20 @@ impl Session {
         if self.config == *config {
             return Ok(());
         }
+        if self
+            .vibe
+            .as_ref()
+            .is_some_and(|host| host.enabled() || host.running())
+        {
+            return Err(AgentSessionError::Busy);
+        }
         self.validate_roles(config).await?;
         // Mode, system prompt, provider options and role assignments are launch arguments
         // (M10). An overlay change needs a process that reads the new file at startup.
         if self.config.mode_id == config.mode_id
             && self.config.system_prompt == config.system_prompt
             && self.config.provider_options == config.provider_options
+            && self.config.mcp_servers == config.mcp_servers
             && roles::same_overlay(&self.config, config)
         {
             self.state =
@@ -448,7 +531,9 @@ impl Session {
             let _ = transport.close().await;
             return Err(AgentSessionError::Failed);
         }
+        let mcp = super::mcp::Mcp::open(config, &mut transport).await?;
         let mut old = std::mem::replace(&mut self.transport, transport);
+        self.mcp = mcp;
         if old.close().await.is_err() {
             tracing::warn!("the replaced OMP process did not exit after SIGKILL");
         }
@@ -477,6 +562,27 @@ impl Session {
         }
         self.idle_without_outcome = None;
         self.live = !persisted;
+        if let Some(host) = &self.vibe {
+            let workers = host.persisted();
+            self.vibe = Some(super::vibe::host::Host::new(
+                &self.client,
+                &AgentSessionSpec {
+                    provider: PROVIDER.to_owned(),
+                    cwd: self.cwd.clone(),
+                    config: config.clone(),
+                    confinement: self.confinement.clone(),
+                },
+                config::text(&state, "sessionId")?,
+                config::text(&state, "sessionFile")?,
+                Some(&workers),
+            ));
+        }
+        if let Some(host) = &mut self.vibe {
+            host.base_tools = self
+                .mcp
+                .as_ref()
+                .map_or_else(Vec::new, |mcp| mcp.definitions().to_vec());
+        }
         self.state = state;
         self.stream.state_todos(&self.state);
         self.config.clone_from(config);
@@ -549,6 +655,18 @@ impl Session {
                 return Err(AgentSessionError::CommandCatalogChanged);
             }
         }
+        let directive;
+        let prompt = if self.commands.handles_vibe(&prompt.text) {
+            let (_, args) = commands::split(&prompt.text).ok_or(AgentSessionError::Rejected)?;
+            self.toggle_vibe(true).await?;
+            directive = AgentPrompt {
+                text: args.to_owned(),
+                ..prompt.clone()
+            };
+            &directive
+        } else {
+            prompt
+        };
         let payload = Self::payload(prompt)?;
         self.submit(payload, None, prompt.client_message_id.clone())
             .await
@@ -557,8 +675,27 @@ impl Session {
     /// Process already received native facts without consuming their projected events.
     /// A saturated queue leaves ownership uncertain, so the caller must retry.
     fn drain_before_slash(&mut self) -> Result<bool, AgentSessionError> {
+        if let Some(host) = &mut self.vibe {
+            self.stream
+                .events
+                .extend(host.poll(self.transport.writer()?));
+        }
+        if let Some(mcp) = &mut self.mcp {
+            mcp.poll(self.transport.writer()?);
+        }
         self.commands.poll();
         for _ in 0..64 {
+            if self
+                .vibe
+                .as_ref()
+                .is_some_and(super::vibe::host::Host::backpressured)
+                || self
+                    .mcp
+                    .as_ref()
+                    .is_some_and(super::mcp::Mcp::backpressured)
+            {
+                return Ok(false);
+            }
             let Some(event) = self.transport.poll()? else {
                 return Ok(true);
             };
@@ -823,7 +960,30 @@ impl Session {
         }
     }
 
+    fn consume_host_tool(&mut self, event: &Value) -> Result<bool, AgentSessionError> {
+        if matches!(
+            event["type"].as_str(),
+            Some("host_tool_call" | "host_tool_cancel")
+        ) && let Some(mcp) = &mut self.mcp
+            && mcp.consume(event, self.transport.writer()?)?
+        {
+            return Ok(true);
+        }
+        if matches!(
+            event["type"].as_str(),
+            Some("host_tool_call" | "host_tool_cancel")
+        ) && let Some(host) = &mut self.vibe
+            && host.tool(event, self.transport.writer()?)?
+        {
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if self.consume_host_tool(event)? {
+            return Ok(());
+        }
         if event["type"] == "goal_updated"
             && let Some(goal) = event.get("goal").or_else(|| event.pointer("/state/goal"))
         {
@@ -1002,6 +1162,10 @@ impl Session {
 
     /// End the active turn as failed after its connection or protocol failed (D28).
     fn fail_turn(&mut self) {
+        if let Some(host) = &mut self.vibe {
+            host.stop();
+        }
+        self.mcp.take();
         self.release_identities();
         self.stream.aborted = false;
         self.stream.failed = true;
@@ -1128,6 +1292,9 @@ impl Session {
         self.release_identities();
         self.stream.terminalize();
         self.stream.switch_session(id.to_owned());
+        if let Some(host) = &mut self.vibe {
+            host.reparent(id, config::text(&state, "sessionFile")?);
+        }
         self.children = super::subagents::Children::default().with_blobs(blobs);
         self.created_at = chrono::Utc::now().to_rfc3339();
         self.submitted = false;
@@ -1147,6 +1314,19 @@ impl Session {
         }
     }
 
+    /// Toggle only an acknowledged private extension; publish state after the complete receipt.
+    async fn toggle_vibe(&mut self, enabled: bool) -> Result<(), AgentSessionError> {
+        self.vibe
+            .as_mut()
+            .ok_or(AgentSessionError::Unavailable)?
+            .toggle(&mut self.transport, enabled)
+            .await?;
+        self.stream
+            .events
+            .push_back(AgentTurnEvent::RuntimeInfo(self.runtime()?));
+        Ok(())
+    }
+
     /// Runtime facts from the last native state, with the effective mode: none means Full.
     fn runtime(&self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
         let mut info = config::runtime(&self.state)?;
@@ -1158,6 +1338,11 @@ impl Session {
             info.extra
                 .get_or_insert_with(Default::default)
                 .insert("goal".to_owned(), goal);
+        }
+        if let Some(host) = &self.vibe {
+            info.extra
+                .get_or_insert_with(Default::default)
+                .insert("vibe".to_owned(), host.snapshot());
         }
         info.mode_id = Some(
             self.config
@@ -1316,7 +1501,52 @@ impl AgentSession for Session {
         self.runtime()
     }
     fn subagents(&self) -> Vec<provider_core::ports::controls::NativeSubagent> {
-        self.children.list()
+        let mut children = self.children.list();
+        if let Some(host) = &self.vibe {
+            children.extend(host.children());
+        }
+        children
+    }
+    fn command_config_patch(
+        &self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<Option<provider_core::protocol::agent_config::ConfigPatch>, AgentSessionError> {
+        if !self.commands.handles_advisor(&prompt.text) {
+            return Ok(None);
+        }
+        prompt.validate()?;
+        if prompt.output_schema.is_some()
+            || !prompt.images.is_empty()
+            || !prompt.attachments.is_empty()
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        let (_, args) = commands::split(&prompt.text).ok_or(AgentSessionError::Rejected)?;
+        let enabled = match args {
+            "on" => true,
+            "off" => false,
+            "" | "toggle" => !config
+                .feature_values
+                .as_ref()
+                .and_then(|values| values.get(roles::ADVISOR_ENABLED))
+                .and_then(Value::as_bool)
+                .unwrap_or_else(|| {
+                    self.catalog().is_some_and(|catalog| {
+                        catalog.features(config).iter().any(|feature| {
+                            feature["id"] == roles::ADVISOR_ENABLED && feature["value"] == true
+                        })
+                    })
+                }),
+            _ => return Err(AgentSessionError::Rejected),
+        };
+        Ok(Some(provider_core::protocol::agent_config::ConfigPatch {
+            feature_values: Some(BTreeMap::from([(
+                roles::ADVISOR_ENABLED.to_owned(),
+                json!(enabled),
+            )])),
+            ..Default::default()
+        }))
     }
     async fn out_of_band(&mut self, prompt: &AgentPrompt) -> Result<(), AgentSessionError> {
         self.run_command(prompt).await
@@ -1343,6 +1573,12 @@ impl AgentSession for Session {
                     json!(!self.submitted && !std::path::Path::new(file).is_file()),
                 ),
                 ("createdAt".to_owned(), json!(self.created_at)),
+                (
+                    "aitVibeWorkers".to_owned(),
+                    self.vibe
+                        .as_ref()
+                        .map_or_else(|| json!([]), super::vibe::host::Host::persisted),
+                ),
             ])),
         })
     }
@@ -1402,6 +1638,9 @@ impl AgentSession for Session {
             return Err(AgentSessionError::Failed);
         }
         // Paseo's `abort`: unlike `abort_and_restore_queue` it keeps OMP's queued steering.
+        if let Some(host) = &mut self.vibe {
+            host.stop();
+        }
         let id = self.transport.begin("abort", json!({})).await?;
         self.cancel_requests.insert(id, turn.to_owned());
         self.cancellation = Cancellation::Requested(Instant::now());
@@ -1409,7 +1648,11 @@ impl AgentSession for Session {
         Ok(())
     }
     fn pending_permissions(&self) -> Vec<Value> {
-        self.dialogs.pending()
+        let mut pending = self.dialogs.pending();
+        if let Some(host) = &self.vibe {
+            pending.extend(host.pending());
+        }
+        pending
     }
     fn begin_child_guide(
         &mut self,
@@ -1418,6 +1661,11 @@ impl AgentSession for Session {
     ) -> Result<provider_core::ports::controls::ChildControlReceipt, AgentSessionError> {
         if self.closed || message.trim().is_empty() || message.len() > 65_536 {
             return Err(AgentSessionError::Rejected);
+        }
+        if let Some(host) = &mut self.vibe
+            && host.owns_child(child_id)
+        {
+            return host.begin_child(child_id, Some(message));
         }
         self.child_controls
             .begin(&mut self.transport, &self.state, child_id, Some(message))
@@ -1429,6 +1677,11 @@ impl AgentSession for Session {
         if self.closed {
             return Err(AgentSessionError::Rejected);
         }
+        if let Some(host) = &mut self.vibe
+            && host.owns_child(child_id)
+        {
+            return host.begin_child(child_id, None);
+        }
         self.child_controls
             .begin(&mut self.transport, &self.state, child_id, None)
     }
@@ -1437,6 +1690,15 @@ impl AgentSession for Session {
         id: &str,
         response: &Value,
     ) -> Result<(), AgentSessionError> {
+        if let Some(host) = &mut self.vibe
+            && host.owns_permission(id)
+        {
+            host.permission(id, response).await?;
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+            return Ok(());
+        }
         let answer = self.dialogs.response(id, response)?;
         self.transport.send(&answer.native).await?;
         self.dialogs.resolve(id, answer);
@@ -1458,6 +1720,8 @@ impl AgentSession for Session {
     }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
+        self.vibe.take();
+        self.mcp.take();
         self.child_controls.clear(&mut self.stream.events);
         self.usage.stop();
         self.pending.clear();
@@ -1470,6 +1734,14 @@ impl AgentSession for Session {
 impl Session {
     /// Return the next turn event, reading native frames until one is produced.
     fn observe(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if let Some(host) = &mut self.vibe {
+            self.stream
+                .events
+                .extend(host.poll(self.transport.writer()?));
+        }
+        if let Some(mcp) = &mut self.mcp {
+            mcp.poll(self.transport.writer()?);
+        }
         self.commands.poll();
         self.child_controls.poll(&mut self.stream.events);
         self.check_cancellation()?;
@@ -1477,6 +1749,17 @@ impl Session {
             return Ok(Some(event));
         }
         for _ in 0..64 {
+            if self
+                .vibe
+                .as_ref()
+                .is_some_and(super::vibe::host::Host::backpressured)
+                || self
+                    .mcp
+                    .as_ref()
+                    .is_some_and(super::mcp::Mcp::backpressured)
+            {
+                return Ok(None);
+            }
             let Some(event) = self.transport.poll()? else {
                 self.poll_identity();
                 self.poll_state_check()?;

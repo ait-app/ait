@@ -171,12 +171,12 @@ Linux 首次受限启动会为缺失的受保护条目建立占位：目录为�
 - 每个会话实时跟踪 256 个子 Agent，超出时先替换最早结束的子 Agent。持久句柄只保留最新 4096 条
   用户消息的客户端身份。
 - 后台请求写入失败或超时后，该 OMP 连接作废，当前回合失败；下一次输入由运行时重新启动 OMP。
-- 输入不因超时或断开自动重发。不支持输出 schema、每会话 MCP server 或工具策略覆盖；OMP 自己的工具、
+- 输入不因超时或断开自动重发。不支持输出 schema、任意每会话 MCP server 或工具策略覆盖（Ait 编排工具由宿主私有注入）；OMP 自己的工具、
   MCP 和扩展仍按本机配置加载。
 
 ## 已知缺口
 
-- 尚未提供：宿主工具与 MCP 桥接、会话回退（`branch`）、迟到拒绝的追加输入重新排队、按会话实时更新的
+- 尚未提供：通用 MCP server 配置、会话回退（`branch`）、迟到拒绝的追加输入重新排队、按会话实时更新的
   命令列表缓存、终端组件 UI。OMP 请求宿主工具或 URI 处理器时，当前回合失败。
 - 同一回合中先 `/follow-up` 后 `/steer` 时，两条消息的客户端 ID 可能对调（OMP 先投递 steer）。
 - HTML `ask` 中预先勾选的复选项无法回放。
@@ -187,3 +187,19 @@ Linux 首次受限启动会为缺失的受保护条目建立占位：目录为�
 决策见 [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md)
 （修订 [ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)），
 早期验证见[历史报告](../archive/reports/providers/omp-native-provider.md)。
+
+## Vibe 与跨 Provider 子 Agent
+
+在空闲 OMP 会话中发送 `/vibe on` 开启，或 `/vibe <任务>` 开启并开始委派。先清除已有 Goal。
+主会话成为只读指挥者，使用 `vibe_spawn`、`vibe_send`、`vibe_wait`、`vibe_kill`、`vibe_list`
+管理持久 worker；fast 使用 smol 角色，good 使用 task 角色，未分配时沿用主模型。
+确认开启后出现 Vibe ON 胶囊，worker 状态和历史位于现有子 Agent 胶囊。
+退出按钮和 `/vibe off` 会取消全部 Vibe worker；恢复父会话不会自动启用模式或重跑旧任务。
+
+OMP 同时获得 Ait 的 Agent 编排工具，可以选择 agy/Antigravity、Codex 等 Provider 创建子 Agent。
+这类子 Agent 使用自己的 Ait 身份与现有审批/工作区约束。OMP 原生 task 子项仍自动接入共享
+子 Agent 胶囊；`bash` 的 background job 不是子 Agent，不显示为子项。
+
+`/advisor on`、`/advisor off` 和 `/advisor toggle` 与功能菜单控制同一开关；没有参数时切换。
+需要先配置可用 Advisor 模型。保存后下一轮生效，当前轮次不会被强制重启。
+开启的功能图标各有颜色（快速黄、计划蓝、Advisor 紫、自动压缩青、自动重试橙），关闭为中性灰。

@@ -1,3 +1,4 @@
+import { getFeatureIconColor } from "./utils";
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
@@ -181,7 +182,12 @@ function FeaturesMenu({
           active={active}
           onPress={onPress}
           disabled={disabled || Boolean(feature && !onSetFeature)}
-          leadingSlot={<Icon size={16} color={theme.colors.foreground} />}
+          leadingSlot={
+            <Icon
+              size={16}
+              color={feature ? getFeatureIconColor(feature, theme.colors) : theme.colors.foreground}
+            />
+          }
           trailingSlot={
             feature?.type === "select" ? (
               <View style={styles.value}>
@@ -196,13 +202,7 @@ function FeaturesMenu({
         />
       );
     },
-    [
-      availableFeatures,
-      disabled,
-      onSetFeature,
-      theme.colors.foreground,
-      theme.colors.foregroundMuted,
-    ],
+    [availableFeatures, disabled, onSetFeature, theme.colors, theme.colors.foregroundMuted],
   );
 
   if (!availableFeatures.length && !onSelectCommand) return null;
@@ -213,6 +213,14 @@ function FeaturesMenu({
         icon={Settings2}
         surface={surface}
         label={t("agentControls.features.title")}
+        value={
+          surface === "sheet"
+            ? availableFeatures
+                .filter((feature) => feature.type === "toggle" && feature.value)
+                .map((feature) => presentFeature(feature, provider, t).label)
+                .join(", ")
+            : undefined
+        }
         showToolbarLabel={false}
         open={open}
         disabled={disabled}

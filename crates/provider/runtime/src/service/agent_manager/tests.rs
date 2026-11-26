@@ -331,6 +331,28 @@ impl AgentSession for FakeSession {
         self.0.lock().unwrap().command_route
     }
 
+    fn command_config_patch(
+        &self,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<Option<ConfigPatch>, AgentSessionError> {
+        if prompt.text == "/feature-invalid" {
+            return Err(AgentSessionError::Rejected);
+        }
+        if prompt.text != "/feature-toggle" {
+            return Ok(None);
+        }
+        let enabled = config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get("testToggle"))
+            != Some(&json!(true));
+        Ok(Some(ConfigPatch {
+            feature_values: Some(BTreeMap::from([("testToggle".into(), json!(enabled))])),
+            ..Default::default()
+        }))
+    }
+
     async fn out_of_band(
         &mut self,
         _prompt: &provider_core::protocol::prompt::AgentPrompt,

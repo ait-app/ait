@@ -1,6 +1,7 @@
 import { WorkspaceDiffStatPill } from "@/composer/diff-stat-pill";
 import { AgentTaskList } from "@/composer/task-list";
 import { ComposerTrackBar } from "@/composer/tracks";
+import { AgentVibeTrack } from "@/composer/vibe";
 import { AgentGoalTrack, useAgentGoal } from "@/composer/goal";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -140,6 +141,7 @@ export const AgentTracks = memo(function AgentTracks({
         onPress={handleOpenChanges}
       />
       <AgentGoalTrack serverId={serverId} agentId={agentId} goal={goal} />
+      <AgentVibeTrack serverId={serverId} agentId={agentId} />
     </ComposerTrackBar>
   );
 });

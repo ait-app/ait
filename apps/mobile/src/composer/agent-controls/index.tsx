@@ -53,8 +53,7 @@ import type {
 } from "@ait/protocol/agent-types";
 import type { AgentProviderDefinition } from "@ait/protocol/provider-manifest";
 import {
-  getFeatureHighlightColor,
-  isFeatureActive,
+  getFeatureIconColor,
   getFeatureTooltip,
   getAgentControlHintKey,
   resolveAgentModelSelection,
@@ -207,31 +206,6 @@ function toCommandCenterModes(modeControl: AgentModeControlValue | null) {
 
 function getModeProviderDefinitions(modeControl: AgentModeControlValue | null) {
   return modeControl?.providerDefinitions ?? EMPTY_AGENT_PROVIDER_DEFINITIONS;
-}
-
-function getFeatureIconColor(
-  feature: AgentFeature,
-  palette: {
-    blue: { 400: string };
-    green: { 400: string };
-    yellow: { 400: string };
-  },
-  foregroundMuted: string,
-): string {
-  if (!isFeatureActive(feature)) {
-    return foregroundMuted;
-  }
-
-  switch (getFeatureHighlightColor(feature.id)) {
-    case "blue":
-      return palette.blue[400];
-    case "green":
-      return palette.green[400];
-    case "yellow":
-      return palette.yellow[400];
-    default:
-      return foregroundMuted;
-  }
 }
 
 type ActiveSheet = "thinking" | null;
@@ -1105,6 +1079,8 @@ function DesktopFeatureItem({
   onActionComplete?: () => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const isDisabled = disabled || !onSetFeature;
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
   const renderFeatureOption = useFeatureOptionRenderer(feature, theme.colors.foreground);
@@ -1119,11 +1095,11 @@ function DesktopFeatureItem({
   );
 
   const handleTogglePress = useCallback(() => {
-    if (feature.type === "toggle") {
+    if (!isDisabled && feature.type === "toggle") {
       onSetFeature?.(feature.id, !feature.value);
       onActionComplete?.();
     }
-  }, [feature, onActionComplete, onSetFeature]);
+  }, [feature, isDisabled, onActionComplete, onSetFeature]);
 
   const handleSelectOption = useCallback(
     (optionId: string) => {
@@ -1144,7 +1120,7 @@ function DesktopFeatureItem({
       <SpeedToggle
         feature={feature}
         surface="toolbar"
-        disabled={disabled}
+        disabled={isDisabled}
         onSetFeature={onSetFeature}
         onActionComplete={onActionComplete}
       />
@@ -1153,31 +1129,30 @@ function DesktopFeatureItem({
 
   if (feature.type === "toggle") {
     const FeatureIcon = getAgentFeatureIcon(feature.icon, feature.id);
+    const statusLabel = t("agentControls.features.withValue", {
+      label: getFeatureTooltip(feature),
+      status: t(feature.value ? "agentControls.features.on" : "agentControls.features.off"),
+    });
     return (
       <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
         <TooltipTrigger asChild triggerRefProp="ref">
           <AgentControlTrigger
             icon={FeatureIcon}
-            iconColor={getFeatureIconColor(
-              feature,
-              theme.colors.palette,
-              theme.colors.foregroundMuted,
-            )}
+            iconColor={getFeatureIconColor(feature, theme.colors)}
             surface="toolbar"
             label={feature.label}
             showToolbarLabel={false}
-            disabled={disabled}
+            disabled={isDisabled}
             onPress={handleTogglePress}
-            accessibilityLabel={
-              lockedReason
-                ? `${getFeatureTooltip(feature)}. ${lockedReason}`
-                : getFeatureTooltip(feature)
-            }
+            accessibilityLabel={lockedReason ? `${statusLabel}. ${lockedReason}` : statusLabel}
+            accessibilityState={{ selected: feature.value, disabled: isDisabled }}
             testID={`agent-feature-${feature.id}`}
           />
         </TooltipTrigger>
         <TooltipContent side="top" align="center" offset={8}>
-          <Text style={styles.tooltipText}>{getFeatureTooltip(feature)}</Text>
+          <Text style={styles.tooltipText}>
+            {lockedReason ? `${statusLabel}. ${lockedReason}` : statusLabel}
+          </Text>
         </TooltipContent>
       </Tooltip>
     );
@@ -1197,17 +1172,13 @@ function DesktopFeatureItem({
             <AgentControlTrigger
               ref={featureAnchorRef}
               icon={FeatureIcon}
-              iconColor={getFeatureIconColor(
-                feature,
-                theme.colors.palette,
-                theme.colors.foregroundMuted,
-              )}
+              iconColor={getFeatureIconColor(feature, theme.colors)}
               surface="toolbar"
               label={feature.label}
               value={selectedOption?.label ?? feature.label}
               showToolbarLabel={!iconOnly}
               open={openSelector === featureSelector}
-              disabled={disabled}
+              disabled={isDisabled}
               onPress={handleSelectPress}
               accessibilityLabel={lockedReason ? `${tooltip}. ${lockedReason}` : tooltip}
               testID={`agent-feature-${feature.id}`}

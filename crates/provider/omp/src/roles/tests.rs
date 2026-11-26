@@ -472,3 +472,22 @@ async fn rpc_goal_continuation_is_scoped_to_the_private_session_overlay() {
     let value: Value = serde_json::from_slice(&std::fs::read(file.path()).unwrap()).unwrap();
     assert_eq!(value, json!({"goal":{"continuationModes":["rpc"]}}));
 }
+
+#[test]
+fn worker_thinking_follows_its_role_instead_of_the_director() {
+    let (roles, tags, cycle, models) = catalog_json();
+    let catalog = Catalog::parse(&roles, &tags, &cycle, &models).unwrap();
+    let mut config = StoredAgentConfig {
+        thinking_option_id: Some("low".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        catalog.worker_thinking(&config, "task"),
+        Some("high".into())
+    );
+    config.feature_values = config_with(&[("modelRole.task", "test/model:low")]).feature_values;
+    assert_eq!(catalog.worker_thinking(&config, "task"), Some("low".into()));
+    config.feature_values = config_with(&[("modelRole.task", "unset")]).feature_values;
+    assert_eq!(catalog.worker_thinking(&config, "task"), None);
+    assert_eq!(catalog.worker_thinking(&config, "unknown"), None);
+}

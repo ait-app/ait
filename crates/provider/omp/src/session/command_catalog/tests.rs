@@ -40,7 +40,7 @@ fn catalog_routes_builtin_aliases_and_native_collisions_without_guessing() {
     );
     assert_eq!(commands.route("/mystery"), Some(CommandRoute::Foreground));
     assert_eq!(commands.route("/dupe"), Some(CommandRoute::Unavailable));
-    assert_eq!(commands.route("/advisor"), Some(CommandRoute::Unavailable));
+    assert_eq!(commands.route("/advisor"), Some(CommandRoute::OutOfBand));
     assert_eq!(commands.route("/handoff"), Some(CommandRoute::OutOfBand));
     assert_eq!(commands.route("hello"), None);
     commands.update(&json!({"commands":[
@@ -206,4 +206,42 @@ fn goal_capability_is_reset_by_a_process_without_valid_native_state() {
     assert!(commands.handles_goal("/goal resume"));
     commands.update(&json!({"commands":"invalid"}));
     assert!(!commands.handles_goal("/goal resume"));
+}
+
+#[test]
+fn advisor_and_vibe_respect_current_command_ownership() {
+    let mut commands = Commands::default();
+    commands.update(&json!({"commands":[]}));
+    assert!(commands.handles_advisor("/advisor on"));
+    assert_eq!(
+        commands.route("/vibe task"),
+        Some(CommandRoute::Unavailable)
+    );
+    commands.update(&json!({"commands":[
+        {"name":"advisor","source":"builtin","aliases":["adv"]},
+        {"name":"ait-vibe-mode-v1","source":"extension"}
+    ]}));
+    assert!(commands.handles_advisor("/adv off"));
+    assert!(commands.handles_vibe("/vibe on"));
+    assert_eq!(commands.route("/vibe task"), Some(CommandRoute::Foreground));
+    assert_eq!(commands.route("/vibe off"), Some(CommandRoute::OutOfBand));
+    assert!(
+        !commands
+            .catalog()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["name"] == "ait-vibe-mode-v1")
+    );
+    commands.update(&json!({"commands":[
+        {"name":"advisor","source":"extension"},
+        {"name":"vibe","source":"extension"},
+        {"name":"ait-vibe-mode-v1","source":"extension"}
+    ]}));
+    assert!(!commands.handles_advisor("/advisor on"));
+    assert!(!commands.handles_vibe("/vibe on"));
+    assert_eq!(
+        commands.route("/advisor on"),
+        Some(CommandRoute::Foreground)
+    );
+    assert_eq!(commands.route("/vibe on"), Some(CommandRoute::Foreground));
 }

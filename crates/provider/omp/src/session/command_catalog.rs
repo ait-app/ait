@@ -118,6 +118,32 @@ impl Commands {
         changed
     }
 
+    /// Advisor is a host configuration shortcut only when the active catalog grants ownership.
+    pub(super) fn handles_advisor(&self, text: &str) -> bool {
+        let Some((name, _)) = commands::split(text) else {
+            return false;
+        };
+        self.catalog
+            .as_ref()
+            .is_some_and(|catalog| match catalog.claim(name) {
+                None => name.eq_ignore_ascii_case("advisor"),
+                Some(Claim::Builtin(canonical)) => canonical.eq_ignore_ascii_case("advisor"),
+                _ => false,
+            })
+    }
+
+    /// The private extension must be loaded and `/vibe` must not be claimed by another owner.
+    pub(super) fn handles_vibe(&self, text: &str) -> bool {
+        let Some((name, _)) = commands::split(text) else {
+            return false;
+        };
+        name.eq_ignore_ascii_case("vibe")
+            && self.catalog.as_ref().is_some_and(|catalog| {
+                matches!(catalog.claim("ait-vibe-mode-v1"), Some(Claim::Native))
+                    && !catalog.contains("vibe")
+            })
+    }
+
     pub(super) fn catalog(&self) -> Option<Vec<Value>> {
         let catalog = self.catalog.as_ref()?;
         let mut commands = catalog.project();
@@ -127,6 +153,20 @@ impl Commands {
                 "description":"Manage the native goal",
                 "argumentHint":"[<objective>|show|pause|resume|clear]"
             }));
+        }
+        if self.handles_advisor("/advisor")
+            && !commands.iter().any(|entry| entry["name"] == "advisor")
+        {
+            commands.push(json!({"name":"advisor", "source":"builtin", "kind":"command", "description":"Set the Advisor switch for the next turn", "argumentHint":"[on|off|toggle]"}));
+        }
+        commands.retain(|entry| {
+            !matches!(
+                entry["name"].as_str(),
+                Some("ait-vibe-mode-v1" | "ait-vibe-result-v1")
+            )
+        });
+        if self.handles_vibe("/vibe") {
+            commands.push(json!({"name":"vibe", "source":"builtin", "kind":"command", "description":"Delegate work to persistent fast/good workers", "argumentHint":"[on|off|<task>]"}));
         }
         Some(commands)
     }
@@ -144,6 +184,17 @@ impl Commands {
                 },
             );
         };
+        if self.handles_advisor(text) {
+            return Some(CommandRoute::OutOfBand);
+        }
+        if self.handles_vibe(text) {
+            let (_, args) = commands::split(text)?;
+            return Some(if matches!(args, "" | "on" | "off") {
+                CommandRoute::OutOfBand
+            } else {
+                CommandRoute::Foreground
+            });
+        }
         let route = match catalog.claim(name) {
             Some(Claim::Builtin(canonical))
                 if canonical.eq_ignore_ascii_case("goal") && !self.goal_supported =>
@@ -177,6 +228,7 @@ impl Commands {
                     CommandRoute::Foreground
                 }
             }
+            None if name.eq_ignore_ascii_case("vibe") => CommandRoute::Unavailable,
             None if name.eq_ignore_ascii_case("goal") && !self.goal_supported => {
                 CommandRoute::Unavailable
             }

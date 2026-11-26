@@ -322,9 +322,125 @@ pub(super) struct Transport {
     sequence: u64,
     timeouts: Timeouts,
     shutdown_signalled: bool,
+    extension: Option<tempfile::NamedTempFile>,
+}
+
+/// A bounded handle to the existing serialized writer; failures poison the connection.
+#[derive(Debug, Clone)]
+pub(super) struct Writer {
+    input: Arc<Mutex<ChildStdin>>,
+    deadline: Duration,
+    poisoned: Arc<AtomicBool>,
+}
+impl Writer {
+    /// Write a frame through the existing mutex; reject poisoned connections.
+    pub(super) async fn send(&self, frame: &Value) -> Result<(), AgentSessionError> {
+        if self.poisoned.load(Ordering::Acquire) {
+            return Err(AgentSessionError::Failed);
+        }
+        let result = write(&self.input, frame, self.deadline).await;
+        if result.is_err() {
+            self.poisoned.store(true, Ordering::Release);
+        }
+        result
+    }
 }
 
 impl Transport {
+    /// Retain the private extension for this connection's lifetime.
+    pub(super) fn retain_extension(&mut self, extension: Option<tempfile::NamedTempFile>) {
+        self.extension = extension;
+    }
+    /// Share only stdin serialization; this never creates a second native reader.
+    pub(super) fn writer(&self) -> Result<Writer, AgentSessionError> {
+        Ok(Writer {
+            input: self.writable()?.clone(),
+            deadline: self.timeouts.request,
+            poisoned: self.poisoned.clone(),
+        })
+    }
+    pub(super) fn restore_events(&mut self, events: Vec<Value>) -> Result<(), AgentSessionError> {
+        let records: Vec<_> = events
+            .into_iter()
+            .map(|value| {
+                let bytes = value.to_string().len();
+                Frame { value, bytes }
+            })
+            .collect();
+        let bytes = records
+            .iter()
+            .try_fold(self.buffered_bytes, |total, record| {
+                total.checked_add(record.bytes)
+            })
+            .filter(|bytes| *bytes <= MAX_BUFFER)
+            .ok_or(AgentSessionError::Failed)?;
+        for record in records.into_iter().rev() {
+            self.events.push_front(record);
+        }
+        self.buffered_bytes = bytes;
+        Ok(())
+    }
+
+    /// Execute a known local command on the session writer, awaiting its final receipt.
+    /// Admission alone is insufficient for extension handlers. Agent work, rejection, oversized
+    /// output and missing completion remain errors. Owner controls must restore unrelated returned frames.
+    pub(super) async fn local_command(
+        &mut self,
+        message: &str,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        let id = self.begin("prompt", json!({"message":message})).await?;
+        let mut events = Vec::new();
+        let result = tokio::time::timeout(self.timeouts.request, async {
+            let mut admitted = false;
+            let mut completed = false;
+            let mut bytes = 0;
+            while !admitted || !completed {
+                let event = match self.poll()? {
+                    Some(event) => event,
+                    None => {
+                        self.messages
+                            .recv()
+                            .await
+                            .ok_or(AgentSessionError::Failed)?
+                            .value
+                    }
+                };
+                if event["type"] == "response" && event["id"] == id {
+                    if event["command"] != "prompt" || event["success"] != true {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    if event["data"]["agentInvoked"] == true {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    admitted = true;
+                    completed |= event["data"]["agentInvoked"] == false;
+                } else if event["type"] == "prompt_result" && event["id"] == id {
+                    if event["agentInvoked"] != false || event["status"] != "completed" {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    completed = true;
+                } else {
+                    bytes += event.to_string().len();
+                    if events.len() >= 4096 || bytes > MAX_BUFFER {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    events.push(event);
+                }
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|_| AgentSessionError::Failed)
+        .and_then(|result| result);
+        match result {
+            Ok(()) => Ok(events),
+            Err(error) => {
+                self.restore_events(events)?;
+                Err(error)
+            }
+        }
+    }
+
     /// Start the native RPC process in `cwd` with `args`, under `confinement` for an Agent
     /// in a sandboxed Workspace, bounding its startup and requests by `timeouts`.
     ///
@@ -413,6 +529,7 @@ impl Transport {
             sequence: 0,
             timeouts,
             shutdown_signalled: false,
+            extension: None,
         })
     }
 

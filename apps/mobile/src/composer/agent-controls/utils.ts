@@ -1,4 +1,5 @@
 import type { AgentFeature, AgentModelDefinition } from "@ait/protocol/agent-types";
+import type { Theme } from "@/styles/theme";
 import { i18n } from "@/i18n/i18next";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
@@ -10,7 +11,14 @@ import { findModelByReference } from "@/provider-selection/model-catalog";
 import { resolveDefaultModel } from "@/provider-selection/resolve-agent-form";
 
 export type ExplainedAgentControl = "mode" | "model" | "thinking";
-export type FeatureHighlightColor = "blue" | "default" | "green" | "yellow";
+export type FeatureHighlightColor =
+  | "blue"
+  | "default"
+  | "green"
+  | "yellow"
+  | "purple"
+  | "orange"
+  | "cyan";
 export type AgentControlHintKey =
   | "agentControls.hints.thinking"
   | "agentControls.hints.model"
@@ -49,6 +57,7 @@ export function isFeatureActive(feature: AgentFeature): boolean {
 
 export function getFeatureHighlightColor(featureId: string): FeatureHighlightColor {
   switch (featureId) {
+    case "fastMode":
     case FAST_MODE_FEATURE_ID:
     case SPEED_FEATURE_ID:
       return "yellow";
@@ -56,8 +65,34 @@ export function getFeatureHighlightColor(featureId: string): FeatureHighlightCol
       return "green";
     case PLAN_MODE_FEATURE_ID:
       return "blue";
+    case "autoCompaction":
+      return "cyan";
+    case "advisorEnabled":
+      return "purple";
+    case "autoRetry":
+      return "orange";
     default:
       return "default";
+  }
+}
+
+export function getFeatureIconColor(feature: AgentFeature, colors: Theme["colors"]): string {
+  if (!isFeatureActive(feature)) return colors.foregroundMuted;
+  switch (getFeatureHighlightColor(feature.id)) {
+    case "blue":
+      return colors.palette.blue[400];
+    case "green":
+      return colors.palette.green[400];
+    case "yellow":
+      return colors.palette.yellow[400];
+    case "cyan":
+      return colors.terminal.cyan;
+    case "purple":
+      return colors.statusMerged;
+    case "orange":
+      return colors.palette.orange[500];
+    default:
+      return colors.accentBright;
   }
 }
 

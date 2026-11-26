@@ -2495,6 +2495,7 @@ dependencies = [
  "provider",
  "provider-core",
  "provider-native",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",

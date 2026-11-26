@@ -8,10 +8,12 @@ mod confinement;
 mod goals;
 mod images;
 mod interactions;
+mod mcp;
 mod settlement;
 mod side_questions;
 mod subagents;
 mod timeline;
+mod vibe;
 
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OMP_BIN; uses isolated configuration without model inference"]

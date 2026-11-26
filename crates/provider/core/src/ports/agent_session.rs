@@ -243,6 +243,22 @@ pub trait AgentSession: Debug + Send + Sync {
         Ok(())
     }
 
+    /// Translate an owned slash command into the same durable configuration patch as the UI.
+    /// The runtime validates and persists this patch through its normal configuration path.
+    /// Return `Rejected` for malformed arguments and `None` for commands with native effects.
+    ///
+    /// # Errors
+    ///
+    /// Returns a rejection for malformed owned commands or an adapter error if their
+    /// current configuration cannot be resolved. No mutation occurs in this method.
+    fn command_config_patch(
+        &self,
+        _prompt: &crate::protocol::prompt::AgentPrompt,
+        _config: &StoredAgentConfig,
+    ) -> Result<Option<crate::protocol::agent_config::ConfigPatch>, AgentSessionError> {
+        Ok(None)
+    }
+
     /// Execute a provider command that does not interrupt or replace the active input turn.
     /// # Errors
     /// Returns rejected before mutation for unsupported commands, or uncertain transport failure.

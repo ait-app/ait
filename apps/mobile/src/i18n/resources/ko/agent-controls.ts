@@ -14,6 +14,7 @@ export const agentControls = {
     unknown: "알 수 없는 모델",
   },
   features: {
+    withValue: "{{label}}: {{status}}",
     searchPlaceholder: "기능 검색...",
     autoCompaction: "컨텍스트 자동 압축",
     autoRetry: "자동 재시도",
@@ -23,6 +24,18 @@ export const agentControls = {
     open: "에이전트 기능 열기",
     on: "켜짐",
     off: "꺼짐",
+  },
+  vibe: {
+    title: "Vibe",
+    pill: "Vibe ON",
+    on: "켜짐",
+    director: "읽기 전용 지휘자",
+    description:
+      "지속적인 fast/good 작업자에게 작업을 위임합니다. 하위 에이전트에서 진행 상황을 확인하세요.",
+    consequence: "종료하면 모든 Vibe 작업자가 취소됩니다.",
+    exit: "Vibe 종료",
+    failed: "Vibe를 종료할 수 없습니다",
+    accessibilityLabel: "Vibe 모드, 켜짐",
   },
   goal: {
     title: "목표",

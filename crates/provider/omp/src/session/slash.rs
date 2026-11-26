@@ -48,6 +48,26 @@ impl Session {
         prompt: &AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         prompt.validate()?;
+        if self.commands.handles_vibe(&prompt.text) {
+            if self.closed
+                || prompt.output_schema.is_some()
+                || !prompt.images.is_empty()
+                || !prompt.attachments.is_empty()
+            {
+                return Err(AgentSessionError::Rejected);
+            }
+            let (_, args) = commands::split(&prompt.text).ok_or(AgentSessionError::Rejected)?;
+            let enabled = match args {
+                "on" => true,
+                "off" => false,
+                "" => !self
+                    .vibe
+                    .as_ref()
+                    .is_some_and(crate::vibe::host::Host::enabled),
+                _ => return Err(AgentSessionError::Rejected),
+            };
+            return self.toggle_vibe(enabled).await;
+        }
         let canonical = self.commands.canonical_text(&prompt.text);
         let command_text = canonical.as_deref().unwrap_or(&prompt.text);
         if let Some((name, managed)) = commands::gui_managed(command_text) {
@@ -74,7 +94,12 @@ impl Session {
                 return Err(AgentSessionError::Rejected);
             }
             Builtin::Goal => {
-                if !self.commands.handles_goal(command_text) {
+                if self
+                    .vibe
+                    .as_ref()
+                    .is_some_and(crate::vibe::host::Host::enabled)
+                    || !self.commands.handles_goal(command_text)
+                {
                     return Err(AgentSessionError::Rejected);
                 }
                 ("goal", goal_arguments(args)?, Some(Pending::Goal))

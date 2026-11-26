@@ -5,6 +5,7 @@ use super::*;
 use provider_core::ports::agent_session::AgentTurnEvent;
 use provider_core::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod advisor;
 mod blocked_commands;
 mod capabilities;
 mod commands;
@@ -295,6 +296,9 @@ pub(super) fn launches(calls: &[Value]) -> Vec<Vec<String>> {
             if let Some(index) = args.iter().position(|arg| arg == "--config") {
                 args.drain(index..index + 2);
             }
+            if let Some(index) = args.iter().position(|arg| arg == "--extension") {
+                args.drain(index..index + 2);
+            }
             args
         })
         .collect()
@@ -308,7 +312,14 @@ pub(super) fn count(calls: &[Value], kind: &str) -> usize {
 pub(super) async fn next(
     session: &mut dyn AgentSession,
 ) -> Result<AgentTurnEvent, AgentSessionError> {
-    tokio::time::timeout(Duration::from_secs(5), async {
+    next_within(session, Duration::from_secs(5)).await
+}
+
+pub(super) async fn next_within(
+    session: &mut dyn AgentSession,
+    limit: Duration,
+) -> Result<AgentTurnEvent, AgentSessionError> {
+    tokio::time::timeout(limit, async {
         loop {
             if let Some(event) = session.poll_turn()? {
                 return Ok(event);

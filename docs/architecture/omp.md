@@ -113,7 +113,8 @@ flowchart LR
   `responseId` 和至多 500 个字符的部分输出，并经脱敏和限长；分类只依据 OMP 的原因。
 - 回合结束时仍没有 `toolResult` 的工具不再等待结果：OMP 已结束的保留其显示结果，其余标为已取消。
   回合失败、取消或进程断开时，运行中的子 Agent 也标为已取消。
-- `host_tool_call` 与 `host_uri_request` 使当前回合失败：Ait 尚未注册宿主工具。
+- 已注册的 Ait MCP 与 Vibe `host_tool_call` 由 adapter 执行并返回原生结果；未知 host tool 与
+  `host_uri_request` 仍拒绝。并行调用和拒绝队列有界，达到拒绝队列上限时暂停原生读取。
 - 没有活动回合时到达的 `agent_start`（例如 OMP 自行恢复的队列）开始一个自主回合，按同样的规则结算。
 
 ## 取消与追加输入
@@ -202,7 +203,7 @@ flowchart LR
   没有图片时省略该键（`prompt`）。对文本模型，OMP 18.18.8 自行把图片存为 `local://image-<hash>.webp`，
   并在用户消息前追加 `display: false` 的 `image-attachment-description` 自定义消息；该消息按上表不显示，
   用户消息照常显示图片（ADR-248 第 10 条）。
-- 不接受输出 schema、每会话 MCP server 或工具策略覆盖；系统提示上限 64 KiB。
+- 不接受输出 schema、任意每会话 MCP server 或工具策略覆盖；仅接收 runtime 注入的 Ait HTTP MCP；系统提示上限 64 KiB。
 
 ## 历史、会话列表与子 Agent
 
@@ -258,10 +259,26 @@ flowchart LR
 
 ## 暂缓与已知限制
 
-- 未实现：宿主工具与 MCP 桥接、经 `branch` 的会话回退、迟到 steer 拒绝后的重新排队、终端组件 UI。
+- 未实现：通用 MCP server 配置、经 `branch` 的会话回退、迟到 steer 拒绝后的重新排队、终端组件 UI。
 - 已知限制：
   - 未经运行时通告的自主回合不能被 `cancel_pending` 取消，排队输入要等该运行结束后才投递。
   - 同一回合中先 `/follow-up` 后 `/steer` 时，客户端 ID 按写入顺序分配，而 OMP 先投递 steer。
   - 空闲时运行 `/compact` 期间发送的 prompt 不受保护。
   - HTML `ask` 中预先勾选的复选项无法回放：OMP 的 `select` 不带勾选状态。
   - 子 Agent 的实时用户消息使用锚点键作为 ID，历史中则使用原生 ID。
+
+## Vibe 与宿主编排
+
+[ADR-308](../decisions/providers/adr-308-omp-host-orchestration.md) 修订宿主工具限制。
+`/vibe on` 与 `/vibe off` 是确认后完成的带外模式控制；`/vibe <任务>` 先启用再送原生前台回合。
+完整命令目录不存在或私有扩展缺失时拒绝，不退化为普通聊天。同名扩展保留原生所有权。
+主会话只保留 read/todo、Ait MCP 与五个 Vibe 工具；模型使用 `@smol`/`@task` 对应角色及其思考设置。
+最多保留 32 个 worker、8 个并行 Vibe 调用，单个答案 16 KiB。完成通知进入原生 follow-up 队列。
+worker 的 `parentSession` 绑定父文件，恢复校验父身份；启动中的 worker 也受退出和取消控制。
+恢复只显示历史 worker，先前运行状态标为取消，Vibe 默认关闭。
+
+Ait MCP 从 runtime 注入配置连接，最多 512 个工具、16 个并行调用、单个响应 4 MiB，禁用 HTTP
+重定向。工具名前缀 `mcp__ait__`，实际调用保留 Agent scope，故 `agent_create` 可选择其他 Provider
+并由现有 Ait 子 Agent 管理器登记。Vibe 切换保留这些工具，worker 配置去掉父 MCP 凭据。
+`/advisor on|off|toggle` 与无参数切换通过最新持久配置生成补丁；验证失败不改变开关。
+它更新下一轮配置，不强制重启正在运行的原生回合。

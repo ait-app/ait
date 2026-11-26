@@ -10,6 +10,7 @@ mod events;
 mod framing;
 mod history;
 mod interactions;
+mod mcp;
 mod prompt;
 mod roles;
 mod sandbox;
@@ -20,6 +21,7 @@ mod subagents;
 mod tool_detail;
 mod transport;
 mod usage;
+mod vibe;
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -44,6 +46,8 @@ const LABEL: &str = "Oh My Pi";
 #[derive(Debug, Clone)]
 pub struct OmpClient {
     program: PathBuf,
+    /// Workers must not recursively own another Vibe coordinator.
+    vibe_host: bool,
     timeouts: transport::Timeouts,
     environment: AgentEnvironment,
     images: provider_native::images::ImageStore,
@@ -72,6 +76,7 @@ impl OmpClient {
     pub fn new(program: PathBuf) -> Self {
         Self {
             program,
+            vibe_host: true,
             timeouts: transport::Timeouts::default(),
             environment: AgentEnvironment::default(),
             images: provider_native::images::ImageStore::default(),
@@ -239,6 +244,10 @@ impl AgentClient for OmpClient {
             description: "Oh My Pi native approvals, questions and subagents",
             default_mode: provider_core::ports::catalog::DefaultMode::Fixed("full"),
         })
+    }
+
+    fn supports_agent_mcp(&self) -> bool {
+        true
     }
 
     fn supports_write_confinement(&self) -> bool {

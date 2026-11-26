@@ -14,6 +14,7 @@ export const agentControls = {
     unknown: "不明なモデル",
   },
   features: {
+    withValue: "{{label}}: {{status}}",
     searchPlaceholder: "機能を検索...",
     autoCompaction: "コンテキストの自動圧縮",
     autoRetry: "自動再試行",
@@ -23,6 +24,18 @@ export const agentControls = {
     open: "エージェント機能を開く",
     on: "オン",
     off: "オフ",
+  },
+  vibe: {
+    title: "Vibe",
+    pill: "Vibe ON",
+    on: "オン",
+    director: "読み取り専用の指揮役",
+    description:
+      "永続的な fast/good ワーカーに作業を委任します。進捗はサブエージェントで確認できます。",
+    consequence: "終了するとすべての Vibe ワーカーがキャンセルされます。",
+    exit: "Vibe を終了",
+    failed: "Vibe を終了できませんでした",
+    accessibilityLabel: "Vibe モード、オン",
   },
   goal: {
     title: "目標",

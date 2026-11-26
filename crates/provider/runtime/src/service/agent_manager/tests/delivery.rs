@@ -430,3 +430,70 @@ async fn preset_save_after_claim_requeues_without_native_write() {
         Some("updated-model")
     );
 }
+
+#[tokio::test]
+async fn command_configuration_is_durable_idempotent_and_preserves_the_active_turn() {
+    let (manager, registry, client) = make_manager();
+    let timeline = Timeline::memory().unwrap();
+    let mut manager = manager.with_timeline(timeline);
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    manager.send("agent-1", "running").await.unwrap();
+    let turn = manager.active_turn("agent-1").unwrap().to_owned();
+    {
+        let mut state = client.0.lock().unwrap();
+        state.command_ownership = CommandOwnership::Supported;
+        state.command_route = Some(CommandRoute::OutOfBand);
+    }
+    let mut prompt = AgentPrompt {
+        client_message_id: Some("toggle-on".into()),
+        ..AgentPrompt::text("/feature-toggle")
+    };
+    for _ in 0..2 {
+        manager
+            .deliver("agent-1", &prompt, ActiveTurnBehavior::Interrupt)
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        registry
+            .get("agent-1")
+            .unwrap()
+            .unwrap()
+            .config
+            .unwrap()
+            .feature_values
+            .unwrap()["testToggle"],
+        true
+    );
+    prompt.client_message_id = Some("toggle-off".into());
+    manager
+        .deliver("agent-1", &prompt, ActiveTurnBehavior::Interrupt)
+        .await
+        .unwrap();
+    assert_eq!(
+        registry
+            .get("agent-1")
+            .unwrap()
+            .unwrap()
+            .config
+            .unwrap()
+            .feature_values
+            .unwrap()["testToggle"],
+        false
+    );
+    prompt.client_message_id = Some("invalid".into());
+    prompt.text = "/feature-invalid".into();
+    assert_eq!(
+        manager
+            .deliver("agent-1", &prompt, ActiveTurnBehavior::Interrupt)
+            .await,
+        Err(ErrorCode::InvalidMessage)
+    );
+    assert_eq!(manager.active_turn("agent-1"), Some(turn.as_str()));
+    let state = client.0.lock().unwrap();
+    assert_eq!(state.out_of_band_calls, 0);
+    assert_eq!(state.start_calls, 1);
+}

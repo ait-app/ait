@@ -379,6 +379,27 @@ impl Catalog {
         })
     }
 
+    /// Resolve the worker role's explicit or inherited effort without inheriting the director's.
+    pub(super) fn worker_thinking(&self, config: &StoredAgentConfig, role: &str) -> Option<String> {
+        let selection = config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get(&format!("{PREFIX}{role}")))
+            .and_then(Value::as_str);
+        let selector = match selection {
+            Some(UNSET) => return None,
+            None | Some(INHERIT) => self.resolve_alias(role)?,
+            Some(value) => value.to_owned(),
+        };
+        self.models.iter().find_map(|model| {
+            selector
+                .strip_prefix(&model.selector)
+                .and_then(|suffix| suffix.strip_prefix(':'))
+                .filter(|effort| model.thinking.iter().any(|known| known == effort))
+                .map(str::to_owned)
+        })
+    }
+
     /// Append role controls without altering the current conversation's model catalog.
     pub(super) fn append(&self, details: &mut Details, config: &StoredAgentConfig) {
         details.features.extend(self.features(config));

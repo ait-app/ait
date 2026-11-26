@@ -14,6 +14,7 @@ export const agentControls = {
     unknown: "Неизвестная модель",
   },
   features: {
+    withValue: "{{label}}: {{status}}",
     searchPlaceholder: "Поиск функций...",
     autoCompaction: "Автосжатие контекста",
     autoRetry: "Автоматический повтор",
@@ -23,6 +24,18 @@ export const agentControls = {
     open: "Открыть настройки функций агента",
     on: "Включено",
     off: "Выключено",
+  },
+  vibe: {
+    title: "Vibe",
+    pill: "Vibe ON",
+    on: "Включён",
+    director: "Координатор только для чтения",
+    description:
+      "Поручайте работу постоянным агентам fast/good. Следите за их работой в разделе субагентов.",
+    consequence: "Выход отменяет работу всех агентов Vibe.",
+    exit: "Выйти из Vibe",
+    failed: "Не удалось выйти из Vibe",
+    accessibilityLabel: "Режим Vibe включён",
   },
   goal: {
     title: "Цель",

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { THEME_OPTIONS } from "@/styles/theme";
 import {
   getFeatureHighlightColor,
+  getFeatureIconColor,
   getFeatureTooltip,
   getAgentControlHintKey,
   isFeatureActive,
@@ -216,5 +218,43 @@ describe("resolveAgentModelSelection", () => {
     expect(selection.displayModel).toBe("Default (Sonnet 4.6)");
     expect(selection.selectedThinkingId).toBe("low");
     expect(selection.displayThinking).toBe("Low");
+  });
+});
+
+describe("toggle icon states across all themes", () => {
+  it("uses distinct feature colors when on and a neutral icon when off", () => {
+    for (const option of THEME_OPTIONS) {
+      if (!("theme" in option)) continue;
+      const colors = option.theme.colors;
+      const on = (id: string) =>
+        getFeatureIconColor({ id, type: "toggle", label: id, value: true }, colors);
+      expect(on("advisorEnabled")).toBe(colors.statusMerged);
+      expect(on("fast_mode")).toBe(colors.palette.yellow[400]);
+      expect(on("plan_mode")).toBe(colors.palette.blue[400]);
+      expect(on("autoRetry")).toBe(colors.palette.orange[500]);
+      expect(
+        new Set([
+          on("advisorEnabled"),
+          on("fast_mode"),
+          on("plan_mode"),
+          on("autoCompaction"),
+          on("autoRetry"),
+          on("auto_accept"),
+        ]).size,
+      ).toBe(6);
+      for (const id of [
+        "advisorEnabled",
+        "fast_mode",
+        "plan_mode",
+        "autoRetry",
+        "autoCompaction",
+        "custom-toggle",
+      ]) {
+        expect(on(id)).not.toBe(colors.foregroundMuted);
+        expect(getFeatureIconColor({ id, type: "toggle", label: id, value: false }, colors)).toBe(
+          colors.foregroundMuted,
+        );
+      }
+    }
   });
 });

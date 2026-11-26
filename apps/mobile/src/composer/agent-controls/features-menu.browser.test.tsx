@@ -139,7 +139,11 @@ it("shares the mode picker's anchored search surface and supports keyboard comma
   const row = page.getByText("指导模型", { exact: true }).element().getBoundingClientRect();
   expect(row.bottom).toBeLessThan(trigger.top);
   await page.screenshot({ path: "../../.tmp/features-menu-desktop.png" });
+  const advisor = page.getByTestId("agent-feature-advisorEnabled");
+  const color = () => advisor.element().querySelector("svg")?.getAttribute("stroke");
+  const enabledColor = color();
   await page.getByText("指导模型", { exact: true }).click();
+  if (enabledColor) await expect.poll(color).not.toBe(enabledColor);
   await page.getByPlaceholder("搜索功能...").fill("compact");
   await expect.element(page.getByText("指导模型", { exact: true })).not.toBeInTheDocument();
   await userEvent.keyboard("{ArrowDown}{Enter}");

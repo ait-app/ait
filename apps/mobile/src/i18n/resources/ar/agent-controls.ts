@@ -14,6 +14,7 @@ export const agentControls = {
     unknown: "نموذج غير معروف",
   },
   features: {
+    withValue: "{{label}}: {{status}}",
     searchPlaceholder: "البحث في الميزات...",
     autoCompaction: "ضغط السياق تلقائيًا",
     autoRetry: "إعادة المحاولة تلقائيًا",
@@ -23,6 +24,17 @@ export const agentControls = {
     open: "فتح ميزات الوكيل",
     on: "تشغيل",
     off: "إيقاف",
+  },
+  vibe: {
+    title: "Vibe",
+    pill: "Vibe ON",
+    on: "تشغيل",
+    director: "منسق للقراءة فقط",
+    description: "فوّض العمل إلى وكلاء fast/good المستمرين. تابع تقدمهم في الوكلاء الفرعيين.",
+    consequence: "الخروج يلغي جميع وكلاء Vibe.",
+    exit: "الخروج من Vibe",
+    failed: "تعذّر الخروج من Vibe",
+    accessibilityLabel: "وضع Vibe، مفعّل",
   },
   goal: {
     title: "الهدف",

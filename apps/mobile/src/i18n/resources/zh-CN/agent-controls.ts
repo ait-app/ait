@@ -14,6 +14,7 @@ export const agentControls = {
     unknown: "未知模型",
   },
   features: {
+    withValue: "{{label}}：{{status}}",
     searchPlaceholder: "搜索功能...",
     autoCompaction: "自动压缩上下文",
     autoRetry: "自动重试",
@@ -23,6 +24,17 @@ export const agentControls = {
     open: "打开智能体功能",
     on: "开启",
     off: "关闭",
+  },
+  vibe: {
+    title: "Vibe",
+    pill: "Vibe ON",
+    on: "已开启",
+    director: "只读编排",
+    description: "工作交由 fast / good 持久子代理执行，可在子代理列表查看进度。",
+    consequence: "退出将取消全部 Vibe 子代理。",
+    exit: "退出 Vibe",
+    failed: "退出 Vibe 失败",
+    accessibilityLabel: "Vibe 模式，已开启",
   },
   goal: {
     title: "目标",

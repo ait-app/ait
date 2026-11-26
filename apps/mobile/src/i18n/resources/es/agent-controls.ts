@@ -14,6 +14,7 @@ export const agentControls = {
     unknown: "Modelo desconocido",
   },
   features: {
+    withValue: "{{label}}: {{status}}",
     searchPlaceholder: "Buscar funciones...",
     autoCompaction: "Compactación automática",
     autoRetry: "Reintentos automáticos",
@@ -23,6 +24,18 @@ export const agentControls = {
     open: "Abrir funciones del agente",
     on: "Activado",
     off: "Apagado",
+  },
+  vibe: {
+    title: "Vibe",
+    pill: "Vibe ON",
+    on: "Activado",
+    director: "Coordinador de solo lectura",
+    description:
+      "Delega el trabajo a agentes fast/good persistentes. Consulta su progreso en Subagentes.",
+    consequence: "Salir cancela todos los agentes Vibe.",
+    exit: "Salir de Vibe",
+    failed: "No se pudo salir de Vibe",
+    accessibilityLabel: "Modo Vibe, activado",
   },
   goal: {
     title: "Objetivo",

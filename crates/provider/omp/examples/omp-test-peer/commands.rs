@@ -22,6 +22,11 @@ impl Peer {
                 self.response(command, json!({"protocolVersion": 2}));
                 self.protocol = 2;
             }
+            "set_host_tools" => self.response(command, json!({"toolNames":command["tools"].as_array().expect("tools").iter().map(|tool| tool["name"].clone()).collect::<Vec<_>>()})),
+            "abort_and_restore_queue" => { self.queued_steers.clear(); self.queued_prompts.clear(); self.abort(command).await; }
+            "prompt" if command["message"].as_str().is_some_and(|text| text.starts_with("/ait-vibe-mode-v1 ")) => {
+                self.vibe_mode(command);
+            }
             "get_state" => self.get_state(command),
             "fixture_new_context" => self.new_context(command),
             "get_available_models" => {
@@ -74,15 +79,7 @@ impl Peer {
             }
             "get_branch_messages" => self.get_branch_messages(command),
             "get_subagents" => self.response(command, json!({"subagents": []})),
-            "get_available_commands" => {
-                let mut commands =
-                    vec![json!({"name": "review", "description": "Review", "source": "skill"})];
-                commands.extend(self.read_plugins());
-                if env_set("OMP_FIXTURE_GOAL_COMMAND") {
-                    commands.push(json!({"name":"goal","source":"builtin","description":"Goal"}));
-                }
-                self.response(command, json!({"commands": commands}));
-            }
+            "get_available_commands" => self.available_commands(command),
             "interactive_control" => {
                 self.pending_control = Some(command.clone());
                 self.emit(&json!({
@@ -107,6 +104,28 @@ impl Peer {
             _ => self.reject(command, "Rejected"),
         }
         true
+    }
+
+    fn available_commands(&self, command: &Value) {
+        let mut commands =
+            vec![json!({"name": "review", "description": "Review", "source": "skill"})];
+        commands.extend(self.read_plugins());
+        if env_set("OMP_FIXTURE_GOAL_COMMAND") {
+            commands.push(json!({"name":"goal","source":"builtin","description":"Goal"}));
+        }
+        self.response(command, json!({"commands": commands}));
+    }
+
+    fn vibe_mode(&mut self, command: &Value) {
+        if command["message"] == "/ait-vibe-mode-v1 on" {
+            if let Ok(text) = fs::read_to_string(self.root.join("vibe-activation-events.json")) {
+                for event in serde_json::from_str::<Vec<Value>>(&text).expect("activation events") {
+                    self.emit(&event);
+                }
+            }
+            self.emit(&json!({"type":"extension_ui_request","method":"notify","message":"AIT_VIBE_V1:{\"fast\":[\"test\",\"model\"],\"good\":[\"test\",\"model\"]}"}));
+        }
+        self.response(command, json!({"agentInvoked":false}));
     }
 
     fn get_state(&mut self, command: &Value) {

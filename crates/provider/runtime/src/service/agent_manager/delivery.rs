@@ -252,8 +252,41 @@ impl AgentManager {
             timeline.finish_input(agent, &message, Receipt::Rejected)?;
             return Err(ErrorCode::AgentIo);
         }
-        let session = self.live.get_mut(agent).ok_or(ErrorCode::AgentIo)?;
-        let result = session.session.out_of_band(&prompt).await;
+        let config = self
+            .registry
+            .get(agent)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?
+            .config
+            .unwrap_or_default();
+        let patch = self
+            .live
+            .get(agent)
+            .ok_or(ErrorCode::AgentIo)?
+            .session
+            .command_config_patch(&prompt, &config);
+        let result = match patch {
+            Ok(Some(patch)) => self
+                .configure(agent, &patch)
+                .await
+                .map_err(|error| match error {
+                    AgentManagerError::InvalidRequest
+                    | AgentManagerError::SessionRejected
+                    | AgentManagerError::Busy => {
+                        provider_core::ports::agent_session::AgentSessionError::Rejected
+                    }
+                    _ => provider_core::ports::agent_session::AgentSessionError::Failed,
+                }),
+            Ok(None) => {
+                self.live
+                    .get_mut(agent)
+                    .ok_or(ErrorCode::AgentIo)?
+                    .session
+                    .out_of_band(&prompt)
+                    .await
+            }
+            Err(error) => Err(error),
+        };
         let receipt = match &result {
             Ok(()) => Receipt::Accepted,
             Err(provider_core::ports::agent_session::AgentSessionError::Rejected) => {

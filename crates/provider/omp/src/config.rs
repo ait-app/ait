@@ -52,10 +52,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .provider_options
             .as_ref()
             .is_some_and(|options| !provider_options(options))
-        || config
-            .mcp_servers
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
+        || !super::mcp::valid(config)
         || config
             .tool_policy
             .as_ref()
