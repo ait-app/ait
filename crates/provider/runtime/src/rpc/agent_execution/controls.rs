@@ -388,12 +388,13 @@ impl ExecutionState {
         let scope = format!("subagent:{id}:{child_id}");
         let existing = timeline.has_entries(&scope)?;
         let live = self.manager.live_child(&id, &child_id);
-        if !live || !existing {
+        // An empty live projection is still owned by the stream; history may be ahead of it.
+        if !live {
             match self.manager.child_history(&id, child).await {
                 Ok(history) => {
                     timeline.reconcile(&scope, &record.provider, &history.entries)?;
                 }
-                Err(_) if live || existing => {}
+                Err(_) if existing => {}
                 Err(error) => return Err(error.into()),
             }
         }

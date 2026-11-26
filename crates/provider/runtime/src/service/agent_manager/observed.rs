@@ -453,6 +453,12 @@ impl AgentManager {
             self.mark_history_loaded(id);
             return Ok(());
         }
+        // Native history can be ahead of queued live events. Importing completed items here
+        // would make the later progress conflict and fail the owning parent's turn. Serve the
+        // live projection even before its first row; leave hydration retryable after detachment.
+        if self.live_child(&source.root_agent_id, &source.native_id) {
+            return Ok(());
+        }
         let _ = self.subagents(&source.root_agent_id).await;
         let child = NativeSubagent {
             persistence: source.persistence.clone(),

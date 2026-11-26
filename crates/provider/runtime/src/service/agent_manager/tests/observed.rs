@@ -3,6 +3,8 @@ use crate::service::agent_manager::observed::{register_children, scope};
 use crate::storage::timeline::Timeline;
 use domain::agent_runtime::observation::{ObservationHealth, ObservedStatus};
 use provider_core::ports::controls::NativeSubagent;
+use provider_core::ports::native_history::{SessionDescriptor, SessionHistory};
+use provider_core::protocol::timeline::NativeItem;
 
 fn child(id: &str, parent: &str, status: &str) -> NativeSubagent {
     NativeSubagent {
@@ -48,7 +50,7 @@ fn managed_native_identity_is_reused_without_forwarding_a_second_stream() {
         outbound,
     );
     subscription.activate().expect("subscribe");
-    let entry = provider_core::protocol::timeline::NativeItem {
+    let entry = NativeItem {
         key: "native:item".to_owned(),
         turn_id: None,
         timestamp: "2026-10-31T00:00:00Z".to_owned(),
@@ -345,4 +347,125 @@ fn unavailable_observations_keep_outcomes_and_stale_lists_cannot_reverse_complet
             .status,
         ObservedStatus::Unknown
     );
+}
+
+#[tokio::test]
+async fn opening_live_child_does_not_complete_items_ahead_of_queued_stream_events() {
+    use provider_core::ports::controls::SubagentEvent;
+
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .expect("create");
+    manager
+        .send("agent-1", "start")
+        .await
+        .expect("start parent");
+    manager.poll().await.expect("poll parent");
+    let timeline = Timeline::memory().expect("timeline");
+    manager = manager.with_timeline(timeline.clone());
+    let root = registry.get("agent-1").expect("registry").expect("root");
+    let native = child("native-child", "native-1", "running");
+    let ids = register_children(&registry, &timeline, &root, std::slice::from_ref(&native))
+        .expect("register child");
+    let id = &ids["native-child"];
+    let entry = NativeItem {
+        key: "native:child-turn:answer".to_owned(),
+        turn_id: Some("child-turn".to_owned()),
+        timestamp: "2026-10-30T01:00:00Z".to_owned(),
+        item: serde_json::json!({"type":"assistant_message","text":"answer"}),
+    };
+    {
+        let mut state = client.0.lock().expect("state");
+        state.subagents = vec![native];
+        // The provider has completed the message, but its live notifications are still queued.
+        state.inspected_history = Some(child_history(&entry));
+        state
+            .events
+            .push_back(AgentTurnEvent::Subagent(SubagentEvent::Progress {
+                id: "native-child".to_owned(),
+                observation: "late-delta".to_owned(),
+                entry: NativeItem {
+                    item: serde_json::json!({"type":"assistant_message","text":"ans"}),
+                    ..entry.clone()
+                },
+            }));
+        state
+            .events
+            .push_back(AgentTurnEvent::Subagent(SubagentEvent::Timeline {
+                id: "native-child".to_owned(),
+                entry: entry.clone(),
+            }));
+    }
+    manager.load_timeline(id).await.expect("open live child");
+    manager.poll().await.expect("drain queued child events");
+    assert_eq!(manager.active_turn("agent-1"), Some("native-turn"));
+    assert_eq!(client.0.lock().expect("state").close_calls, 0);
+    assert_eq!(client.0.lock().expect("state").inspect_calls, 0);
+    assert!(
+        !manager.history_loaded(id),
+        "deferred reads must remain retryable"
+    );
+    let source = registry
+        .get(id)
+        .expect("registry")
+        .expect("child")
+        .observation
+        .expect("source");
+    let rows = timeline.read(&scope(&source)).expect("child timeline").1;
+    assert_eq!(
+        rows.iter()
+            .filter_map(|row| row.entry.item["text"].as_str())
+            .collect::<String>(),
+        "answer"
+    );
+
+    // Once the live owner is gone, opening the child must still recover authoritative history.
+    manager.live.remove("agent-1");
+    client
+        .0
+        .lock()
+        .expect("state")
+        .inspected_history
+        .as_mut()
+        .expect("history")
+        .active = false;
+    manager
+        .load_timeline(id)
+        .await
+        .expect("load settled history");
+    assert_eq!(client.0.lock().expect("state").inspect_calls, 1);
+    assert!(manager.history_loaded(id));
+    assert_eq!(
+        registry
+            .get(id)
+            .expect("registry")
+            .expect("child")
+            .observation
+            .expect("source")
+            .native_id,
+        "native-child"
+    );
+}
+
+fn child_history(entry: &NativeItem) -> SessionHistory {
+    SessionHistory {
+        resume_metadata: BTreeMap::new(),
+        parent_id: Some("native-1".to_owned()),
+        descriptor: SessionDescriptor {
+            provider_id: "codex".to_owned(),
+            provider_label: "Codex".to_owned(),
+            provider_handle_id: "native-child".to_owned(),
+            cwd: "/tmp".to_owned(),
+            title: None,
+            first_prompt_preview: None,
+            last_prompt_preview: None,
+            last_activity_at: entry.timestamp.clone(),
+        },
+        created_at: entry.timestamp.clone(),
+        config: spec().config,
+        active: true,
+        entries: vec![entry.clone()],
+    }
 }

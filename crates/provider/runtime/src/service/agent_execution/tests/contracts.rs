@@ -6,7 +6,7 @@ use crate::testing::request;
 use provider_core::protocol::prompt::AgentPrompt;
 
 mod fixture;
-use fixture::{CommandOwnership, Harness};
+use fixture::{ChildOutput, CommandOwnership, Harness};
 
 #[tokio::test]
 async fn child_control_wait_does_not_block_parent_permission_and_returns_native_outcome() {
@@ -224,4 +224,26 @@ async fn command_ownership_uses_live_session_and_draft_uses_probe() {
     assert_eq!(draft["commands"][0]["name"], "probe");
     assert_eq!(harness.state.lock().unwrap().command_probes, 1);
     harness.execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn opening_live_child_before_first_output_does_not_read_native_history() {
+    let harness = Harness::new().await;
+    harness.state.lock().expect("state").child_output = ChildOutput::Deferred;
+    harness.send().await;
+    let page = request(
+        &harness.execution,
+        "agent.provider_subagents.timeline.get.request",
+        json!({"parentAgentId":harness.id, "subagentId":"native-child"}),
+    )
+    .await;
+    let history_reads = harness.state.lock().expect("state").history_reads;
+    let snapshot = harness.snapshot().await;
+    harness.execution.shutdown().await.expect("shutdown");
+    assert_eq!(page["rows"], json!([]));
+    assert_eq!(
+        history_reads, 0,
+        "live ownership also applies before the first event"
+    );
+    assert_eq!(snapshot["agent"]["activeTurn"]["turnId"], "native-turn");
 }

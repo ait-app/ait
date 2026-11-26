@@ -26,11 +26,19 @@ pub(super) enum CommandOwnership {
     Supported,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(super) enum ChildOutput {
+    #[default]
+    Immediate,
+    Deferred,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct State {
     pub(super) cancellations: usize,
     pub(super) closes: usize,
     pub(super) history_reads: usize,
+    pub(super) child_output: ChildOutput,
     events: VecDeque<AgentTurnEvent>,
     child: Option<NativeSubagent>,
     pub(super) child_controls: Vec<(String, String)>,
@@ -285,6 +293,9 @@ impl AgentSession for Session {
             state.events.push_back(AgentTurnEvent::PermissionRequested(
                 json!({"id":"permission-1", "toolName":"fixture"}),
             ));
+        }
+        if state.child_output == ChildOutput::Deferred {
+            return Ok("native-turn".to_owned());
         }
         state.events.push_back(AgentTurnEvent::Subagent(SubagentEvent::Progress {
             id:"native-child".to_owned(), observation:"child-progress".to_owned(),

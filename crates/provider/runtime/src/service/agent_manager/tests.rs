@@ -151,6 +151,9 @@ struct FakeState {
     resume_purposes: Vec<AgentResumePurpose>,
     resume_specs: Vec<AgentSessionSpec>,
     close_calls: usize,
+    subagents: Vec<provider_core::ports::controls::NativeSubagent>,
+    inspected_history: Option<provider_core::ports::native_history::SessionHistory>,
+    inspect_calls: usize,
     events: std::collections::VecDeque<AgentTurnEvent>,
     start_result: Result<(), AgentSessionError>,
     start_calls: usize,
@@ -197,6 +200,9 @@ impl Default for FakeState {
             resume_purposes: Vec::new(),
             resume_specs: Vec::new(),
             close_calls: 0,
+            subagents: Vec::new(),
+            inspected_history: None,
+            inspect_calls: 0,
             events: std::collections::VecDeque::new(),
             start_result: Ok(()),
             start_calls: 0,
@@ -229,6 +235,19 @@ struct FakeSession(Arc<Mutex<FakeState>>);
 
 #[async_trait::async_trait]
 impl AgentClient for FakeClient {
+    async fn inspect_session(
+        &self,
+        _handle: &AgentPersistenceHandle,
+        _cwd: &str,
+    ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
+        let mut state = self.0.lock().expect("state");
+        state.inspect_calls += 1;
+        state
+            .inspected_history
+            .clone()
+            .ok_or(AgentSessionError::Unavailable)
+    }
+
     fn commands_include_ownership(&self) -> bool {
         self.0.lock().unwrap().command_ownership == CommandOwnership::Supported
     }
@@ -324,6 +343,10 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 
 #[async_trait::async_trait]
 impl AgentSession for FakeSession {
+    fn subagents(&self) -> Vec<provider_core::ports::controls::NativeSubagent> {
+        self.0.lock().expect("state").subagents.clone()
+    }
+
     fn command_route(
         &self,
         _text: &str,
