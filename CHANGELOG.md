@@ -6,6 +6,10 @@
   Scoped tools omit directory arguments they cannot accept and explain how to correct invalid
   directory or provider/model arguments when creating agents.
 
+- Older desktop clients keep their Bot page when connecting to a shared-context Host, instead
+  of being told to update the Host. Their per-chat reset is refused without changing shared
+  context; update the client to reset the Bot context.
+
 - Add independent `aitd-bin` and `aitd-git` Arch packages with an opt-in systemd user service.
   Stable releases can publish both desktop and daemon binary recipes; Git recipes remain locally maintained.
 
