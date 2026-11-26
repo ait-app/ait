@@ -14,7 +14,7 @@ import {
   validateSshHost,
 } from "@ait/protocol/ssh-transport";
 import { z } from "zod";
-import { normalizeCenter } from "@ait/client/internal/account-session";
+import { accountServiceCenter } from "@ait/client/internal/account-session";
 import type { HubShareResourceKind } from "@ait/client/internal/hub";
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
@@ -369,7 +369,7 @@ export function createAccountRelayHostConnection(input: {
   shareResourceKind?: HubShareResourceKind;
 }): AccountRelayHostConnection {
   const hostId = z.uuid().parse(input.hostId.trim());
-  const center = normalizeCenter(input.center);
+  const center = accountServiceCenter(input.center);
   const shareId = input.shareId ? z.uuid().parse(input.shareId.trim()) : undefined;
   const nodeId = input.nodeId?.trim() || undefined;
   if ((shareId === undefined) !== (nodeId === undefined)) {
@@ -500,9 +500,16 @@ export function normalizeStoredHostProfile(entry: unknown): HostProfile | null {
   const record = result.data;
   const serverId = record.serverId;
 
+  const relayIds = new Set<string>();
   const connections = record.connections
     .map((connection) => normalizeStoredConnection(connection))
-    .filter((connection): connection is HostConnection => connection !== null);
+    .filter((connection): connection is HostConnection => {
+      if (!connection) return false;
+      if (connection.type !== "accountRelay") return true;
+      if (relayIds.has(connection.id)) return false;
+      relayIds.add(connection.id);
+      return true;
+    });
   if (connections.length === 0) {
     return null;
   }

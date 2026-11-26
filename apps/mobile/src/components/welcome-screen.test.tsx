@@ -166,11 +166,7 @@ describe("welcome account entry", () => {
       expect(view.queryByTestId("account-password")).toBeNull();
       expect(view.queryByTestId("account-legacy-login")).toBeNull();
       fireEvent.click(view.getByTestId("account-unified-login"));
-      await waitFor(() =>
-        expect(mocks.command).toHaveBeenCalledWith("account_login_hosted", {
-          center: "https://aitapp.cn/api",
-        }),
-      );
+      await waitFor(() => expect(mocks.command).toHaveBeenCalledWith("account_login_hosted"));
       expect(mocks.push).not.toHaveBeenCalled();
     },
   );
@@ -207,9 +203,7 @@ describe("welcome account entry", () => {
     expect(view.queryByTestId("account-legacy-login")).toBeNull();
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
-      expect(mocks.command).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
-        center: "https://aitapp.cn/api",
-      }),
+      expect(mocks.command).toHaveBeenCalledExactlyOnceWith("account_login_hosted"),
     );
   });
 });

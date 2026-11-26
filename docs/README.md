@@ -12,7 +12,7 @@
 | 移动端、Web 开发与网页镜像        | [Mobile 与 Web](../apps/mobile/README.md)                                              |
 | 独立 daemon 安装、登录、后台运行  | [无人值守 daemon](operations/headless-daemon.md)                                       |
 | daemon 配置、数据、鉴权和连接协议 | [daemon 手册](operations/daemon.md)                                                    |
-| 账号登录、主机上线与登录保持      | [统一登录](operations/authing-client-login.md)                                         |
+| 服务入口、账号登录与主机上线      | [统一登录](operations/authing-client-login.md)                                         |
 | 导出故障证据、排查远程连接        | [诊断](operations/diagnostics.md)、[Hub 与下载 Relay](operations/relay-diagnostics.md) |
 | SDK 和协议开发                    | [客户端 SDK](../packages/client/README.md)、[协议包](../packages/protocol/README.md)   |
 

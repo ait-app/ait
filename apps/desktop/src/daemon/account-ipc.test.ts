@@ -55,6 +55,15 @@ vi.mock("./account-session.js", () => ({
       this.status = "online";
       this.deps.notify(this.snapshot() as AccountSnapshot);
     }
+    async loginWithSelectedEntry() {
+      await this.loginWithBrowser();
+    }
+    async changeEntry(entry: { mode: "cn" | "global" }) {
+      await this.deps.saveEntry?.({ choice: entry });
+    }
+    async recommendEntry() {
+      return "cn";
+    }
     async logout() {
       await this.deps.save(null);
       this.status = "logged_out";
@@ -93,6 +102,18 @@ beforeEach(() => {
   mocks.unpublish.mockResolvedValue(undefined);
 });
 afterEach(() => rmSync(mocks.userDataPath, { recursive: true, force: true }));
+
+it("persists the entry preference separately and restores it after restart", async () => {
+  const command = invoke();
+  await expect(command(event, "account_entry_recommendation")).resolves.toBe("cn");
+  await command(event, "account_change_entry", { entry: { mode: "global" } });
+  await command(event, "account_logout");
+  expect(stored().entry).toEqual({ choice: { mode: "global" } });
+
+  const restarted = invoke();
+  await restarted(event, "account_status");
+  expect(mocks.deps?.savedEntry).toEqual({ choice: { mode: "global" } });
+});
 
 describe("desktop built-in daemon synchronization preference", () => {
   it("reads account information through the credential-owning manager", async () => {

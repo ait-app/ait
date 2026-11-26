@@ -1,3 +1,4 @@
+import { sameAccountService } from "@ait/client/internal/account-session";
 import { useCallback, useRef, useState, type ReactElement } from "react";
 import { Text, View } from "react-native";
 import { MessageSquare, Square } from "lucide-react-native";
@@ -47,7 +48,7 @@ function mayDriveParent(
   }
   return (
     account.status === "online" &&
-    account.center === connection.center &&
+    sameAccountService(account.center, connection.center) &&
     Boolean(account.accountId) &&
     parent.labels["ait.guest.share-id"] === connection.shareId &&
     parent.labels["ait.guest.user-id"] === account.accountId

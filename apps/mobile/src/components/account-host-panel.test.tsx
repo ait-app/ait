@@ -3,7 +3,7 @@ import React from "react";
 import "@/i18n/i18next";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { accountCommand } from "@/runtime/account-state";
+import { accountCommand, loadAccountEntryRecommendation } from "@/runtime/account-state";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { AccountHostPanel } from "./account-host-panel";
 
@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({ loginPending: false, status: "logged_out", acc
 vi.mock("@/utils/confirm-dialog", () => ({ confirmDialog: vi.fn(async () => false) }));
 vi.mock("@/runtime/account-state", () => ({
   accountCommand: vi.fn(async () => ({ status: "connecting" })),
+  loadAccountEntryRecommendation: vi.fn(async () => "global"),
   useAccountState: () => ({
     status: state.status,
     accountId: state.accountId,
@@ -41,27 +42,30 @@ describe("AccountHostPanel browser login", () => {
     expect(view.queryByTestId("account-delete")).toBeNull();
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
-      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
-        center: "https://aitapp.cn/api",
-      }),
+      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted"),
     );
     expect(signedIn).toHaveBeenCalledOnce();
   });
 
-  it("keeps service settings optional and submits the edited service address", async () => {
+  it("shows the recommended entry and saves a custom service before signing in", async () => {
     const cancel = vi.fn();
     const view = render(<AccountHostPanel onCancel={cancel} />);
     expect(view.queryByTestId("account-center")).toBeNull();
-    fireEvent.click(view.getByTestId("account-service-settings"));
+    const entry = view.getByTestId("account-service-entry-trigger");
+    await waitFor(() => expect(entry.textContent).toContain("Global recommended"));
+    expect(loadAccountEntryRecommendation).toHaveBeenCalledOnce();
+    fireEvent.click(entry);
+    fireEvent.click(await view.findByText("Custom URL"));
     fireEvent.change(view.getByLabelText("Service URL"), {
       target: { value: "https://private.example/api" },
     });
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
-      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
-        center: "https://private.example/api",
+      expect(accountCommand).toHaveBeenNthCalledWith(1, "account_change_entry", {
+        entry: { mode: "custom", center: "https://private.example/api" },
       }),
     );
+    expect(accountCommand).toHaveBeenNthCalledWith(2, "account_login_hosted");
     await waitFor(() =>
       expect(view.getByRole("button", { name: "Cancel" }).hasAttribute("disabled")).toBe(false),
     );

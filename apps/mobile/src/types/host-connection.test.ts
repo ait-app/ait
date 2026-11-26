@@ -76,7 +76,11 @@ describe("normalizeStoredHostProfile", () => {
     ).toBeNull();
   });
 
-  it.each(["https://dash.ait-app.com:8443/api", "https://aitapp.cn:8443/api"])(
+  it.each([
+    "https://dash.ait-app.com:8443/api",
+    "https://aitapp.cn:8443/api",
+    "https://hub.ait-app.com/api",
+  ])(
     "migrates a saved official relay host at %s while retaining its preferred connection",
     (center) => {
       const hostId = "11111111-1111-4111-8111-111111111111";
@@ -98,6 +102,20 @@ describe("normalizeStoredHostProfile", () => {
       expect(profile?.preferredConnectionId).toBe(migrated.id);
     },
   );
+
+  it("merges the two official entries for a Host that was previously stored twice", () => {
+    const hostId = "11111111-1111-4111-8111-111111111111";
+    const domestic = createAccountRelayHostConnection({ hostId, center: "https://aitapp.cn/api" });
+    const globalCenter = "https://hub.ait-app.com/api";
+    const oldGlobalId = `account-relay:${encodeURIComponent(globalCenter)}:${hostId}`;
+    const profile = normalizeStoredHostProfile({
+      serverId: "account-host",
+      connections: [domestic, { ...domestic, id: oldGlobalId, center: globalCenter }],
+      preferredConnectionId: oldGlobalId,
+    });
+    expect(profile?.connections).toEqual([domestic]);
+    expect(profile?.preferredConnectionId).toBe(domestic.id);
+  });
 
   it("restores saved online-service hosts with their service binding and appearance", () => {
     const connection = createAccountRelayHostConnection({

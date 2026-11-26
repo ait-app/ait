@@ -1,15 +1,20 @@
 import { supportsBrowserAccount } from "@/runtime/browser-account";
-import React, { useRef, useState, type ReactNode } from "react";
-import { Keyboard, Pressable, Text, View } from "react-native";
+import React, { useEffect, useRef, useState, type ReactNode } from "react";
+import { Keyboard, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { ChevronDown, ChevronRight, ExternalLink, RotateCw } from "lucide-react-native";
+import { ExternalLink, RotateCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { StatusBadge } from "./ui/status-badge";
 import { AdaptiveTextInput } from "./adaptive-text-input";
-import { accountCommand, useAccountState } from "@/runtime/account-state";
+import {
+  accountCommand,
+  loadAccountEntryRecommendation,
+  useAccountState,
+} from "@/runtime/account-state";
+import type { AccountEntry, AccountRegion } from "@ait/client/internal/account-session";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { SettingsCard, SettingsRow, SettingsSection } from "./settings";
+import { SettingsCard, SettingsRow, SettingsSection, SettingsSelect } from "./settings";
 
 export function AccountHostPanel({
   onSignedIn,
@@ -28,10 +33,14 @@ export function AccountHostPanel({
   const accountIdentity = JSON.stringify([account.center, account.accountId, account.name]);
   const currentAccountIdentity = useRef(accountIdentity);
   currentAccountIdentity.current = accountIdentity;
-  // Follow the account snapshot until the user edits the optional override.
-  const [centerOverride, setCenterOverride] = useState<string | null>(null);
-  const center = centerOverride ?? account.center;
-  const [showServiceSettings, setShowServiceSettings] = useState(false);
+  const browserAccount = supportsBrowserAccount();
+  const entry = account.entry ?? { mode: "auto" };
+  const [recommended, setRecommended] = useState<AccountRegion | null>(null);
+  const [editingCustom, setEditingCustom] = useState(false);
+  const [customDraft, setCustomDraft] = useState<string | null>(null);
+  const savedCustom = entry.mode === "custom" ? entry.center : "";
+  const customCenter = customDraft ?? savedCustom;
+  const showCustom = editingCustom || entry.mode === "custom";
   const [working, setBusy] = useState(false);
   const busy = working || account.loginPending === true;
   const busyRef = useRef(false);
@@ -52,10 +61,93 @@ export function AccountHostPanel({
       setBusy(false);
     }
   };
-  const ServiceSettingsIcon = showServiceSettings ? ChevronDown : ChevronRight;
+  const mode = entry.mode;
+  useEffect(() => {
+    if (browserAccount || mode !== "auto") return;
+    let current = true;
+    void loadAccountEntryRecommendation().then(
+      (region) => {
+        if (current) setRecommended(region);
+      },
+      () => {
+        if (current) setRecommended(null);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [browserAccount, mode]);
+
+  const changeEntry = async (entry: AccountEntry) => {
+    await accountCommand("account_change_entry", { entry });
+    setCustomDraft(null);
+    setEditingCustom(false);
+  };
+  const choice = editingCustom ? "custom" : mode;
+  const saveCustom = () => changeEntry({ mode: "custom", center: customCenter });
+  const entrySelect = !browserAccount && (
+    <SettingsSelect<AccountEntry["mode"]>
+      testID="account-service-entry"
+      label={t("onlineService.serviceEntry")}
+      value={choice}
+      options={[
+        {
+          value: "auto",
+          label: recommended
+            ? t("onlineService.entryRecommended", {
+                region: t(
+                  recommended === "cn" ? "onlineService.entryChina" : "onlineService.entryGlobal",
+                ),
+              })
+            : t("onlineService.entryAuto"),
+        },
+        { value: "cn", label: t("onlineService.entryChina") },
+        { value: "global", label: t("onlineService.entryGlobal") },
+        { value: "custom", label: t("onlineService.entryCustom") },
+      ]}
+      disabled={busy}
+      onValueChange={(value) => {
+        if (value === "custom") setEditingCustom(true);
+        else if (value !== mode || editingCustom)
+          void runAccountAction(() => changeEntry({ mode: value }));
+      }}
+    />
+  );
+  const customSettings = !browserAccount && showCustom && (
+    <SettingsRow
+      label={t("onlineService.serviceUrl")}
+      hint={account.status !== "logged_out" ? t("onlineService.entryNextLogin") : undefined}
+    >
+      <View style={styles.actions}>
+        <AdaptiveTextInput
+          style={styles.input}
+          initialValue={customCenter}
+          resetKey={savedCustom}
+          onChangeText={setCustomDraft}
+          placeholder="https://your-server.example/api"
+          accessibilityLabel={t("onlineService.serviceUrl")}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!busy}
+          testID="account-center"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy || !customCenter.trim() || customCenter.trim() === savedCustom}
+          onPress={() => void runAccountAction(saveCustom)}
+        >
+          {t("common.actions.save")}
+        </Button>
+      </View>
+    </SettingsRow>
+  );
 
   const signIn = async () => {
-    const snapshot = await accountCommand("account_login_hosted", { center });
+    if (showCustom && (entry.mode !== "custom" || customCenter.trim() !== savedCustom)) {
+      await saveCustom();
+    }
+    const snapshot = await accountCommand("account_login_hosted");
     if (snapshot.status === "logged_out") return;
     Keyboard.dismiss();
     onSignedIn?.();
@@ -90,7 +182,7 @@ export function AccountHostPanel({
                     variant="default"
                     size="sm"
                     leftIcon={ExternalLink}
-                    disabled={busy}
+                    disabled={busy || (showCustom && !customCenter.trim())}
                     loading={busy}
                     testID="account-unified-login"
                     onPress={() => void runAccountAction(signIn)}
@@ -103,35 +195,8 @@ export function AccountHostPanel({
                   </Button>
                 </View>
               </SettingsRow>
-              {!supportsBrowserAccount() ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: showServiceSettings, disabled: busy }}
-                  style={styles.disclosure}
-                  disabled={busy}
-                  onPress={() => setShowServiceSettings((shown) => !shown)}
-                  testID="account-service-settings"
-                >
-                  <Text style={styles.disclosureText}>{t("onlineService.serviceSettings")}</Text>
-                  <ServiceSettingsIcon size={16} color={theme.colors.foregroundMuted} />
-                </Pressable>
-              ) : null}
-              {!supportsBrowserAccount() && showServiceSettings ? (
-                <SettingsRow label={t("onlineService.serviceUrl")}>
-                  <AdaptiveTextInput
-                    style={styles.input}
-                    initialValue={center}
-                    resetKey={account.center}
-                    onChangeText={setCenterOverride}
-                    placeholder={t("onlineService.serviceUrlHint")}
-                    accessibilityLabel={t("onlineService.serviceUrl")}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!busy}
-                    testID="account-center"
-                  />
-                </SettingsRow>
-              ) : null}
+              {entrySelect}
+              {customSettings}
             </SettingsCard>
           </SettingsSection>
           {error || account.error ? (
@@ -180,16 +245,24 @@ export function AccountHostPanel({
               {t("onlineService.refresh")}
             </Button>
           </View>
-          {children ?? (
-            <SettingsSection title={t("onlineService.accountInfo")} flush>
+          {!browserAccount && (
+            <SettingsSection title={t("onlineService.serviceEntry")} flush>
               <SettingsCard>
-                {!supportsBrowserAccount() ? (
-                  <SettingsRow label={t("onlineService.serviceUrl")}>
+                {entrySelect}
+                {customSettings}
+                {children ? null : (
+                  <SettingsRow label={t("onlineService.activeEntry")}>
                     <Text selectable style={styles.value}>
                       {account.center}
                     </Text>
                   </SettingsRow>
-                ) : null}
+                )}
+              </SettingsCard>
+            </SettingsSection>
+          )}
+          {children ?? (
+            <SettingsSection title={t("onlineService.accountInfo")} flush>
+              <SettingsCard>
                 <SettingsRow label={t("onlineService.accountExpiry")}>
                   <Text selectable style={styles.value}>
                     {account.accountExpiresAt
@@ -276,18 +349,6 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     justifyContent: "flex-end",
     gap: theme.spacing[2],
-  },
-  disclosure: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    justifyContent: "space-between",
-    padding: theme.spacing[4],
-  },
-  disclosureText: {
-    fontSize: theme.fontSize.base,
-    flexShrink: 1,
-    color: theme.colors.foreground,
   },
   accountHeader: {
     flexDirection: "row",

@@ -25,6 +25,7 @@ vi.mock("react-native", async (original) => {
 vi.mock("@/runtime/account-state", () => ({
   useAccountState: () => state.value,
   accountCommand: state.command,
+  loadAccountEntryRecommendation: vi.fn(async () => null),
 }));
 afterEach(() => {
   cleanup();

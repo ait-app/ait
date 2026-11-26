@@ -4,6 +4,10 @@ import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 import { HubLink, formatDiagnosticFields } from "@ait/client/internal/hub";
 import log from "electron-log/main";
+import {
+  readSavedAccountEntry,
+  type SavedAccountEntry,
+} from "@ait/client/internal/account-session";
 import type { WebSocketLike } from "@ait/client/internal/daemon-client-transport-types";
 import { readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
@@ -51,15 +55,18 @@ export function createAccountIpc(
   // Ciphertext this launch could not decrypt; a locked keychain must not become a sign-out.
   let undecryptedAccount: string | null = null;
   let syncBuiltInDaemon = true;
+  let savedEntry: SavedAccountEntry | undefined;
   try {
     const stored = JSON.parse(readFileSync(file, "utf8")) as {
       installationId?: string;
       account?: string;
       syncBuiltInDaemon?: boolean;
+      entry?: unknown;
     };
     if (typeof stored.installationId === "string" && /^[0-9a-f-]{36}$/i.test(stored.installationId))
       installationId = stored.installationId;
     if (typeof stored.syncBuiltInDaemon === "boolean") syncBuiltInDaemon = stored.syncBuiltInDaemon;
+    savedEntry = readSavedAccountEntry(stored.entry);
     undecryptedAccount = stored.account ?? null;
     if (stored.account && canRemember()) {
       saved = JSON.parse(
@@ -77,11 +84,17 @@ export function createAccountIpc(
         ? safeStorage.encryptString(JSON.stringify(saved)).toString("base64")
         : undecryptedAccount;
     const syncPreference = syncBuiltInDaemon;
+    const entry = savedEntry;
     const next = saveTail.then(async () => {
       await mkdir(path.dirname(file), { recursive: true });
       await writeFile(
         `${file}.tmp`,
-        JSON.stringify({ installationId, account: encoded, syncBuiltInDaemon: syncPreference }),
+        JSON.stringify({
+          installationId,
+          account: encoded,
+          syncBuiltInDaemon: syncPreference,
+          entry,
+        }),
         {
           mode: 0o600,
         },
@@ -92,10 +105,20 @@ export function createAccountIpc(
     return next;
   };
   // A login or sign-out supersedes any credential this launch could not read.
-  const save = (value: SavedAccount | null): Promise<void> => {
+  const save = async (value: SavedAccount | null): Promise<void> => {
+    const previous = saved;
+    const previousCiphertext = undecryptedAccount;
     saved = value;
     undecryptedAccount = null;
-    return persist();
+    try {
+      await persist();
+    } catch (error) {
+      if (saved === value) {
+        saved = previous;
+        undecryptedAccount = previousCiphertext;
+      }
+      throw error;
+    }
   };
   let transports: AccountTransportManager;
   let downloads: AccountDownloadManager;
@@ -113,6 +136,17 @@ export function createAccountIpc(
     browserLogin: desktopBrowserLogin((url) => shell.openExternal(url)),
     openUrl: (url) => shell.openExternal(url),
     save,
+    savedEntry,
+    saveEntry: async (entry) => {
+      const previous = savedEntry;
+      savedEntry = entry;
+      try {
+        await persist();
+      } catch (error) {
+        savedEntry = previous;
+        throw error;
+      }
+    },
     closeTransports: () => {
       transports?.closeAll();
       downloads?.closeAll();
@@ -201,10 +235,16 @@ export function createAccountIpc(
         case "account_hub_presence":
           await hubBridge.reportPresence(event.sender, args.presence);
           return null;
+        case "account_entry_recommendation":
+          return manager.recommendEntry();
+        case "account_change_entry":
+          await manager.changeEntry(args.entry);
+          return snapshot();
         case "account_login_hosted": {
           if (args.center !== undefined && typeof args.center !== "string")
             throw new Error("Invalid service URL");
-          await manager.loginWithBrowser((args.center as string) ?? "");
+          if (typeof args.center === "string") await manager.loginWithBrowser(args.center);
+          else await manager.loginWithSelectedEntry();
           const window = BrowserWindow.fromWebContents(event.sender);
           if (window && !window.isDestroyed()) {
             if (window.isMinimized()) window.restore();
@@ -351,6 +391,7 @@ export function createAccountIpc(
     if (
       [
         "account_login_hosted",
+        "account_change_entry",
         "account_logout",
         "account_delete",
         "account_select",

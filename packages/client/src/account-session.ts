@@ -16,6 +16,18 @@ import {
 
 /** API base includes the management gateway prefix; all relay URLs derive from it. */
 export const DEFAULT_ACCOUNT_CENTER = "https://aitapp.cn/api";
+export const GLOBAL_ACCOUNT_CENTER = "https://hub.ait-app.com/api";
+export type AccountRegion = "cn" | "global";
+export type AccountEntry = { mode: "auto" | AccountRegion } | { mode: "custom"; center: string };
+export interface SavedAccountEntry {
+  choice: AccountEntry;
+  lastRegion?: AccountRegion;
+}
+
+const ACCOUNT_CENTERS: Record<AccountRegion, string> = {
+  cn: DEFAULT_ACCOUNT_CENTER,
+  global: GLOBAL_ACCOUNT_CENTER,
+};
 
 /** One Host of the account, built from the Hub link's `hosts` frames. */
 export interface AccountHost {
@@ -89,6 +101,7 @@ export interface AccountSnapshot {
   synchronizedHosts?: string[];
   accountExpiresAt?: string | null;
   loginPending?: boolean;
+  entry?: AccountEntry;
   /** Stable subject of the signed-in account; scopes hosts persisted from this account. */
   accountId?: string;
 }
@@ -100,6 +113,8 @@ export interface AccountDependencies {
   randomUUID(): string;
   appVersion: string;
   save(account: SavedAccount | null): Promise<void>;
+  savedEntry?: SavedAccountEntry;
+  saveEntry?(entry: SavedAccountEntry): Promise<void>;
   notify(snapshot: AccountSnapshot): void;
   closeTransports(): void;
   fetch?: typeof fetch;
@@ -142,6 +157,51 @@ export function normalizeCenter(value: string): string {
   return center === "https://dash.ait-app.com:8443/api" || center === "https://aitapp.cn:8443/api"
     ? DEFAULT_ACCOUNT_CENTER
     : center;
+}
+
+export function officialAccountRegion(center: string): AccountRegion | null {
+  if (center === DEFAULT_ACCOUNT_CENTER) return "cn";
+  if (center === GLOBAL_ACCOUNT_CENTER) return "global";
+  return null;
+}
+
+/** Both official entries share accounts and Host IDs. Self-hosted services use their own URL. */
+export function accountServiceCenter(center: string): string {
+  const normalized = normalizeCenter(center);
+  return officialAccountRegion(normalized) ? DEFAULT_ACCOUNT_CENTER : normalized;
+}
+
+export function sameAccountService(left: string | null | undefined, right: string): boolean {
+  return !!left && accountServiceCenter(left) === accountServiceCenter(right);
+}
+
+function parseAccountEntry(value: unknown): AccountEntry {
+  if (value && typeof value === "object" && "mode" in value) {
+    if (value.mode === "auto" || value.mode === "cn" || value.mode === "global")
+      return { mode: value.mode };
+    if (
+      value.mode === "custom" &&
+      "center" in value &&
+      typeof value.center === "string" &&
+      value.center.trim()
+    ) {
+      const center = normalizeCenter(value.center);
+      const region = officialAccountRegion(center);
+      return region ? { mode: region } : { mode: "custom", center };
+    }
+  }
+  throw new Error("Invalid account service entry.");
+}
+
+export function readSavedAccountEntry(value: unknown): SavedAccountEntry | undefined {
+  if (!value || typeof value !== "object" || !("choice" in value)) return undefined;
+  try {
+    const choice = parseAccountEntry(value.choice);
+    const region = "lastRegion" in value ? value.lastRegion : undefined;
+    return region === "cn" || region === "global" ? { choice, lastRegion: region } : { choice };
+  } catch {
+    return undefined;
+  }
 }
 
 /** A relay visit started during startup may wait this long for this device's registration. */
@@ -262,7 +322,12 @@ export class AccountSessionManager {
     selected: null,
   };
 
+  private entry: SavedAccountEntry;
+  private entryRecommendation: { expires: number; result: Promise<AccountRegion | null> } | null =
+    null;
+
   constructor(private readonly deps: AccountDependencies) {
+    this.entry = deps.savedEntry ?? { choice: { mode: "auto" } };
     this.registrationId = deps.randomUUID();
   }
 
@@ -304,6 +369,7 @@ export class AccountSessionManager {
     const selected = hosts.find((host) => host.host_id === this.state.selected?.host_id) ?? null;
     return {
       ...this.state,
+      entry: this.entry.choice,
       ...(ready ? { status: "online" as const, error: null } : {}),
       stale: !ready,
       confirmedHostIds: ready
@@ -352,6 +418,101 @@ export class AccountSessionManager {
     }
   }
 
+  /** Discovery sends an unauthenticated request to the installed official endpoints only. */
+  recommendEntry(): Promise<AccountRegion | null> {
+    if (this.entryRecommendation && this.entryRecommendation.expires > Date.now())
+      return this.entryRecommendation.result;
+    const requests = new Set<AbortController>();
+    const result = Promise.any(
+      Object.values(ACCOUNT_CENTERS).map(async (center) => {
+        const result = await this.http<{ recommended_region?: unknown }>(
+          center,
+          null,
+          "/v1/client/bootstrap",
+          "GET",
+          undefined,
+          requests,
+          1500,
+        );
+        const region = result?.recommended_region;
+        if (region === "cn" || region === "global") return region;
+        throw new Error("No entry recommendation.");
+      }),
+    )
+      .catch(() => null)
+      .finally(() => {
+        for (const request of requests) request.abort();
+      });
+    this.entryRecommendation = { expires: Date.now() + 60_000, result };
+    return result;
+  }
+
+  private async automaticCenters(): Promise<string[]> {
+    const region = (await this.recommendEntry()) ?? this.entry.lastRegion ?? "cn";
+    return [ACCOUNT_CENTERS[region], ACCOUNT_CENTERS[region === "cn" ? "global" : "cn"]];
+  }
+
+  /** Resolve the automatic fallback before starting the browser authorization. */
+  async loginWithSelectedEntry(): Promise<AccountSnapshot> {
+    const choice = this.entry.choice;
+    if (choice.mode !== "auto")
+      return this.loginWithBrowser(
+        choice.mode === "custom" ? choice.center : ACCOUNT_CENTERS[choice.mode],
+      );
+    const centers = await this.automaticCenters();
+    for (const center of centers) {
+      const supported = await this.loginMethods(center).catch(() => ({ hosted: false }));
+      if (supported.hosted) return this.startBrowserLogin(center);
+    }
+    throw new Error(
+      "Could not reach the official Ait sign-in service. Try again or choose a service entry.",
+    );
+  }
+
+  /** Change an official entry without clearing the account credentials. */
+  async changeEntry(value: unknown): Promise<void> {
+    const choice = parseAccountEntry(value);
+    const account = this.account;
+    const generation = this.generation;
+    let center: string | undefined;
+    if (account && officialAccountRegion(account.center) && choice.mode !== "custom") {
+      center =
+        choice.mode === "auto" ? (await this.automaticCenters())[0] : ACCOUNT_CENTERS[choice.mode];
+      if (center !== account.center) {
+        // Verify the other gateway shares this session before disconnecting the running link.
+        try {
+          await this.http(center, account.token, "/v1/me", "GET");
+        } catch (error) {
+          if (choice.mode !== "auto") throw error;
+          center = account.center;
+        }
+      }
+    }
+    if (this.generation !== generation) throw new Error("The account changed. Try again.");
+    const region = center ? officialAccountRegion(center) : null;
+    const previousEntry = this.entry;
+    const entry = { ...previousEntry, choice, ...(region ? { lastRegion: region } : {}) };
+    await this.deps.saveEntry?.(entry);
+    this.entry = entry;
+    if (!account || !center || center === account.center) {
+      this.update({});
+      return;
+    }
+    if (this.generation !== generation) throw new Error("The account changed. Try again.");
+    const next = { ...account, center };
+    delete next.nodeSessionId;
+    await this.disconnectAccount(false, center);
+    try {
+      await this.deps.save(next);
+    } catch (error) {
+      this.entry = previousEntry;
+      await this.deps.saveEntry?.(previousEntry).catch(() => undefined);
+      await this.restore({ ...next, center: account.center });
+      throw error;
+    }
+    await this.restore(next);
+  }
+
   cancelLogin(): void {
     this.browserLogin?.abort();
   }
@@ -363,6 +524,12 @@ export class AccountSessionManager {
       throw new Error(
         "This service does not support client browser sign-in. Update the service or choose another service URL.",
       );
+    return this.startBrowserLogin(center);
+  }
+
+  private async startBrowserLogin(center: string): Promise<AccountSnapshot> {
+    const browser = this.deps.browserLogin;
+    if (!browser) throw new Error("Browser sign-in is unavailable.");
     await this.logout();
     const attempt = new AbortController();
     this.browserLogin = attempt;
@@ -460,6 +627,11 @@ export class AccountSessionManager {
       accountExpiresAt: result.user.expires_at ?? null,
     };
     await this.deps.save(this.account);
+    const region = officialAccountRegion(center);
+    if (region) {
+      this.entry = { ...this.entry, lastRegion: region };
+      await this.deps.saveEntry?.(this.entry).catch(() => undefined);
+    }
     this.update({
       status: "connecting",
       center,
@@ -476,6 +648,11 @@ export class AccountSessionManager {
       return;
     }
     this.account = { ...account, center: normalizeCenter(account.center) };
+    if (!this.deps.savedEntry && this.entry.choice.mode === "auto") {
+      const region = officialAccountRegion(this.account.center);
+      if (region) this.entry = { ...this.entry, lastRegion: region };
+      else this.entry = { choice: { mode: "custom", center: this.account.center } };
+    }
     this.update({
       status: "connecting",
       center: this.account.center,
@@ -522,7 +699,7 @@ export class AccountSessionManager {
     return true;
   }
 
-  private async disconnectAccount(forgetAccount: boolean): Promise<void> {
+  private async disconnectAccount(forgetAccount: boolean, releaseCenter?: string): Promise<void> {
     this.cancelLogin();
     this.generation += 1;
     if (this.timer) clearTimeout(this.timer);
@@ -543,7 +720,7 @@ export class AccountSessionManager {
     await this.running?.catch(() => undefined);
     if (account && node) {
       await this.http(
-        account.center,
+        releaseCenter ?? account.center,
         account.token,
         `/v1/node-sessions/${node.node_session_id}`,
         "DELETE",
@@ -618,7 +795,7 @@ export class AccountSessionManager {
     const account = this.account;
     const generation = this.generation;
     if (!account || this.suspended || this.closing) throw new Error("Sign in first.");
-    if (normalizeCenter(center) !== account.center)
+    if (!sameAccountService(center, account.center))
       throw new Error("The account service changed. Refresh and try again.");
     if (shareId.length !== 36 || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(shareId))
       throw new Error("Invalid share ID.");
@@ -653,7 +830,7 @@ export class AccountSessionManager {
     const account = this.account;
     const generation = this.generation;
     if (!account || this.suspended || this.closing) throw new Error("Sign in first.");
-    if (account.center !== DEFAULT_ACCOUNT_CENTER)
+    if (!officialAccountRegion(account.center))
       throw new Error(
         "This daemon uses the official account service. Sign in there to authorize it.",
       );
@@ -709,7 +886,7 @@ export class AccountSessionManager {
     if (this.suspended || !this.account || !this.node) {
       throw new Error("Sign in and wait for this device to register.");
     }
-    if (normalizeCenter(expectedCenter) !== this.account.center) {
+    if (!sameAccountService(expectedCenter, this.account.center)) {
       throw new Error("Sign in to the online service used by this host.");
     }
     const generation = this.generation;
@@ -748,7 +925,7 @@ export class AccountSessionManager {
   ): Promise<HubSession | null> {
     const hub = this.hub;
     if (!hub || this.suspended || !this.account) return null;
-    if (normalizeCenter(expectedCenter) !== this.account.center) return null;
+    if (!sameAccountService(expectedCenter, this.account.center)) return null;
     if (hub.pending) await hub.whenReady(NODE_READY_WAIT_MS / 2);
     if (!hub.ready || hub.centerUrl !== this.account.center) return null;
     const host = hub.hostFor(hostId);
@@ -1010,10 +1187,11 @@ export class AccountSessionManager {
     method: string,
     body?: unknown,
     requests = this.requests,
+    timeoutMs = 5000,
   ): Promise<T> {
     const abort = new AbortController();
     requests.add(abort);
-    const timer = setTimeout(() => abort.abort(), 5000);
+    const timer = setTimeout(() => abort.abort(), timeoutMs);
     try {
       const response = await (this.deps.fetch ?? fetch)(`${center}${path}`, {
         method,

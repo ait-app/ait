@@ -3,6 +3,9 @@ import {
   AccountSessionManager,
   accountSubject,
   normalizeCenter,
+  DEFAULT_ACCOUNT_CENTER,
+  GLOBAL_ACCOUNT_CENTER,
+  readSavedAccountEntry,
   type AccountDependencies,
   type SavedAccount,
 } from "./account-session.js";
@@ -261,6 +264,29 @@ describe("direct share invitations", () => {
       }),
     );
     await f.manager.logout();
+  });
+
+  it("uses the selected official endpoint when a saved share names the other one", async () => {
+    const { manager, http } = fixture();
+    await manager.restore({
+      center: GLOBAL_ACCOUNT_CENTER,
+      token: "saved-jwt",
+      name: "Me",
+      expiresAt: Date.now() + 60_000,
+    });
+    http.mockResolvedValueOnce(Response.json({ token }, { status: 201 }));
+
+    await expect(manager.createShareInvitation(center, share, "alice")).resolves.toBe(
+      `https://hub.ait-app.com/dash/share-invite#${token}`,
+    );
+
+    expect(http).toHaveBeenCalledExactlyOnceWith(
+      `${GLOBAL_ACCOUNT_CENTER}/v1/shares/${share}/invitations`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer saved-jwt" }),
+      }),
+    );
+    await manager.logout();
   });
 
   it("checks the center and share ID, and rejects malformed issued tokens", async () => {
@@ -1182,6 +1208,21 @@ describe("daemon authorization handoff", () => {
     expect(JSON.stringify(manager.snapshot())).not.toContain(handoff.device_code);
   });
 
+  it("uses the overseas official entry to authorize a local daemon", async () => {
+    const { manager, http } = approvalFixture();
+    await manager.loginWithBrowser(GLOBAL_ACCOUNT_CENTER);
+
+    await expect(manager.authorizeHost(runtime)).resolves.toMatchObject({ kind: "device_code" });
+
+    expect(http).toHaveBeenCalledWith(
+      `${GLOBAL_ACCOUNT_CENTER}/v1/auth/device/approve`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    await manager.logout();
+  });
+
   it("requires a signed-in official account and rejects invalid machine identity", async () => {
     const { manager, login, http } = approvalFixture();
     await expect(manager.authorizeHost(runtime)).rejects.toThrow("Sign in");
@@ -1598,5 +1639,125 @@ describe("hub features", () => {
       f.link.stop();
       await f.manager.logout();
     });
+  });
+});
+
+describe("official service entry", () => {
+  it("uses a credential-free IP recommendation for both parts of browser sign-in", async () => {
+    const { manager, http, open } = browserFixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/client/bootstrap")
+        ? Promise.resolve(
+            Response.json({ recommended_region: "global", url: "https://other.test" }),
+          )
+        : original(url, options),
+    );
+
+    expect(await manager.recommendEntry()).toBe("global");
+    await manager.loginWithSelectedEntry();
+
+    expect(open.mock.calls[0]?.[0]("ait://auth/callback")).toMatch(
+      /^https:\/\/hub\.ait-app\.com\/api\/v1\/auth\/authorize\?/,
+    );
+    expect(http).toHaveBeenCalledWith(
+      `${GLOBAL_ACCOUNT_CENTER}/v1/auth/client/exchange`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(
+      http.mock.calls.filter(([url]) => String(url).endsWith("/client/bootstrap")),
+    ).toHaveLength(2);
+    expect(
+      http.mock.calls.every(([, options]) => !new Headers(options?.headers).has("Authorization")),
+    ).toBe(true);
+    expect(manager.snapshot().center).toBe(GLOBAL_ACCOUNT_CENTER);
+    await manager.logout();
+  });
+
+  it("tries the other official entry if the recommended gateway cannot start login", async () => {
+    const { manager, http } = browserFixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) => {
+      if (String(url).endsWith("/client/bootstrap"))
+        return Promise.resolve(Response.json({ recommended_region: "global" }));
+      if (url === `${GLOBAL_ACCOUNT_CENTER}/v1/auth/providers`)
+        return Promise.reject(new Error("Offline"));
+      return original(url, options);
+    });
+
+    await manager.loginWithSelectedEntry();
+
+    expect(manager.snapshot().center).toBe(DEFAULT_ACCOUNT_CENTER);
+    expect(http).toHaveBeenCalledWith(
+      `${DEFAULT_ACCOUNT_CENTER}/v1/auth/client/exchange`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    await manager.logout();
+  });
+
+  it("skips IP discovery for a manual choice and persists it independently of sign-out", async () => {
+    const { manager, http, deps } = browserFixture();
+    deps.saveEntry = vi.fn(async () => undefined);
+
+    await manager.changeEntry({ mode: "global" });
+    await manager.loginWithSelectedEntry();
+    await manager.logout();
+
+    expect(http.mock.calls.some(([url]) => String(url).endsWith("/client/bootstrap"))).toBe(false);
+    expect(manager.snapshot().entry).toEqual({ mode: "global" });
+    expect(deps.saveEntry).toHaveBeenLastCalledWith({
+      choice: { mode: "global" },
+      lastRegion: "global",
+    });
+  });
+
+  it("switches an existing official session and keeps saved Host connections usable", async () => {
+    const { manager, http, login, deps } = fixture();
+    await login();
+    vi.mocked(deps.save).mockClear();
+
+    await manager.changeEntry({ mode: "global" });
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(manager.snapshot()).toMatchObject({ center: GLOBAL_ACCOUNT_CENTER, status: "online" });
+    expect(deps.save).not.toHaveBeenCalledWith(null);
+    expect(deps.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({ center: GLOBAL_ACCOUNT_CENTER, token: "private-jwt" }),
+    );
+    expect(http).toHaveBeenCalledWith(
+      `${GLOBAL_ACCOUNT_CENTER}/v1/me`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    const download = await manager.openDownload("remote", "download-token", DEFAULT_ACCOUNT_CENTER);
+    expect(download.url).toMatch(/^wss:\/\/hub\.ait-app\.com\//);
+    await manager.logout();
+  });
+
+  it("preserves a working session if the other official endpoint rejects it", async () => {
+    const { manager, http, login, deps } = fixture();
+    await login();
+    vi.mocked(deps.save).mockClear();
+    http.mockResolvedValueOnce(new Response(null, { status: 401 }));
+
+    await expect(manager.changeEntry({ mode: "global" })).rejects.toThrow();
+
+    expect(manager.snapshot()).toMatchObject({
+      center: DEFAULT_ACCOUNT_CENTER,
+      status: "online",
+      entry: { mode: "auto" },
+    });
+    expect(deps.save).not.toHaveBeenCalled();
+    await manager.logout();
+  });
+
+  it("validates saved custom choices without merging them into the official service", () => {
+    expect(
+      readSavedAccountEntry({ choice: { mode: "custom", center: " https://custom.test/api/ " } }),
+    ).toEqual({ choice: { mode: "custom", center: "https://custom.test/api" } });
+    expect(
+      readSavedAccountEntry({ choice: { mode: "custom", center: "http://example.test/api" } }),
+    ).toBeUndefined();
   });
 });

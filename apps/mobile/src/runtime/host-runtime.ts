@@ -74,6 +74,7 @@ import {
 import type { HubShare } from "@ait/client/internal/hub";
 import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@ait/protocol/browser-automation/rpc-schemas";
 import { CLIENT_CAPS } from "@ait/protocol/client-capabilities";
+import { accountServiceCenter } from "@ait/client/internal/account-session";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import equal from "fast-deep-equal/es6";
 import { useMemo, useSyncExternalStore } from "react";
@@ -1718,18 +1719,23 @@ export class HostRuntimeStore {
       LastAvailableAccountRelaySchema,
     ).catch(() => null);
     if (!saved || this.accountRelayAvailabilityKnown || this.accountRelayCenter !== null) return;
+    let center: string;
+    try {
+      center = accountServiceCenter(saved.center);
+    } catch {
+      return;
+    }
     const serverIds = saved.serverIds.filter((serverId) =>
       profiles.some(
         (profile) =>
           profile.serverId === serverId &&
           profile.connections.some(
-            (connection) =>
-              connection.type === "accountRelay" && connection.center === saved.center,
+            (connection) => connection.type === "accountRelay" && connection.center === center,
           ),
       ),
     );
     if (serverIds.length === 0) return;
-    this.accountRelayCenter = saved.center;
+    this.accountRelayCenter = center;
     this.availableAccountRelayServers = new Set(serverIds);
     markStartupPhase("relay_tentative");
   }
@@ -2307,6 +2313,7 @@ export class HostRuntimeStore {
     isCurrent: () => boolean = () => true,
     options?: { accountId?: string; retainedHostIds?: ReadonlySet<string> },
   ): Promise<void> {
+    center = accountServiceCenter(center);
     const update = this.accountDiscoveryTail.then(async () => {
       while (isCurrent()) {
         const previous = this.hosts;
@@ -2369,17 +2376,28 @@ export class HostRuntimeStore {
   }
 
   private async readAccountRelayOwners(): Promise<Record<string, string>> {
-    this.accountRelayOwners ??=
-      (await readValidatedJson(
+    if (!this.accountRelayOwners) {
+      const stored = await readValidatedJson(
         this.storage,
         ACCOUNT_RELAY_OWNERS_KEY,
         AccountRelayOwnersSchema,
-      ).catch(() => null)) ?? {};
+      ).catch(() => null);
+      const owners = { ...stored };
+      for (const [center, owner] of Object.entries(owners)) {
+        try {
+          owners[accountServiceCenter(center)] ??= owner;
+        } catch {
+          // Invalid historical service URLs cannot own any live connections.
+        }
+      }
+      this.accountRelayOwners = owners;
+    }
     return this.accountRelayOwners;
   }
 
   /** Saved hosts remain registered while signed out or connected to another service. */
   setAccountRelayCenter(center: string | null): void {
+    if (center) center = accountServiceCenter(center);
     // Signed out: no saved account host can become available.
     if (center === null) this.markAccountRelayAvailabilityKnown();
     if (center === this.accountRelayCenter) {

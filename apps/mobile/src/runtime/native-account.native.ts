@@ -8,6 +8,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   AccountSessionManager,
   normalizeCenter,
+  readSavedAccountEntry,
   type AccountSnapshot,
   type SavedAccount,
 } from "@ait/client/internal/account-session";
@@ -16,6 +17,7 @@ import { androidBrowserLogin, iosBrowserLogin } from "./account-browser-login.na
 
 const INSTALLATION_KEY = "@ait:account-installation-v1";
 const CREDENTIAL_KEY = "ait.account.session.v1";
+const ENTRY_KEY = "@ait:account-entry-v1";
 const BACKGROUND_CONNECTION_GRACE_MS = 2 * 60 * 1000;
 const listeners = new Set<(state: AccountSnapshot) => void>();
 const transports = new Set<() => void>();
@@ -43,6 +45,9 @@ async function createAccount(): Promise<AccountSessionManager> {
     else if (hubPaused) link.pause();
     else link.start();
   };
+  const savedEntry = await AsyncStorage.getItem(ENTRY_KEY)
+    .then((value) => (value ? readSavedAccountEntry(JSON.parse(value)) : undefined))
+    .catch(() => undefined);
   const manager = new AccountSessionManager({
     installationId,
     deviceName: platform === "ios" ? "Ait iOS" : "Ait Android",
@@ -52,6 +57,8 @@ async function createAccount(): Promise<AccountSessionManager> {
     randomUUID: Crypto.randomUUID,
     fetch: nativeFetch as typeof fetch,
     appVersion: resolveAppVersion() ?? "unknown",
+    savedEntry,
+    saveEntry: (entry) => AsyncStorage.setItem(ENTRY_KEY, JSON.stringify(entry)),
     save: async (account) => {
       if (account) await SecureStore.setItemAsync(CREDENTIAL_KEY, JSON.stringify(account));
       else await SecureStore.deleteItemAsync(CREDENTIAL_KEY);
