@@ -38,7 +38,7 @@ pub(super) async fn generate(
         .await?
         .select(&spec.config)?;
     let args = arguments(&selection, schema);
-    let mut transport = Transport::spawn(client, &spec.cwd, &args)?;
+    let mut transport = Transport::spawn(client, &spec.cwd, &args, None)?;
     let result = tokio::time::timeout(
         client.deadline,
         execute(&mut transport, &spec.cwd, &selection, prompt),

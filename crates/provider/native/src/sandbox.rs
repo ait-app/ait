@@ -138,6 +138,14 @@ pub const MINIMAX_STATE: &[StateLocation] = &[StateLocation::tree(
     &["config.yaml", "bin", "plugins", "shims"],
 )];
 
+/// Antigravity CLI conversations, summaries, auth state, caches and logs.
+pub const ANTIGRAVITY_STATE: &[StateLocation] = &[StateLocation::tree(
+    None,
+    "",
+    ".gemini/antigravity-cli",
+    &["builtin", "hooks.json", "plugins", "settings.json"],
+)];
+
 /// Build the native command for `program`, confined when `confinement` is present.
 ///
 /// # Arguments

@@ -22,6 +22,9 @@ paths:
 - OMP 修订：[ADR-248](../providers/adr-248-omp-paseo-native-rpc.md) 第 11 条起，Oh My Pi 增加
   `PI_CODING_AGENT_DIR` 可写目录，并保护其设置、模型、MCP、`.env`、扩展、hooks、工具、插件、
   原生 addon 与 Python 环境；下文 Oh My Pi 一行和受保护路径清单以该条为准。
+- Antigravity 修订：[ADR-311](../providers/adr-311-antigravity-worktree-sandbox.md) 起，Antigravity
+  纳入受限 Provider 范围，开放 `~/.gemini/antigravity-cli` 可写并保护其 `builtin`、`hooks.json`、
+  `plugins`、`settings.json`，受限启动时通过 `--settings` 关闭内置终端沙箱。
 - 关系：在 [ADR-060](adr-060-workspace-create-worktree.md) 的 Paseo 自有 worktree 之上增加隔离级别；
   Provider 测试归属沿用 [ADR-179](../providers/adr-179-provider-owned-tests.md)。
 - 沙箱适配器现位于 `crates/provider-native`（[ADR-270](../providers/adr-270-provider-crate-family.md)）。

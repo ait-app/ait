@@ -21,7 +21,7 @@ fn maps_only_explicit_full_access_to_skip_permissions() {
             model: Some("gemini-test".to_owned()),
             effort: Some("high".to_owned()),
         };
-        let args = arguments(&config, &selection, Some("conversation-id"));
+        let args = arguments(&config, &selection, Some("conversation-id"), false);
         assert_eq!(
             args.iter()
                 .any(|arg| arg == "--dangerously-skip-permissions"),
@@ -37,6 +37,14 @@ fn maps_only_explicit_full_access_to_skip_permissions() {
         );
         assert!(args.windows(2).any(|pair| pair == ["--effort", "high"]));
         assert!(args.iter().any(|arg| arg == "--disable-slash-commands"));
+        assert!(!args.iter().any(|arg| arg == "--settings"));
+
+        let confined = arguments(&config, &selection, Some("conversation-id"), true);
+        assert!(
+            confined
+                .windows(2)
+                .any(|pair| pair == ["--settings", "{\"enableTerminalSandbox\":false}"])
+        );
     }
 }
 

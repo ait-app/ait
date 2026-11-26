@@ -236,9 +236,10 @@ Composer 的“功能”入口使用与模式选择相同的搜索下拉菜单�
   [ADR-177](../decisions/providers/adr-177-codex-restart-continuation.md) 对 Codex 修订，
   [ADR-299](../decisions/providers/adr-299-runtime-reads-adapter-capabilities.md) 改为按声明判断）。
 - 沙箱 Workspace 中，adapter 未声明 `supports_write_confinement` 时创建或恢复返回
-  `ConfinementUnsupported`，失败关闭；目前 Antigravity 与 DeepSeek Harness 未声明
+  `ConfinementUnsupported`，失败关闭；目前仅 DeepSeek Harness 未声明
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
-  [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。共享的 slash 命令发现路径
+  [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)、
+  [ADR-311](../decisions/providers/adr-311-antigravity-worktree-sandbox.md)）。共享的 slash 命令发现路径
   不传入写入限制（[ADR-219](../decisions/providers/adr-219-pi-slash-command-discovery.md)）。
 
 ## 时间线与历史投影

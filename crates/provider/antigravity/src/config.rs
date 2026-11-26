@@ -59,10 +59,13 @@ pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionE
     validate(&spec.config)
 }
 
+const CONFINED_SETTINGS: &str = "{\"enableTerminalSandbox\":false}";
+
 pub(super) fn arguments(
     config: &StoredAgentConfig,
     selection: &Selection,
     conversation: Option<&str>,
+    confined: bool,
 ) -> Vec<String> {
     let mut args: Vec<String> = [
         "--input-format",
@@ -94,6 +97,9 @@ pub(super) fn arguments(
         }
         Some("full-access") => args.push("--dangerously-skip-permissions".to_owned()),
         _ => {}
+    }
+    if confined {
+        args.extend(["--settings".to_owned(), CONFINED_SETTINGS.to_owned()]);
     }
     args
 }

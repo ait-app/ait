@@ -2,6 +2,8 @@
 
 use std::{fs, io};
 
+use nix::sys::signal::Signal;
+
 /// Send SIGTERM to the native PID 2 below the owned bubblewrap `monitor` process.
 ///
 /// The monitor and PID 1 reaper stay alive so `--die-with-parent` cannot interrupt
@@ -13,15 +15,29 @@ use std::{fs, io};
 /// Returns an error if the child has exited, the expected namespace hierarchy is
 /// unavailable, or signal delivery fails.
 pub fn terminate_native(monitor: u32) -> io::Result<()> {
+    signal_native(monitor, Signal::SIGTERM)
+}
+
+/// Send SIGINT to the native PID 2 below the owned bubblewrap `monitor` process.
+///
+/// Signalling `bwrap` itself would terminate the monitor and trigger `--die-with-parent`
+/// before the native CLI can acknowledge turn cancellation on stdout.
+///
+/// # Errors
+///
+/// Returns an error if the child has exited, the expected namespace hierarchy is
+/// unavailable, or signal delivery fails.
+pub fn interrupt_native(monitor: u32) -> io::Result<()> {
+    signal_native(monitor, Signal::SIGINT)
+}
+
+fn signal_native(monitor: u32, signal: Signal) -> io::Result<()> {
     let reaper = namespace_child(monitor, 1)?;
     let native = namespace_child(reaper, 2)?;
     let native = i32::try_from(native)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid native pid"))?;
-    nix::sys::signal::kill(
-        nix::unistd::Pid::from_raw(native),
-        nix::sys::signal::Signal::SIGTERM,
-    )
-    .map_err(|error| io::Error::from_raw_os_error(error as i32))
+    nix::sys::signal::kill(nix::unistd::Pid::from_raw(native), signal)
+        .map_err(|error| io::Error::from_raw_os_error(error as i32))
 }
 
 fn namespace_child(parent: u32, expected: u32) -> io::Result<u32> {

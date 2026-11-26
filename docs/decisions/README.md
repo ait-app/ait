@@ -92,9 +92,9 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-283：RPC JSON 编解码统一归 model](workspace/adr-283-shared-rpc-codecs.md)
 - [ADR-230：归档 Worktree 时运行 teardown](workspace/adr-230-worktree-teardown.md)
 - [ADR-229：Workspace 脚本运行记录、输出与参数](workspace/adr-229-workspace-script-runs.md)
-- [ADR-223：Linux 沙箱化 Worktree](workspace/adr-223-linux-worktree-sandbox.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
+- [ADR-223：Linux 沙箱化 Worktree](workspace/adr-223-linux-worktree-sandbox.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md)、[ADR-311](providers/adr-311-antigravity-worktree-sandbox.md) 修订）
 - [ADR-217：事件驱动的 Workspace 运行时事实与低能耗 Git 读取](workspace/adr-217-event-driven-workspace-runtime.md)
-- [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)（经 [ADR-223](workspace/adr-223-linux-worktree-sandbox.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
+- [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)（经 [ADR-223](workspace/adr-223-linux-worktree-sandbox.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md)、[ADR-311](providers/adr-311-antigravity-worktree-sandbox.md) 修订）
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 - [ADR-146：Workspace 重置清除变更请求关联](workspace/adr-146-reset-workspace-change-request-association.md)
 - [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
@@ -124,6 +124,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-311：Antigravity 沙箱化 Worktree 写入隔离](providers/adr-311-antigravity-worktree-sandbox.md)
 - [ADR-310：Host 账号用量按 Provider 活动刷新](providers/adr-310-activity-driven-account-usage.md)
 - [ADR-308：OMP 的宿主编排与配置命令](providers/adr-308-omp-host-orchestration.md)
 - [ADR-303：原生 Goal 状态投影到共享胶囊轨道](providers/adr-303-native-goal-composer-track.md)
@@ -204,7 +205,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](providers/adr-090-timeline-entry-and-page-budgets.md)（经 [ADR-140](providers/adr-140-codex-mcp-display-previews.md) 修订）
 - [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)（经 [ADR-099](providers/adr-099-provider-owned-auxiliary-models.md)、[ADR-101](providers/adr-101-provider-summary-generator.md)、[ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-179](providers/adr-179-provider-owned-tests.md)、[ADR-249](providers/adr-249-omp-adapter-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-088：Provider 发现与启动历史同步隔离](providers/adr-088-provider-catalog-startup-isolation.md)（经 [ADR-091](providers/adr-091-independent-session-execution.md) 修订）
-- [ADR-087：Antigravity CLI 原生 Provider](providers/adr-087-antigravity-cli-provider.md)
+- [ADR-087：Antigravity CLI 原生 Provider](providers/adr-087-antigravity-cli-provider.md)（经 [ADR-311](providers/adr-311-antigravity-worktree-sandbox.md) 修订）
 - [ADR-082：DeepSeek Harness 原生交互 Host](providers/adr-082-deepseek-harness-native-host.md)（经 [ADR-147](providers/adr-147-dsh-native-plugin-presets.md) 修订）
 - [ADR-074：OpenCode 原生 Provider](providers/adr-074-opencode-native-provider.md)（经 [ADR-110](providers/adr-110-opencode-private-protocol-boundary.md)、[ADR-115](providers/adr-115-opencode-acp-provider.md) 修订）
 - [ADR-067：DeepSeek Harness ACP Provider](providers/adr-067-deepseek-harness-acp.md)（经 [ADR-082](providers/adr-082-deepseek-harness-native-host.md) 修订）

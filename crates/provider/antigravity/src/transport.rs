@@ -79,15 +79,24 @@ impl Drop for Process {
     }
 }
 
-fn command(client: &AntigravityClient, cwd: &Path) -> Command {
-    let mut command = Command::new(&client.program);
+fn command(
+    client: &AntigravityClient,
+    cwd: &Path,
+    confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
+) -> Result<Command, AgentSessionError> {
+    let mut command = provider_native::sandbox::command(
+        &client.program,
+        confinement,
+        provider_native::sandbox::ANTIGRAVITY_STATE,
+        &|name| client.environment.variable(name),
+    )?;
     command
         .current_dir(cwd)
         .envs(client.environment.entries())
         .env("AGY_CLI_DISABLE_AUTO_UPDATE", "true")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    command
+    Ok(command)
 }
 
 pub(super) async fn query(
@@ -95,7 +104,7 @@ pub(super) async fn query(
     cwd: &Path,
     args: &[&OsStr],
 ) -> Result<Vec<u8>, AgentSessionError> {
-    let mut process = Process::spawn(command(client, cwd).args(args).stdin(Stdio::null()))?;
+    let mut process = Process::spawn(command(client, cwd, None)?.args(args).stdin(Stdio::null()))?;
     let output = process
         .child
         .stdout
@@ -142,6 +151,7 @@ pub(super) struct Transport {
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
     deadline: Duration,
+    sandboxed: bool,
     closed: bool,
     failure_since: Option<Instant>,
 }
@@ -151,9 +161,10 @@ impl Transport {
         client: &AntigravityClient,
         cwd: &str,
         args: &[String],
+        confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<Self, AgentSessionError> {
         let mut process = Process::spawn(
-            command(client, Path::new(cwd))
+            command(client, Path::new(cwd), confinement)?
                 .args(args)
                 .stdin(Stdio::piped()),
         )?;
@@ -192,6 +203,7 @@ impl Transport {
             messages,
             reader,
             deadline: client.deadline,
+            sandboxed: confinement.is_some(),
             closed: false,
             failure_since: None,
         })
@@ -254,6 +266,13 @@ impl Transport {
         #[cfg(unix)]
         {
             let id = self.process.child.id().ok_or(AgentSessionError::Failed)?;
+            #[cfg(target_os = "linux")]
+            if self.sandboxed {
+                return provider_native::sandbox::linux::process::interrupt_native(id)
+                    .map_err(|_| AgentSessionError::Failed);
+            }
+            #[cfg(not(target_os = "linux"))]
+            let _ = self.sandboxed;
             let status = Command::new("/bin/kill")
                 .args(["-INT", &id.to_string()])
                 .stdout(Stdio::null())

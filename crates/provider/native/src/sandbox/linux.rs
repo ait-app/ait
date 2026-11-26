@@ -17,7 +17,7 @@ use provider_core::ports::agent_session::AgentSessionError;
 pub mod process;
 
 const BWRAP: &str = "/usr/bin/bwrap";
-const PROTECTED_DIRECTORIES: [&str; 9] = [
+const PROTECTED_DIRECTORIES: [&str; 10] = [
     "hooks",
     "plugins",
     "bin",
@@ -27,6 +27,7 @@ const PROTECTED_DIRECTORIES: [&str; 9] = [
     "natives",
     "python-env",
     "profiles",
+    "builtin",
 ];
 
 /// Wrap `program` with writable mounts from `policy`, returning a command ready for args.

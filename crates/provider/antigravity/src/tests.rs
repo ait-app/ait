@@ -11,6 +11,8 @@ use provider_core::protocol::prompt::{AgentPrompt, PromptImage};
 mod image_input;
 mod input_history;
 mod recovery;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod sandbox;
 
 fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     let directory = tempfile::tempdir().unwrap();
@@ -94,6 +96,7 @@ async fn headless_checkpoint_compaction_is_visible_before_turn_completion() {
 async fn discovers_native_models_and_labels_without_a_prompt() {
     let (directory, client, spec) = fixture();
     assert!(client.is_available().await.unwrap());
+    assert!(client.supports_write_confinement());
     assert!(!client.supports_history_replay());
     let details = client.discover(&spec.cwd).await.unwrap();
     assert_eq!(details.models.len(), 3);

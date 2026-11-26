@@ -266,3 +266,27 @@ fn unresolvable_worktree_fails_the_launch() {
 
     assert_eq!(result.err(), Some(AgentSessionError::Failed));
 }
+
+#[test]
+fn antigravity_state_allows_cli_directory_and_protects_configuration() {
+    let worktree = LinkedWorktree::absolute();
+    let home = tempfile::tempdir().expect("home");
+    let real_home = home.path().canonicalize().expect("real home");
+
+    let policy = policy(
+        &confinement(&worktree.base.join("wt")),
+        ANTIGRAVITY_STATE,
+        &lookup(&[("HOME", home.path().to_str().expect("utf-8 home"))]),
+    )
+    .expect("resolvable policy");
+
+    let cli_root = real_home.join(".gemini/antigravity-cli");
+    assert!(policy.trees().contains(&cli_root));
+    assert!(!policy.trees().contains(&real_home.join(".gemini/config")));
+    for entry in ["builtin", "hooks.json", "plugins", "settings.json"] {
+        assert!(
+            policy.protected().contains(&cli_root.join(entry)),
+            "{entry}"
+        );
+    }
+}

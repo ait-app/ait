@@ -44,7 +44,14 @@ fn missing_protected_entries_are_initialized_without_overwriting_existing_conten
     let models = root.path().join("agent/models.yml");
     protect(&models).expect("nested yaml guard");
     assert_eq!(fs::read_to_string(&models).expect("yaml"), "{}\n");
-    for directory in ["extensions", "tools", "natives", "python-env", "profiles"] {
+    for directory in [
+        "extensions",
+        "tools",
+        "natives",
+        "python-env",
+        "profiles",
+        "builtin",
+    ] {
         let code = root.path().join("agent").join(directory);
         protect(&code).expect("code directory guard");
         assert!(code.is_dir(), "{directory}");

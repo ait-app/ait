@@ -143,7 +143,8 @@
 - 每次创建、恢复或 rewind 原生进程前，`provider::service::agent_manager::confinement` 从 Registry
   重新推导 confinement（优先 `worktreeRoot`），不随 Agent 持久化。Registry 读取失败或适配器未声明
   `supports_write_confinement` 时拒绝启动；目前声明支持的有 Claude Code、Codex、Pi、Oh My Pi、
-  OpenCode、MiniMax Code（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）。
+  OpenCode、MiniMax Code、Antigravity（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
+  [ADR-311](../decisions/providers/adr-311-antigravity-worktree-sandbox.md)）。
 - `provider_native::sandbox::command` 是唯一平台接缝：macOS 用 `/usr/bin/sandbox-exec -p` 加内联
   profile，Linux 用 `/usr/bin/bwrap`（需支持 `--disable-userns`），其他平台返回 `Unavailable`。
   任何失败都不退化为不受限运行（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
@@ -153,9 +154,10 @@
   另行保护（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
 - 受限会话中 Codex sandbox 固定为 `danger-full-access`，Claude Code 合并 `sandbox.enabled: false`，
-  以避免嵌套沙箱失败；写入边界由外层沙箱提供
+  Antigravity 传入 `--settings {"enableTerminalSandbox":false}`，以避免嵌套沙箱失败；写入边界由外层沙箱提供
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
-  [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
+  [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)、
+  [ADR-311](../decisions/providers/adr-311-antigravity-worktree-sandbox.md)）。
 
 ## Workspace 记事本
 

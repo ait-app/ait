@@ -56,6 +56,11 @@ Google 的 headless 接口没有交互审批回传。需要运行特定命令时
 [官方 Headless 文档](https://antigravity.google/docs/cli/headless)配置 AGY 自己的权限规则，
 或显式选择 Full Access。Ait 不改写全局权限文件。
 
+在沙箱化 Worktree（`sandbox: worktree_writes`）中，交互会话进程（含取消或切换配置后的重连）受外层
+Seatbelt / `bubblewrap` 写入隔离约束：允许写入当前 worktree、Git 目录及 `~/.gemini/antigravity-cli`，
+但该目录下的 `builtin`、`hooks.json`、`plugins`、`settings.json` 与整个 `~/.gemini/config` 保持只读；
+启动参数自动追加不落盘的 `--settings '{"enableTerminalSandbox":false}'`，避免与外层沙箱嵌套冲突。
+
 工具被自动拒绝时，AGY 1.3.0 可能返回 `SUCCESS`、空响应和 `denied_actions`，
 且工具完成事件不带 `error`。Ait 根据拒绝列表将对应工具显示为失败；没有响应的拒绝轮次
 也显示失败，并在会话错误和活动日志中提示配置 `permissions.allow` 或选择 Full Access。

@@ -12,6 +12,7 @@ paths:
 - 范围：`crates/provider`、`bins/daemon`、共享协议与客户端 Provider 显示。
 - 上位约束：ADR-027、ADR-031、ADR-039、ADR-072。
 - 适配器现位于 `crates/provider-antigravity`（[ADR-270](adr-270-provider-crate-family.md)）。
+- 后续修订：[ADR-311](adr-311-antigravity-worktree-sandbox.md) 支持沙箱化 Worktree 写入隔离。
 
 ## 背景
 

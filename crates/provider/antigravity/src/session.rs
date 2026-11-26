@@ -25,6 +25,7 @@ pub(super) struct Session {
     id: String,
     cwd: String,
     config: StoredAgentConfig,
+    confinement: Option<domain::workspace::sandbox::WriteConfinement>,
     /// Effort the native process was started with; `None` is AGY's own default.
     effort: Option<String>,
     init: Value,
@@ -61,6 +62,7 @@ pub(super) async fn open(
         id: connection.id,
         cwd: spec.cwd.clone(),
         config: spec.config.clone(),
+        confinement: spec.confinement.clone(),
         effort: connection.effort,
         init: connection.init,
         active: None,
@@ -92,7 +94,13 @@ async fn connect(
     let mut transport = Transport::spawn(
         client,
         &spec.cwd,
-        &config::arguments(&spec.config, &selection, conversation),
+        &config::arguments(
+            &spec.config,
+            &selection,
+            conversation,
+            spec.confinement.is_some(),
+        ),
+        spec.confinement.as_ref(),
     )?;
     let response = tokio::time::timeout(client.deadline, transport.receive()).await;
     let Ok(Ok(initialized)) = response else {
@@ -168,7 +176,7 @@ impl Session {
                 provider: PROVIDER.to_owned(),
                 cwd: self.cwd.clone(),
                 config: config.clone(),
-                confinement: None,
+                confinement: self.confinement.clone(),
             };
             let connection = connect(&self.client, &spec, Some(&self.id))
                 .await

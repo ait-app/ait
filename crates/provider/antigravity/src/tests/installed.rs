@@ -53,6 +53,39 @@ async fn authenticated_model_starts_with_its_default_thinking_level() {
     session.close().await.unwrap();
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[tokio::test]
+#[ignore = "requires authenticated AGY; starts a confined native session without a model turn"]
+async fn authenticated_session_starts_in_a_sandboxed_worktree() {
+    let client = AntigravityClient::installed();
+    let directory = tempfile::tempdir().unwrap();
+    let cwd = directory.path().canonicalize().unwrap();
+    std::fs::create_dir_all(cwd.join(".git")).unwrap();
+    let workspace = serde_json::from_value(json!({
+        "workspaceId": "wks_0123456789abcdef",
+        "projectId": "prj_1",
+        "kind": "worktree",
+        "cwd": cwd,
+        "worktreeRoot": cwd,
+        "displayName": "sandbox",
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z",
+        "archivedAt": null,
+        "sandbox": "worktree_writes"
+    }))
+    .unwrap();
+    let spec = AgentSessionSpec {
+        provider: PROVIDER.to_owned(),
+        cwd: cwd.to_str().unwrap().to_owned(),
+        config: StoredAgentConfig::default(),
+        confinement: domain::workspace::sandbox::WriteConfinement::for_workspace(&workspace),
+    };
+    let mut session = client.create_session(&spec).await.unwrap();
+    let runtime = session.runtime_info().await.unwrap();
+    assert_eq!(runtime.provider, PROVIDER);
+    session.close().await.unwrap();
+}
+
 async fn answer(session: &mut dyn AgentSession) -> String {
     tokio::time::timeout(Duration::from_secs(90), async {
         loop {

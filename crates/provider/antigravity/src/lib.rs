@@ -66,6 +66,10 @@ impl AntigravityClient {
 
 #[async_trait::async_trait]
 impl AgentClient for AntigravityClient {
+    fn supports_write_confinement(&self) -> bool {
+        true
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }

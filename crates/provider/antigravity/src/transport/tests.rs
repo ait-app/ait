@@ -2,7 +2,7 @@ use super::*;
 
 fn transport(script: &str) -> Transport {
     let client = AntigravityClient::new("python3".into());
-    Transport::spawn(&client, ".", &["-c".to_owned(), script.to_owned()]).unwrap()
+    Transport::spawn(&client, ".", &["-c".to_owned(), script.to_owned()], None).unwrap()
 }
 
 #[tokio::test]
