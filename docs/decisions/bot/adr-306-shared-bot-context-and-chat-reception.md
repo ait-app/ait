@@ -21,6 +21,7 @@ paths:
 # ADR-306：Bot 共享执行上下文与外部会话接收策略
 
 后续修订：[ADR-307](adr-307-bot-restart-recovery-and-delivery-drain.md) 调整重启后的不确定执行恢复与回执排空。
+后续修订：[ADR-309](adr-309-bot-legacy-client-negotiation.md) 保留旧单对话重置的能力协商，拒绝其重置请求以维持旧客户端 Bot 页可用。
 
 ## 背景
 

@@ -7,6 +7,7 @@ use domain::bot::permissions::{BotPermissions, Holder, ToolGroup};
 use super::*;
 
 mod confinement;
+mod directories;
 mod follow;
 mod hosts;
 mod notepad;
@@ -16,6 +17,7 @@ mod peer_acceptance;
 mod recall;
 mod schedules;
 mod support;
+mod terminals;
 mod tickets;
 mod transport;
 
