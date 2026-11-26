@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed completed agent turns appearing active again after an idle snapshot when a delayed
+  start event or history response arrives, leaving a stale Stop button in the composer.
+
 - Fixed BTW cold starts being cut short by the question's acceptance deadline. A failed
   auxiliary startup now returns a rejected receipt so the question can be retried.
 

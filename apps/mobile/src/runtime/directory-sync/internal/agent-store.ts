@@ -34,6 +34,20 @@ export class AgentStoreProjection {
 
   constructor(private readonly serverId: string) {}
 
+  private rememberClosedTurn(agentId: string, turnId: string | null): void {
+    if (turnId === null) return;
+    let closed = this.closedTurns.get(agentId);
+    if (!closed) {
+      closed = new Set();
+      this.closedTurns.set(agentId, closed);
+    }
+    closed.add(turnId);
+    if (closed.size > MAX_CLOSED_TURNS_PER_AGENT) {
+      const oldest = closed.values().next().value;
+      if (oldest !== undefined) closed.delete(oldest);
+    }
+  }
+
   private reduceTurn(
     agentId: string,
     current: TurnLiveness,
@@ -41,18 +55,7 @@ export class AgentStoreProjection {
   ): TurnLiveness {
     if (transition.type === "stream_close") {
       const turnId = transition.turnId ?? (current.phase === "open" ? current.turnId : null);
-      if (turnId !== null) {
-        let closed = this.closedTurns.get(agentId);
-        if (!closed) {
-          closed = new Set();
-          this.closedTurns.set(agentId, closed);
-        }
-        closed.add(turnId);
-        if (closed.size > MAX_CLOSED_TURNS_PER_AGENT) {
-          const oldest = closed.values().next().value;
-          if (oldest !== undefined) closed.delete(oldest);
-        }
-      }
+      this.rememberClosedTurn(agentId, turnId);
     }
     const incoming =
       transition.type === "stream_open"
@@ -65,6 +68,16 @@ export class AgentStoreProjection {
   }
 
   private mergeSnapshotTurn(previous: Agent | undefined, incoming: Agent): Agent {
+    // A snapshot can confirm completion even when the terminal stream event was lost.
+    // Retain that identity so a delayed start or history response cannot reopen it.
+    if (
+      previous?.turn.phase === "open" &&
+      incoming.turn.phase === "idle" &&
+      (!previous.turn.startedAt || previous.turn.startedAt <= incoming.updatedAt) &&
+      acceptAgentDirectoryUpdate(previous, incoming) === incoming
+    ) {
+      this.rememberClosedTurn(incoming.id, previous.turn.turnId);
+    }
     const activeTurn =
       incoming.turn.phase === "open"
         ? { turnId: incoming.turn.turnId, startedAt: incoming.turn.startedAt }

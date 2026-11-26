@@ -289,6 +289,103 @@ describe("AgentDirectoryReplica", () => {
     store.clearSession(serverId);
   });
 
+  it.each(["delta", "snapshot", "timeline", "changes"] as const)(
+    "keeps a turn closed after an idle snapshot from %s when its terminal event was missed",
+    (source) => {
+      const serverId = `agent-replica-idle-snapshot-${source}`;
+      const store = useSessionStore.getState();
+      store.initializeSession(serverId, null);
+      const replica = new AgentDirectoryReplica(
+        serverId,
+        () => undefined,
+        () => undefined,
+      );
+      const running: AgentSnapshotPayload = {
+        ...payload("running"),
+        workspaceId: "workspace",
+        status: "running",
+        activeTurn: { turnId: "turn-1", startedAt: "2026-07-17T00:01:00.000Z" },
+      };
+      replica.commitSnapshot([entry(running)], []);
+      const historyToken = replica.captureTimeline("agent");
+      const idle: AgentSnapshotPayload = {
+        ...running,
+        status: "idle",
+        activeTurn: null,
+        updatedAt: "2026-07-17T00:02:00.000Z",
+      };
+      if (source === "delta") replica.applyDelta({ kind: "upsert", ...entry(idle) });
+      else if (source === "snapshot") replica.commitSnapshot([entry(idle)], []);
+      else if (source === "timeline") replica.submitTimelineAgent(historyToken, idle);
+      else replica.commitChanges([entry(idle)], [], []);
+
+      // A history read begun before completion returns after the idle snapshot.
+      replica.submitTimelineAgent(historyToken, { ...running, updatedAt: idle.updatedAt });
+      expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").isActive).toBe(false);
+      replica.applyTurnLiveness("agent", {
+        type: "stream_open",
+        turn: { turnId: "turn-1", startedAt: null },
+      });
+      expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").isActive).toBe(false);
+      expect(store.getSession(serverId)?.workspaceAgentActivity.get("workspace")?.status).toBe(
+        "done",
+      );
+
+      replica.applyDelta({
+        kind: "upsert",
+        ...entry({
+          ...running,
+          updatedAt: "2026-07-17T00:03:00.000Z",
+          activeTurn: { turnId: "turn-2", startedAt: "2026-07-17T00:03:00.000Z" },
+        }),
+      });
+      replica.submitTimelineAgent(historyToken, running);
+      replica.applyTurnLiveness("agent", { type: "stream_close", turnId: "turn-1" });
+      expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").turnId).toBe(
+        "turn-2",
+      );
+      expect(store.getSession(serverId)?.workspaceAgentActivity.get("workspace")?.status).toBe(
+        "running",
+      );
+      store.clearSession(serverId);
+    },
+  );
+
+  it("can recover a newer streamed turn after an idle snapshot predating its start", () => {
+    const serverId = "agent-replica-idle-before-new-turn";
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, null);
+    const replica = new AgentDirectoryReplica(
+      serverId,
+      () => undefined,
+      () => undefined,
+    );
+    replica.commitSnapshot([entry(payload("idle"))], []);
+    const activeTurn = { turnId: "new-turn", startedAt: "2026-07-17T00:03:00.000Z" };
+    replica.applyTurnLiveness("agent", {
+      type: "stream_open",
+      turn: { turnId: activeTurn.turnId, startedAt: new Date(activeTurn.startedAt) },
+    });
+    replica.applyDelta({
+      kind: "upsert",
+      ...entry({ ...payload("earlier idle"), updatedAt: "2026-07-17T00:02:00.000Z" }),
+    });
+    replica.applyDelta({
+      kind: "upsert",
+      ...entry({
+        ...payload("new turn"),
+        status: "running",
+        updatedAt: activeTurn.startedAt,
+        activeTurn,
+      }),
+    });
+
+    expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").turnId).toBe(
+      activeTurn.turnId,
+    );
+    store.clearSession(serverId);
+  });
+
   it.each(["snapshot", "cache", "timeline"] as const)(
     "remembers a terminal event received before the agent is hydrated through %s",
     (source) => {
