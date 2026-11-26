@@ -2,9 +2,8 @@
 
 ## Unreleased
 
-- Codex sessions can resume and accept queued input when native subagent discovery fails.
-  Discovery finishes before the native writer resumes, so its failure cannot interrupt a Goal
-  that has already continued.
+- Fixed BTW cold starts being cut short by the question's acceptance deadline. A failed
+  auxiliary startup now returns a rejected receipt so the question can be retried.
 
 - Workspace Bots and their agents can read retained output after a terminal command exits.
   Scoped tools omit directory arguments they cannot accept and explain how to correct invalid
@@ -31,6 +30,10 @@
 - Fixed Feishu and Lark channel lists being rejected by the generated WebSocket response validator.
   Feishu QR setup now displays status-query errors and can retry the same scan without creating
   another app.
+
+- Codex sessions can resume and accept queued input when native subagent discovery fails.
+  Discovery finishes before the native writer resumes, so its failure cannot interrupt a Goal
+  that has already continued.
 
 ## 0.2.27 - 2026-11-25
 
