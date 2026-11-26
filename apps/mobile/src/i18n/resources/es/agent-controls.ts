@@ -27,15 +27,21 @@ export const agentControls = {
   },
   vibe: {
     title: "Vibe",
-    pill: "Vibe ON",
-    on: "Activado",
-    director: "Coordinador de solo lectura",
-    description:
-      "Delega el trabajo a agentes fast/good persistentes. Consulta su progreso en Subagentes.",
-    consequence: "Salir cancela todos los agentes Vibe.",
     exit: "Salir de Vibe",
     failed: "No se pudo salir de Vibe",
     accessibilityLabel: "Modo Vibe, activado",
+    empty: "Sin tareas asignadas",
+    unavailable: "Datos de tareas no disponibles",
+    disconnected: "Desconectado · últimas tareas recibidas",
+    unnamed: "Tarea sin título",
+    exitAndStop: "Detener tareas y salir de Vibe",
+    status: {
+      running: "En curso",
+      completed: "Completada",
+      failed: "Fallida",
+      canceled: "Cancelada",
+      unknown: "Sin confirmar",
+    },
   },
   goal: {
     title: "Objetivo",

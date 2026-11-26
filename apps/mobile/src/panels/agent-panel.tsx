@@ -48,6 +48,7 @@ import {
 } from "@/panels/agent-panel-load-state";
 import { AgentTracks, hasAgentTracks } from "@/panels/agent-tracks";
 import { useAgentGoal } from "@/composer/goal";
+import { useAgentVibe } from "@/composer/vibe";
 import { formatAgentPanelSubtitle } from "@/panels/agent-panel-subtitle";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
@@ -1119,8 +1120,10 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   });
   const hasActiveComposer = !agentState.archivedAt && !isArchivingCurrentAgent;
   const goal = useAgentGoal(serverId, agentId);
+  const vibe = useAgentVibe(serverId, agentId);
   const hasVisibleAgentTracks = hasAgentTracks({
     hasGoal: goal !== null,
+    hasVibe: vibe !== null,
     subagentRows,
     tasks,
     archiveFinishedStatus: archiveFinishedSubagents.status,

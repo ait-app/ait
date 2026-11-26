@@ -1,7 +1,7 @@
 import { WorkspaceDiffStatPill } from "@/composer/diff-stat-pill";
 import { AgentTaskList } from "@/composer/task-list";
 import { ComposerTrackBar } from "@/composer/tracks";
-import { AgentVibeTrack } from "@/composer/vibe";
+import { AgentVibeTrack, useAgentVibe } from "@/composer/vibe";
 import { AgentGoalTrack, useAgentGoal } from "@/composer/goal";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -50,6 +50,7 @@ export const AgentTracks = memo(function AgentTracks({
 }): ReactElement | null {
   const { tabId } = usePaneContext();
   const goal = useAgentGoal(serverId, agentId);
+  const vibe = useAgentVibe(serverId, agentId);
   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
   const isCompact = useIsCompactFormFactor();
   const openInSidePane = useSettings((settings) => settings.openInSidePane);
@@ -115,6 +116,7 @@ export const AgentTracks = memo(function AgentTracks({
       tasks,
       archiveFinishedStatus,
       hasGoal: goal !== null,
+      hasVibe: vibe !== null,
     })
   ) {
     return null;
@@ -141,24 +143,35 @@ export const AgentTracks = memo(function AgentTracks({
         onPress={handleOpenChanges}
       />
       <AgentGoalTrack serverId={serverId} agentId={agentId} goal={goal} />
-      <AgentVibeTrack serverId={serverId} agentId={agentId} />
+      <AgentVibeTrack
+        serverId={serverId}
+        agentId={agentId}
+        vibe={vibe}
+        rows={subagentRows}
+        onOpenSubagent={handleOpenSubagent}
+        onOpenProviderSubagent={handleOpenProviderSubagent}
+        opensInSheet={opensInSheet}
+      />
     </ComposerTrackBar>
   );
 });
 
 export function hasAgentTracks({
   hasGoal = false,
+  hasVibe = false,
   subagentRows,
   tasks,
   archiveFinishedStatus,
 }: {
   hasGoal?: boolean;
+  hasVibe?: boolean;
   subagentRows: readonly SubagentRow[];
   tasks: readonly TodoEntry[] | undefined;
   archiveFinishedStatus: ArchiveFinishedStatus;
 }): boolean {
   return (
     hasGoal ||
+    hasVibe ||
     subagentRows.length > 0 ||
     Boolean(tasks?.length) ||
     archiveFinishedStatus.kind !== "idle"

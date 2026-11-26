@@ -7,6 +7,10 @@
   correctly. Goals stopped before the first reply survive reopening. Initial commands retain
   extension ownership and creation retry protection.
 
+- Vibe now shows each worker’s task, model and status, with direct access to its conversation.
+  Its control stays visible before any workers start, and disconnected sessions mark task states
+  as unconfirmed.
+
 ## 0.2.28 - 2026-11-26
 
 - Share a workspace, project, or Host directly with people. Generate and copy the invitation

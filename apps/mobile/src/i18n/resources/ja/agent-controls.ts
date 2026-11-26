@@ -27,15 +27,21 @@ export const agentControls = {
   },
   vibe: {
     title: "Vibe",
-    pill: "Vibe ON",
-    on: "オン",
-    director: "読み取り専用の指揮役",
-    description:
-      "永続的な fast/good ワーカーに作業を委任します。進捗はサブエージェントで確認できます。",
-    consequence: "終了するとすべての Vibe ワーカーがキャンセルされます。",
     exit: "Vibe を終了",
     failed: "Vibe を終了できませんでした",
     accessibilityLabel: "Vibe モード、オン",
+    empty: "タスク未割り当て",
+    unavailable: "タスクデータを取得できません",
+    disconnected: "切断中 · 最後に受信したタスク",
+    unnamed: "無題のタスク",
+    exitAndStop: "タスクを停止して Vibe を終了",
+    status: {
+      running: "実行中",
+      completed: "完了",
+      failed: "失敗",
+      canceled: "キャンセル済み",
+      unknown: "未確認",
+    },
   },
   goal: {
     title: "目標",

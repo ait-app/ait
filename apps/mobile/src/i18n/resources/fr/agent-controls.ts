@@ -27,15 +27,21 @@ export const agentControls = {
   },
   vibe: {
     title: "Vibe",
-    pill: "Vibe ON",
-    on: "Activé",
-    director: "Coordinateur en lecture seule",
-    description:
-      "Déléguez le travail à des agents fast/good persistants. Suivez leur progression dans Sous-agents.",
-    consequence: "Quitter annule tous les agents Vibe.",
     exit: "Quitter Vibe",
     failed: "Impossible de quitter Vibe",
     accessibilityLabel: "Mode Vibe, activé",
+    empty: "Aucune tâche attribuée",
+    unavailable: "Données des tâches indisponibles",
+    disconnected: "Déconnecté · dernières tâches reçues",
+    unnamed: "Tâche sans titre",
+    exitAndStop: "Arrêter les tâches et quitter Vibe",
+    status: {
+      running: "En cours",
+      completed: "Terminée",
+      failed: "Échec",
+      canceled: "Annulée",
+      unknown: "Non confirmé",
+    },
   },
   goal: {
     title: "Objectif",

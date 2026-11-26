@@ -27,15 +27,21 @@ export const agentControls = {
   },
   vibe: {
     title: "Vibe",
-    pill: "Vibe ON",
-    on: "Включён",
-    director: "Координатор только для чтения",
-    description:
-      "Поручайте работу постоянным агентам fast/good. Следите за их работой в разделе субагентов.",
-    consequence: "Выход отменяет работу всех агентов Vibe.",
     exit: "Выйти из Vibe",
     failed: "Не удалось выйти из Vibe",
     accessibilityLabel: "Режим Vibe включён",
+    empty: "Нет назначенных задач",
+    unavailable: "Данные задач недоступны",
+    disconnected: "Нет соединения · последние полученные задачи",
+    unnamed: "Задача без названия",
+    exitAndStop: "Остановить задачи и выйти из Vibe",
+    status: {
+      running: "Выполняется",
+      completed: "Завершена",
+      failed: "Ошибка",
+      canceled: "Отменена",
+      unknown: "Не подтверждено",
+    },
   },
   goal: {
     title: "Цель",

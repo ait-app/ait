@@ -1,31 +1,68 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { MenuSeparator, menuRowContentInset, useMenuContext } from "@/components/ui/menu";
 import { useSessionStore } from "@/stores/session-store";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { ComposerTrackPill } from "./tracks";
+import type { SubagentsTrackProps } from "@/subagents/track";
+import { ComposerTrackPill, ComposerTrackRow } from "./tracks";
+import {
+  findVibeWorkerRow,
+  readVibe,
+  vibeWorkersForDisplay,
+  type VibeSnapshot,
+} from "./vibe-model";
 
-export function AgentVibeTrack({ serverId, agentId }: { serverId: string; agentId: string }) {
-  const enabled = useSessionStore((state) => {
-    const snapshot =
-      state.sessions[serverId]?.agents.get(agentId) ??
-      state.sessions[serverId]?.agentDetails.get(agentId);
-    const vibe = snapshot?.runtimeInfo?.extra?.vibe;
-    return Boolean(vibe && typeof vibe === "object" && "enabled" in vibe && vibe.enabled === true);
-  });
+export function useAgentVibe(serverId: string, agentId: string) {
+  const raw = useSessionStore(
+    (state) =>
+      (
+        state.sessions[serverId]?.agents.get(agentId) ??
+        state.sessions[serverId]?.agentDetails.get(agentId)
+      )?.runtimeInfo?.extra?.vibe,
+  );
+  return useMemo(() => readVibe(raw), [raw]);
+}
+
+export function AgentVibeTrack({
+  serverId,
+  agentId,
+  vibe,
+  rows,
+  onOpenSubagent,
+  onOpenProviderSubagent,
+  opensInSheet,
+}: {
+  serverId: string;
+  agentId: string;
+  vibe: VibeSnapshot | null;
+} & Pick<
+  SubagentsTrackProps,
+  "rows" | "onOpenSubagent" | "onOpenProviderSubagent" | "opensInSheet"
+>) {
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
-  if (!enabled) return null;
+  if (!vibe) return null;
   return (
     <VibeTrack
       key={`${serverId}:${agentId}`}
+      vibe={vibeWorkersForDisplay(vibe, rows, serverId, agentId)}
       disabled={!client || !connected}
+      workerLink={(id) => {
+        const row = findVibeWorkerRow(id, rows, serverId, agentId);
+        if (!row) return undefined;
+        return {
+          closeOnSelect: !opensInSheet(row),
+          onPress: () => {
+            if (row.kind === "provider") onOpenProviderSubagent(row.parentAgentId, row.id);
+            else onOpenSubagent(row.id, row.serverId);
+          },
+        };
+      }}
       onExit={async () => {
         if (client) await client.sendMessage(agentId, "/vibe off");
       }}
@@ -33,15 +70,16 @@ export function AgentVibeTrack({ serverId, agentId }: { serverId: string; agentI
   );
 }
 
-export function VibeTrack({
-  disabled = false,
-  onExit,
-}: {
+interface VibeTrackProps {
+  vibe: VibeSnapshot;
   disabled?: boolean;
   onExit: () => Promise<void>;
-}) {
+  workerLink?: (id: string) => { onPress: () => void; closeOnSelect: boolean } | undefined;
+}
+
+export function VibeTrack({ vibe, disabled = false, onExit, workerLink }: VibeTrackProps) {
   const { t } = useTranslation();
-  const segments = useMemo(() => [{ bucket: null, text: t("agentControls.vibe.pill") }], [t]);
+  const segments = useMemo(() => [{ bucket: null, text: t("agentControls.vibe.title") }], [t]);
   return (
     <ComposerTrackPill
       testID="agent-vibe-pill"
@@ -49,19 +87,21 @@ export function VibeTrack({
       panelTitle={t("agentControls.vibe.title")}
       accessibilityLabel={t("agentControls.vibe.accessibilityLabel")}
     >
-      <VibeCard disabled={disabled} onExit={onExit} />
+      <VibeCard vibe={vibe} disabled={disabled} onExit={onExit} workerLink={workerLink} />
     </ComposerTrackPill>
   );
 }
 
-function VibeCard({ disabled, onExit }: { disabled: boolean; onExit: () => Promise<void> }) {
+function VibeCard({ vibe, disabled, onExit, workerLink }: VibeTrackProps) {
   const { t } = useTranslation();
   const { open } = useMenuContext("VibeCard");
   const compact = useIsCompactFormFactor();
+  const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const exit = async () => {
-    if (busy || disabled) return;
+    if (pending.current || disabled) return;
+    pending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -69,88 +109,119 @@ function VibeCard({ disabled, onExit }: { disabled: boolean; onExit: () => Promi
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("agentControls.vibe.failed"));
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   };
   useEffect(() => {
     setError(null);
   }, [open]);
+  const stopsWork =
+    !vibe.workers ||
+    vibe.workers.some((worker) => worker.status === "running" || worker.status === "unknown");
   return (
     <View testID="agent-vibe-card">
-      <View style={styles.metadata(compact)}>
-        <StatusBadge label={t("agentControls.vibe.on")} variant="success" />
-        <Text style={[styles.muted, styles.director]}>{t("agentControls.vibe.director")}</Text>
-      </View>
-      <View style={styles.body}>
-        <Text style={styles.description}>{t("agentControls.vibe.description")}</Text>
-        {error ? <Alert variant="error" description={error} /> : null}
-      </View>
+      {disabled ? <Text style={styles.notice}>{t("agentControls.vibe.disconnected")}</Text> : null}
+      {vibe.workers?.length ? (
+        vibe.workers.map((worker) => {
+          const link = workerLink?.(worker.id);
+          const status = disabled && worker.status === "running" ? "unknown" : worker.status;
+          const title = worker.description || t("agentControls.vibe.unnamed");
+          return (
+            <ComposerTrackRow
+              key={worker.id}
+              testID={`vibe-worker-${worker.id}`}
+              accessibilityLabel={title}
+              onPress={link?.onPress}
+              closeOnSelect={link?.closeOnSelect}
+            >
+              <View style={styles.worker}>
+                <View style={styles.taskLine}>
+                  <Text style={styles.task} numberOfLines={2}>
+                    {title}
+                  </Text>
+                  <Text style={[styles.status, status === "failed" ? styles.failed : undefined]}>
+                    {t(`agentControls.vibe.status.${status}`)}
+                  </Text>
+                </View>
+                <Text style={styles.model} numberOfLines={2}>
+                  {worker.model || t("agentControls.model.unknown")}
+                </Text>
+              </View>
+            </ComposerTrackRow>
+          );
+        })
+      ) : (
+        <Text style={styles.notice}>
+          {t(vibe.workers ? "agentControls.vibe.empty" : "agentControls.vibe.unavailable")}
+        </Text>
+      )}
+      {error ? (
+        <View style={styles.error}>
+          <Alert variant="error" description={error} />
+        </View>
+      ) : null}
       <MenuSeparator />
       <View style={styles.actions}>
-        <Text style={[styles.muted, styles.consequence]}>
-          {t("agentControls.vibe.consequence")}
-        </Text>
         <Button
           size="sm"
           variant="ghost"
           style={styles.exit(compact)}
-          textStyle={styles.destructive}
+          textStyle={stopsWork ? styles.destructive : styles.exitText}
           loading={busy}
           disabled={disabled || busy}
           onPress={() => void exit()}
           accessibilityState={{ busy, disabled: disabled || busy }}
         >
-          {t("agentControls.vibe.exit")}
+          {t(stopsWork ? "agentControls.vibe.exitAndStop" : "agentControls.vibe.exit")}
         </Button>
       </View>
     </View>
   );
 }
+
 const styles = StyleSheet.create((theme) => ({
-  metadata: (compact: boolean) => ({
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-    paddingHorizontal: menuRowContentInset(theme),
-    paddingTop: compact ? theme.spacing[1] : theme.spacing[2],
-    paddingBottom: theme.spacing[2],
-  }),
-  body: {
-    paddingHorizontal: menuRowContentInset(theme),
-    paddingBottom: theme.spacing[3],
-    gap: theme.spacing[2],
-  },
-  description: {
+  worker: { flex: 1, minWidth: 0, gap: theme.spacing[1], paddingVertical: theme.spacing[1] },
+  taskLine: { flexDirection: "row", alignItems: "flex-start", gap: theme.spacing[3] },
+  task: {
+    flex: 1,
+    minWidth: 0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
     fontFamily: theme.fontFamily.ui,
-    fontWeight: theme.fontWeight.normal,
-    lineHeight: Math.round(theme.fontSize.base * 1.55),
+    lineHeight: 21,
   },
-  muted: {
+  status: {
+    flexShrink: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
     fontFamily: theme.fontFamily.ui,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    lineHeight: 21,
   },
-  director: { flexShrink: 1, minWidth: 0, textAlign: "right" },
-  consequence: { flexShrink: 1, minWidth: 0 },
-  actions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
+  model: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.base,
+    fontFamily: theme.fontFamily.ui,
+    lineHeight: 21,
+  },
+  notice: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontFamily: theme.fontFamily.ui,
+    lineHeight: 21,
     paddingHorizontal: menuRowContentInset(theme),
     paddingVertical: theme.spacing[2],
   },
+  error: { paddingHorizontal: menuRowContentInset(theme), paddingVertical: theme.spacing[2] },
+  actions: {
+    paddingHorizontal: theme.spacing[1],
+  },
   exit: (compact: boolean) => ({
     minHeight: compact ? 44 : 32,
-    flexShrink: 0,
-    marginLeft: "auto",
+    justifyContent: "flex-start",
     paddingHorizontal: theme.spacing[2],
-    marginRight: -theme.spacing[2],
   }),
-  destructive: { color: theme.colors.destructive },
+  exitText: { color: theme.colors.foreground, fontSize: theme.fontSize.base },
+  destructive: { color: theme.colors.destructive, fontSize: theme.fontSize.base },
+  failed: { color: theme.colors.destructive },
 }));

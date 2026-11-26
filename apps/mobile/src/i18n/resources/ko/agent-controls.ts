@@ -27,15 +27,21 @@ export const agentControls = {
   },
   vibe: {
     title: "Vibe",
-    pill: "Vibe ON",
-    on: "켜짐",
-    director: "읽기 전용 지휘자",
-    description:
-      "지속적인 fast/good 작업자에게 작업을 위임합니다. 하위 에이전트에서 진행 상황을 확인하세요.",
-    consequence: "종료하면 모든 Vibe 작업자가 취소됩니다.",
     exit: "Vibe 종료",
     failed: "Vibe를 종료할 수 없습니다",
     accessibilityLabel: "Vibe 모드, 켜짐",
+    empty: "할당된 작업 없음",
+    unavailable: "작업 데이터를 사용할 수 없음",
+    disconnected: "연결 끊김 · 마지막으로 받은 작업",
+    unnamed: "이름 없는 작업",
+    exitAndStop: "작업을 중지하고 Vibe 종료",
+    status: {
+      running: "실행 중",
+      completed: "완료",
+      failed: "실패",
+      canceled: "취소됨",
+      unknown: "확인되지 않음",
+    },
   },
   goal: {
     title: "목표",
