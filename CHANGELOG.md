@@ -1,6 +1,6 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.28 - 2026-11-26
 
 - Share a workspace, project, or Host directly with people. Generate and copy the invitation
   link from Ait by email or username.
@@ -61,6 +61,29 @@
 - Codex sessions can resume and accept queued input when native subagent discovery fails.
   Discovery finishes before the native writer resumes, so its failure cannot interrupt a Goal
   that has already continued.
+
+- Antigravity now runs its main session through the official ACP command. Older AGY versions
+  that support ACP keep working, and the app asks you to upgrade when the installed version
+  cannot do something, such as attaching an image or restoring a session.
+
+- Antigravity sessions can run inside a sandboxed Worktree on macOS and Linux. Writes stay
+  inside the Worktree, and your global Antigravity settings are protected from changes.
+
+- OMP sessions can start Vibe mode, where the main session manages persistent workers, and can
+  delegate to sub-agents on other Providers such as Antigravity and Codex. The Advisor and the
+  other quick switches now show their real on or off state.
+
+- The Goal panel works with OMP again. Goals are detected from the running session instead of
+  the command list, and the mobile card shows status, usage and a horizontal row of actions.
+
+- Opening a native sub-agent tab no longer breaks the parent turn when live output is still
+  arriving, and the history loads once the agent has detached.
+
+- Forking a reply that was streamed while you watched it now works instead of failing with an
+  invalid message.
+
+- The host settings page no longer offers an Update daemon action that the standalone daemon
+  cannot perform.
 
 ## 0.2.27 - 2026-11-25
 
