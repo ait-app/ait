@@ -1,12 +1,9 @@
 use std::path::Path;
 
-use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
+use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 
-use super::{
-    PROVIDER,
-    discovery::{EFFORTS, Selection},
-};
+use super::{PROVIDER, discovery::EFFORTS};
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
@@ -57,70 +54,6 @@ pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionE
     }
     validate_directory(&spec.cwd)?;
     validate(&spec.config)
-}
-
-const CONFINED_SETTINGS: &str = "{\"enableTerminalSandbox\":false}";
-
-pub(super) fn arguments(
-    config: &StoredAgentConfig,
-    selection: &Selection,
-    conversation: Option<&str>,
-    confined: bool,
-) -> Vec<String> {
-    let mut args: Vec<String> = [
-        "--input-format",
-        "stream-json",
-        "--output-format",
-        "stream-json",
-        "--print-timeout",
-        "0",
-        "--disable-slash-commands",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
-    for (flag, value) in [
-        ("--conversation", conversation),
-        ("--model", selection.model.as_deref()),
-        ("--effort", selection.effort.as_deref()),
-    ] {
-        if let Some(value) = value {
-            args.extend([flag.to_owned(), value.to_owned()]);
-        }
-    }
-    match config.mode_id.as_deref() {
-        Some("plan" | "accept-edits") => {
-            args.extend([
-                "--mode".to_owned(),
-                config.mode_id.clone().expect("matched mode"),
-            ]);
-        }
-        Some("full-access") => args.push("--dangerously-skip-permissions".to_owned()),
-        _ => {}
-    }
-    if confined {
-        args.extend(["--settings".to_owned(), CONFINED_SETTINGS.to_owned()]);
-    }
-    args
-}
-
-pub(super) fn runtime(
-    id: &str,
-    config: &StoredAgentConfig,
-    effort: Option<&str>,
-    init: &Value,
-) -> StoredAgentRuntimeInfo {
-    StoredAgentRuntimeInfo {
-        provider: PROVIDER.to_owned(),
-        session_id: Some(id.to_owned()),
-        model: init["model"].as_str().map(str::to_owned),
-        thinking_option_id: effort.map(str::to_owned),
-        mode_id: Some(config.mode_id.as_deref().unwrap_or("default").to_owned()),
-        extra: Some(std::collections::BTreeMap::from([(
-            "permissionMode".to_owned(),
-            init["permission_mode"].clone(),
-        )])),
-    }
 }
 
 pub(super) fn modes() -> Vec<Value> {

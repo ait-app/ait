@@ -63,7 +63,10 @@ async fn inputs_precede_replies_in_live_storage_and_reopened_history() {
         Manager::new(AgentManager::new(Box::new(registry)).with_timeline(timeline.clone()));
     restored.register(Box::new(client)).unwrap();
     let resumed = restored.restore("agent").await.unwrap();
-    assert_eq!(resumed.persistence, initial.persistence);
+    assert_eq!(
+        resumed.persistence.as_ref().map(|h| &h.session_id),
+        initial.persistence.as_ref().map(|h| &h.session_id)
+    );
     restored
         .send_input(
             "agent",
@@ -136,7 +139,7 @@ async fn accepted_input_is_visible_before_native_failure_or_cancellation() {
 
 #[tokio::test]
 async fn rejected_and_failed_writes_do_not_publish_input() {
-    let (_directory, mut client, spec) = fixture();
+    let (_directory, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
     assert!(session.start_turn("", &spec.config).await.is_err());
     assert_eq!(session.poll_turn().unwrap(), None);
@@ -155,21 +158,6 @@ async fn rejected_and_failed_writes_do_not_publish_input() {
     assert_eq!(inputs.len(), 1);
     assert_eq!(inputs[0]["text"], "accepted");
     assert!(inputs[0].get("clientMessageId").is_none());
-    session.close().await.unwrap();
-
-    client.environment = AgentEnvironment::try_from(BTreeMap::from([(
-        "AGY_FIXTURE_SCENARIO".to_owned(),
-        "closed-input".to_owned(),
-    )]))
-    .unwrap();
-    let mut session = client.create_session(&spec).await.unwrap();
-    assert!(
-        session
-            .start_turn("failed write", &spec.config)
-            .await
-            .is_err()
-    );
-    assert_eq!(session.poll_turn().unwrap(), None);
     session.close().await.unwrap();
 }
 
@@ -198,10 +186,16 @@ async fn text_attachments_are_recorded_in_native_submission_order() {
         })
         .collect();
     assert_eq!(inputs.len(), 1);
-    assert_eq!(inputs[0]["text"], "context\nquestion\nnotes");
+    assert_eq!(inputs[0]["text"], "context\n\nquestion\n\nnotes");
     assert_eq!(inputs[0]["clientMessageId"], "rich-input");
     let calls = logs(&directory);
-    let sent = calls.iter().find_map(|call| call.get("input")).unwrap();
-    assert_eq!(sent["message"]["content"], json!(prompt.blocks().unwrap()));
+    let sent = calls
+        .iter()
+        .find(|call| call["rpc"]["method"] == "session/prompt")
+        .unwrap();
+    assert_eq!(
+        sent["rpc"]["params"]["prompt"],
+        json!(prompt.blocks().unwrap())
+    );
     session.close().await.unwrap();
 }

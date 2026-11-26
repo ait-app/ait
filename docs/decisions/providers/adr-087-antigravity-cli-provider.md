@@ -9,6 +9,8 @@ paths:
 
 # ADR-087：Antigravity CLI 原生 Provider
 
+- 后续修订：[ADR-312](adr-312-antigravity-acp-migration.md) 将主会话全面切换为官方 ACP（支持 ACP 的旧版按能力继续使用），移除 headless 主会话兼容路径，仅保留摘要与额度辅助命令。
+
 - 范围：`crates/provider`、`bins/daemon`、共享协议与客户端 Provider 显示。
 - 上位约束：ADR-027、ADR-031、ADR-039、ADR-072。
 - 适配器现位于 `crates/provider-antigravity`（[ADR-270](adr-270-provider-crate-family.md)）。

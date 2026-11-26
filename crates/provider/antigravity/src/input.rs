@@ -1,37 +1,45 @@
-use serde_json::{Value, json};
+use serde_json::json;
 
-use provider_core::ports::agent_session::AgentSessionError;
-use provider_native::images::ImageStore;
+use provider_core::{ports::agent_session::AgentTurnEvent, protocol::timeline::NativeItem};
 
-/// Native text blocks and a separate display projection of the same validated input.
-pub(super) struct Prepared {
-    pub(super) content: Vec<Value>,
-    pub(super) text: String,
-    pub(super) sources: Vec<String>,
-}
-
-/// Replace image blocks with private file references understood by AGY's native image tools.
-/// Returns storage errors before anything is submitted; raw image bytes never enter the timeline.
-pub(super) fn prepare(
-    mut blocks: Vec<Value>,
-    images: &ImageStore,
-) -> Result<Prepared, AgentSessionError> {
-    let text = blocks
-        .iter()
-        .filter_map(|block| block["text"].as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let mut sources = Vec::new();
-    for block in &mut blocks {
-        if block["type"] == "image" {
-            let source = images.source(block)?.into_owned();
-            *block = json!({"type":"text","text":format!("Attached image: {source}")});
-            sources.push(source);
+/// Split accepted input into durable rows within the timeline's escaped JSON budget.
+/// Preserves text, attachment previews and client identity.
+pub(super) fn timeline(
+    conversation: &str,
+    turn: &str,
+    text: &str,
+    sources: &[String],
+    client_message_id: Option<&str>,
+) -> Vec<AgentTurnEvent> {
+    // A control byte can occupy six JSON bytes; leave space for timeline metadata.
+    const INPUT_TEXT_BYTES: usize = 96 * 1024;
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let mut remaining = text;
+    let mut events = Vec::new();
+    loop {
+        let end = remaining.floor_char_boundary(INPUT_TEXT_BYTES.min(remaining.len()));
+        let key = format!(
+            "native:antigravity:{conversation}:{turn}:user:{}",
+            events.len()
+        );
+        let mut item = json!({"type":"user_message","messageId":key,"text":&remaining[..end]});
+        if events.is_empty() {
+            if let Some(id) = client_message_id {
+                item["clientMessageId"] = json!(id);
+            }
+            if !sources.is_empty() {
+                item["imageSources"] = json!(sources);
+            }
+        }
+        events.push(AgentTurnEvent::Timeline(NativeItem {
+            key,
+            turn_id: Some(turn.to_owned()),
+            timestamp: timestamp.clone(),
+            item,
+        }));
+        remaining = &remaining[end..];
+        if remaining.is_empty() {
+            return events;
         }
     }
-    Ok(Prepared {
-        content: blocks,
-        text,
-        sources,
-    })
 }

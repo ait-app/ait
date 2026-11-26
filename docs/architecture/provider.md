@@ -104,6 +104,16 @@ Composer 的“功能”入口使用与模式选择相同的搜索下拉菜单�
   或 Timeline 的场景使用 `provider::testing`
   （[ADR-087](../decisions/providers/adr-087-antigravity-cli-provider.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+  主会话统一走官方 ACP，不保留 headless 主会话兼容层；旧版与无法识别版本号的 CLI 仍按握手能力使用，
+  不因低于 1.5.15 禁用整个 Provider。没有 ACP 命令时提示升级；缺少图片能力仅拒绝图片输入，缺少恢复能力
+  仍允许当前会话继续，但不能恢复或切换配置。旧版涉及后台命令、子代理、取消时在时间线提示升级到 1.5.15，
+  这些显示通知不会成为模型输入；不能确认工具已结束时仍失败收尾，不自动重发。
+  1.5.18 ACP 缺失原生子代理关联信息是已知上游差异，不能声称升级到 1.5.15 会补齐它。
+  无标记旧 handle 与 `metadata.transport = "acp"` handle 均直接经 ACP 恢复原 conversation，不重放历史。
+  配置变更在轮次边界恢复并整体确认最终模型、思考等级及模式后生效，后续选项不得重置已确认值；
+  ACP 每轮用量只提交一个账本 segment，累计展示保存于可选 `metadata.acpUsage`，与上下文占用独立；
+  结构化摘要（headless `--json-schema`）、账号额度（`--print /usage`）与未接入能力保持原边界
+  （[ADR-312](../decisions/providers/adr-312-antigravity-acp-migration.md)）。
 - Claude Code 的 adapter 在 `crates/provider/claude`，生产依赖为 `provider-core`、`provider-native` 与
   `domain`（`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `ClaudeClient`；
   `provider` 与 daemon 都不依赖它。`provider-builtin` 用 `Providers::with` 追加它，可执行文件默认 `claude`，

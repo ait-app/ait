@@ -8,18 +8,21 @@ use super::*;
 use provider_core::ports::agent_session::AgentTurnEvent;
 use provider_core::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod authentication;
 mod image_input;
 mod input_history;
-mod recovery;
+#[cfg(test)]
+mod installed;
+mod quota;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod sandbox;
 
-fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
+pub(crate) fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     let directory = tempfile::tempdir().unwrap();
     let cwd = directory.path().canonicalize().unwrap();
     // An immutable executable avoids ETXTBSY when concurrent forks inherit writable handles.
     let program =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/agy.py");
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/acp.py");
     let mut client = AntigravityClient::new(program).with_image_directory(cwd.join("images"));
     client.environment = AgentEnvironment::try_from(BTreeMap::from([(
         "AGY_FIXTURE_LOG".to_owned(),
@@ -35,7 +38,7 @@ fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     (directory, client, spec)
 }
 
-fn logs(directory: &TempDir) -> Vec<Value> {
+pub(crate) fn logs(directory: &TempDir) -> Vec<Value> {
     std::fs::read_to_string(directory.path().join("requests.jsonl"))
         .unwrap()
         .lines()
@@ -43,8 +46,17 @@ fn logs(directory: &TempDir) -> Vec<Value> {
         .collect()
 }
 
-async fn event(session: &mut dyn AgentSession) -> Result<AgentTurnEvent, AgentSessionError> {
-    tokio::time::timeout(Duration::from_secs(5), async {
+pub(crate) async fn event(
+    session: &mut dyn AgentSession,
+) -> Result<AgentTurnEvent, AgentSessionError> {
+    event_with_deadline(session, Duration::from_secs(5)).await
+}
+
+pub(crate) async fn event_with_deadline(
+    session: &mut dyn AgentSession,
+    deadline: Duration,
+) -> Result<AgentTurnEvent, AgentSessionError> {
+    tokio::time::timeout(deadline, async {
         loop {
             if let Some(event) = session.poll_turn()? {
                 return Ok(event);
@@ -56,7 +68,7 @@ async fn event(session: &mut dyn AgentSession) -> Result<AgentTurnEvent, AgentSe
     .unwrap()
 }
 
-async fn completed(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
+pub(crate) async fn completed(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
     let mut events = Vec::new();
     loop {
         let next = event(session).await.unwrap();
@@ -66,30 +78,6 @@ async fn completed(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
             return events;
         }
     }
-}
-
-#[tokio::test]
-async fn headless_checkpoint_compaction_is_visible_before_turn_completion() {
-    let (_directory, mut client, spec) = fixture();
-    client.environment = AgentEnvironment::try_from(BTreeMap::from([(
-        "AGY_FIXTURE_SCENARIO".to_owned(),
-        "compaction".to_owned(),
-    )]))
-    .unwrap();
-    let mut session = client.create_session(&spec).await.unwrap();
-    session.start_turn("compress", &spec.config).await.unwrap();
-    let events = completed(session.as_mut()).await;
-    let statuses: Vec<_> = events
-        .iter()
-        .filter_map(|event| match event {
-            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "compaction" => {
-                entry.item["status"].as_str()
-            }
-            _ => None,
-        })
-        .collect();
-    assert_eq!(statuses, ["loading", "completed"]);
-    session.close().await.unwrap();
 }
 
 #[tokio::test]
@@ -117,7 +105,7 @@ async fn discovers_native_models_and_labels_without_a_prompt() {
     assert!(
         logs(&directory)
             .iter()
-            .all(|entry| entry.get("input").is_none())
+            .all(|entry| entry["rpc"]["method"] != "session/prompt")
     );
     let mut manager = provider::testing::Manager::new(
         provider::service::agent_manager::AgentManager::new(Box::new(
@@ -134,96 +122,6 @@ async fn discovers_native_models_and_labels_without_a_prompt() {
     assert_eq!(snapshot["entries"][0]["label"], "Antigravity");
     assert_eq!(snapshot["entries"][0]["status"], "ready");
     assert_eq!(snapshot["entries"][0]["defaultModeId"], "default");
-}
-
-#[tokio::test]
-async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
-    let (directory, client, mut spec) = fixture();
-    spec.config.model = Some("gemini-test".to_owned());
-    spec.config.thinking_option_id = Some("xhigh".to_owned());
-    client.validate_selection(&spec).await.unwrap();
-    let mut session = client.create_session(&spec).await.unwrap();
-    let runtime = session.runtime_info().await.unwrap();
-    assert_eq!(runtime.model, spec.config.model);
-    assert_eq!(runtime.thinking_option_id, spec.config.thinking_option_id);
-    let handle = session.persistence().unwrap();
-    let prompt = AgentPrompt {
-        text: "hello".to_owned(),
-        client_message_id: Some("client-id".to_owned()),
-        ..AgentPrompt::default()
-    };
-    session.start_input(&prompt, &spec.config).await.unwrap();
-    assert!(session.start_turn("busy", &spec.config).await.is_err());
-    let first = completed(session.as_mut()).await;
-    let timeline: Vec<_> = first
-        .iter()
-        .filter_map(|event| match event {
-            AgentTurnEvent::Timeline(entry) => Some(entry),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(timeline.len(), 4);
-    assert_eq!(timeline[0].item["type"], "user_message");
-    assert_eq!(timeline[0].item["clientMessageId"], "client-id");
-    assert_eq!(timeline[1].item["type"], "tool_call");
-    assert_eq!(timeline[2].item["text"], "Hello world");
-    session.start_turn("second", &spec.config).await.unwrap();
-    let second = completed(session.as_mut()).await;
-    assert!(
-        second
-            .iter()
-            .any(|event| matches!(event, AgentTurnEvent::Usage(usage)
-        if usage.input_tokens == Some(200)))
-    );
-    spec.config.mode_id = Some("full-access".to_owned());
-    // A variant slug saved before efforts became thinking options restarts as model and effort.
-    spec.config.model = Some("claude-test-high".to_owned());
-    spec.config.thinking_option_id = None;
-    client.validate_selection(&spec).await.unwrap();
-    session.start_turn("third", &spec.config).await.unwrap();
-    completed(session.as_mut()).await;
-    let runtime = session.runtime_info().await.unwrap();
-    assert_eq!(runtime.model.as_deref(), Some("claude-test"));
-    assert_eq!(runtime.thinking_option_id.as_deref(), Some("high"));
-    assert_eq!(session.persistence().unwrap(), handle);
-    session.close().await.unwrap();
-    session.close().await.unwrap();
-    let mut resumed = client
-        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
-        .await
-        .unwrap();
-    resumed.start_turn("resumed", &spec.config).await.unwrap();
-    completed(resumed.as_mut()).await;
-    resumed.close().await.unwrap();
-    let calls = logs(&directory);
-    assert_eq!(
-        calls
-            .iter()
-            .filter(|call| call.get("input").is_some())
-            .count(),
-        4
-    );
-    assert!(
-        calls
-            .iter()
-            .filter_map(|call| call["args"].as_array())
-            .any(|args| args
-                .iter()
-                .any(|arg| arg == "--dangerously-skip-permissions")
-                && args.iter().any(|arg| arg == &handle.session_id))
-    );
-    for selection in [
-        ["--model", "gemini-test", "--effort", "xhigh"],
-        ["--model", "claude-test", "--effort", "high"],
-    ] {
-        assert!(
-            calls
-                .iter()
-                .filter_map(|call| call["args"].as_array())
-                .any(|args| args.windows(4).any(|window| window == selection)),
-            "{selection:?}"
-        );
-    }
 }
 
 #[tokio::test]
@@ -248,7 +146,7 @@ async fn rejects_a_thinking_level_the_model_does_not_offer() {
     assert!(
         logs(&directory)
             .iter()
-            .all(|call| call.get("input").is_none())
+            .all(|call| call["rpc"]["method"] != "session/prompt")
     );
     spec.config.thinking_option_id = Some("low".to_owned());
     session.start_turn("hello", &spec.config).await.unwrap();
@@ -287,6 +185,13 @@ async fn rejects_foreign_handles_models_and_invalid_images_before_admission() {
             metadata: None,
             ..handle.clone()
         },
+        AgentPersistenceHandle {
+            metadata: Some(BTreeMap::from([
+                ("cwd".to_owned(), json!(spec.cwd)),
+                ("transport".to_owned(), json!("unknown")),
+            ])),
+            ..handle.clone()
+        },
     ] {
         assert!(
             client
@@ -314,7 +219,7 @@ async fn rejects_foreign_handles_models_and_invalid_images_before_admission() {
     assert!(
         logs(&directory)
             .iter()
-            .all(|entry| entry.get("input").is_none())
+            .all(|entry| entry["rpc"]["method"] != "session/prompt")
     );
 }
 
@@ -367,48 +272,9 @@ async fn ephemeral_environment_never_enters_the_resume_handle() {
     assert!(
         logs(&directory)
             .iter()
+            .filter(|call| call.get("args").is_some())
             .all(|call| call["hasEnvironment"] == true)
     );
-}
-
-#[tokio::test]
-async fn startup_errors_and_timeout_do_not_hang() {
-    for scenario in ["hung", "malformed", "oversized", "wrong-model"] {
-        let (_directory, mut client, mut spec) = fixture();
-        client.deadline = Duration::from_millis(300);
-        client.environment = AgentEnvironment::try_from(BTreeMap::from([(
-            "AGY_FIXTURE_SCENARIO".to_owned(),
-            scenario.to_owned(),
-        )]))
-        .unwrap();
-        spec.config.model = Some("gemini-test".to_owned());
-        assert!(client.create_session(&spec).await.is_err(), "{scenario}");
-    }
-}
-
-#[tokio::test]
-async fn crashes_foreign_events_and_error_results_do_not_complete_successfully() {
-    for scenario in ["crash", "foreign", "failure"] {
-        let (_directory, mut client, spec) = fixture();
-        client.environment = AgentEnvironment::try_from(BTreeMap::from([(
-            "AGY_FIXTURE_SCENARIO".to_owned(),
-            scenario.to_owned(),
-        )]))
-        .unwrap();
-        let mut session = client.create_session(&spec).await.unwrap();
-        session.start_turn("hello", &spec.config).await.unwrap();
-        loop {
-            match event(session.as_mut()).await {
-                Ok(AgentTurnEvent::RuntimeInfo(_) | AgentTurnEvent::Usage(_)) => {}
-                Ok(AgentTurnEvent::Timeline(entry)) if entry.item["type"] == "user_message" => {
-                    assert_eq!(entry.item["text"], "hello");
-                }
-                Ok(AgentTurnEvent::Failed) | Err(AgentSessionError::Failed) => break,
-                unexpected => panic!("unexpected {unexpected:?}"),
-            }
-        }
-        session.close().await.unwrap();
-    }
 }
 
 #[tokio::test]
@@ -440,7 +306,7 @@ async fn manager_persists_timeline_and_resume_identity_across_restart() {
         Manager::new(AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone()));
     manager.register(Box::new(client.clone())).unwrap();
     let initial = manager.create("agy-agent", &spec).await.unwrap();
-    manager.send("agy-agent", "hello").await.unwrap();
+    manager.send("agy-agent", "tool").await.unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while manager.active_turn("agy-agent").is_some() {
             manager.poll().await.unwrap();
@@ -449,7 +315,7 @@ async fn manager_persists_timeline_and_resume_identity_across_restart() {
     })
     .await
     .unwrap();
-    assert_eq!(manager.last_message("agy-agent"), Some("Hello world"));
+    assert_eq!(manager.last_message("agy-agent"), Some("tool"));
     let (_, entries) = provider::testing::timeline_entries(&timeline, "agy-agent").unwrap();
     assert!(entries.iter().any(|row| row.item["type"] == "tool_call"));
     let text: String = entries
@@ -457,13 +323,16 @@ async fn manager_persists_timeline_and_resume_identity_across_restart() {
         .filter(|row| row.item["type"] == "assistant_message")
         .filter_map(|row| row.item["text"].as_str())
         .collect();
-    assert_eq!(text, "Hello world");
+    assert_eq!(text, "tool");
     manager.close_all().await.unwrap();
     let mut restored =
         Manager::new(AgentManager::new(Box::new(registry)).with_timeline(timeline.clone()));
     restored.register(Box::new(client)).unwrap();
     let resumed = restored.restore("agy-agent").await.unwrap();
-    assert_eq!(resumed.persistence, initial.persistence);
+    assert_eq!(
+        resumed.persistence.as_ref().map(|h| &h.session_id),
+        initial.persistence.as_ref().map(|h| &h.session_id)
+    );
     let retained = provider::testing::timeline_entries(&timeline, "agy-agent")
         .unwrap()
         .1;
@@ -484,57 +353,8 @@ async fn manager_persists_timeline_and_resume_identity_across_restart() {
         .filter(|row| row.item["type"] == "assistant_message")
         .filter_map(|row| row.item["text"].as_str())
         .collect();
-    assert_eq!(text, "Hello worldHello world");
+    assert_eq!(text, "toolafter restart");
     restored.close_all().await.unwrap();
-}
-
-#[cfg(test)]
-mod installed;
-
-mod diagnostics;
-
-mod quota;
-
-mod authentication;
-
-#[tokio::test]
-async fn cumulative_usage_queues_a_delta_segment_only_after_the_baseline() {
-    let (_root, client, spec) = fixture();
-    let mut session = client.create_session(&spec).await.unwrap();
-    assert!(session.reports_token_usage());
-    let mut segments = Vec::new();
-    for prompt in ["first", "second"] {
-        session.start_turn(prompt, &spec.config).await.unwrap();
-        let events = completed(session.as_mut()).await;
-        let queued: Vec<_> = events
-            .iter()
-            .enumerate()
-            .filter_map(|(position, event)| match event {
-                AgentTurnEvent::RequestUsage(request) => Some((position, request.clone())),
-                _ => None,
-            })
-            .collect();
-        assert!(
-            queued
-                .iter()
-                .all(|(position, _)| *position + 1 < events.len())
-        );
-        segments.push(queued);
-    }
-
-    assert!(segments[0].is_empty(), "the first total is only a baseline");
-    assert_eq!(segments[1].len(), 1);
-    let request = &segments[1][0].1;
-    assert!(request.segment_id.starts_with("antigravity:") && request.segment_id.ends_with(":0"));
-    assert_eq!(
-        (
-            request.input_tokens,
-            request.output_tokens,
-            request.cache_read_tokens
-        ),
-        (100, 10, 50)
-    );
-    session.close().await.unwrap();
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Stdio;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -151,9 +151,7 @@ pub(super) struct Transport {
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
     deadline: Duration,
-    sandboxed: bool,
     closed: bool,
-    failure_since: Option<Instant>,
 }
 
 impl Transport {
@@ -203,9 +201,7 @@ impl Transport {
             messages,
             reader,
             deadline: client.deadline,
-            sandboxed: confinement.is_some(),
             closed: false,
-            failure_since: None,
         })
     }
 
@@ -213,6 +209,7 @@ impl Transport {
         self.messages.recv().await.ok_or(AgentSessionError::Failed)
     }
 
+    #[cfg(test)]
     pub(super) fn failure(&self) -> Option<Failure> {
         self.process.diagnostics.failure()
     }
@@ -224,7 +221,6 @@ impl Transport {
         }
         bytes.push(b'\n');
         self.process.diagnostics.clear();
-        self.failure_since = None;
         let input = self.input.as_mut().ok_or(AgentSessionError::Failed)?;
         let result = tokio::time::timeout(self.deadline, async {
             input.write_all(&bytes).await?;
@@ -236,60 +232,6 @@ impl Transport {
         }
         let _ = self.close().await;
         Err(AgentSessionError::Failed)
-    }
-
-    pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
-        match self.messages.try_recv() {
-            Ok(message) => Ok(Some(message)),
-            Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
-            Err(mpsc::error::TryRecvError::Disconnected)
-                if !self.closed && !self.process.stderr_reader.is_finished() =>
-            {
-                // stdout and stderr have independent readers. Give the final notice a bounded
-                // chance to arrive before the session seals its failed tool entries.
-                if self
-                    .failure_since
-                    .get_or_insert_with(Instant::now)
-                    .elapsed()
-                    < Duration::from_millis(100)
-                {
-                    Ok(None)
-                } else {
-                    Err(AgentSessionError::Failed)
-                }
-            }
-            Err(_) => Err(AgentSessionError::Failed),
-        }
-    }
-
-    pub(super) async fn interrupt(&self) -> Result<(), AgentSessionError> {
-        #[cfg(unix)]
-        {
-            let id = self.process.child.id().ok_or(AgentSessionError::Failed)?;
-            #[cfg(target_os = "linux")]
-            if self.sandboxed {
-                return provider_native::sandbox::linux::process::interrupt_native(id)
-                    .map_err(|_| AgentSessionError::Failed);
-            }
-            #[cfg(not(target_os = "linux"))]
-            let _ = self.sandboxed;
-            let status = Command::new("/bin/kill")
-                .args(["-INT", &id.to_string()])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .await
-                .map_err(|_| AgentSessionError::Failed)?;
-            if status.success() {
-                Ok(())
-            } else {
-                Err(AgentSessionError::Failed)
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            Err(AgentSessionError::Rejected)
-        }
     }
 
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {

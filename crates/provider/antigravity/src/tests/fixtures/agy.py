@@ -24,6 +24,9 @@ def log(value):
 
 log({'args': args, 'hasEnvironment': os.environ.get('AGY_TEST_ENV') == 'test-only-value',
      'cwd': os.getcwd()})
+if args == ['--version']:
+    print('1.3.0')
+    sys.exit(0)
 if scenario == 'signed-out':
     # Native model listing fails silently; print/stream startup would launch OAuth.
     if args != ['models']:

@@ -40,7 +40,7 @@ fn sandboxed_fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     .unwrap();
     let cwd = cwd.canonicalize().unwrap();
     let home = home.canonicalize().unwrap();
-    let program = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/agy.py");
+    let program = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/acp.py");
     let mut client = AntigravityClient::new(program).with_image_directory(cwd.join("images"));
     client.environment = AgentEnvironment::try_from(BTreeMap::from([
         (
@@ -174,7 +174,10 @@ async fn confined_session_cancels_and_keeps_confinement_on_reconnect() {
     let (_directory, client, mut spec) = sandboxed_fixture();
     let mut session = client.create_session(&spec).await.unwrap();
     let handle = session.persistence().unwrap();
-    session.start_turn("first", &spec.config).await.unwrap();
+    session
+        .start_turn("sandbox-boundary", &spec.config)
+        .await
+        .unwrap();
     completed(session.as_mut()).await;
 
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
@@ -187,7 +190,7 @@ async fn confined_session_cancels_and_keeps_confinement_on_reconnect() {
 
     spec.config.mode_id = Some("accept-edits".to_owned());
     session
-        .start_turn("after cancel", &spec.config)
+        .start_turn("sandbox-boundary", &spec.config)
         .await
         .unwrap();
     completed(session.as_mut()).await;
@@ -197,7 +200,10 @@ async fn confined_session_cancels_and_keeps_confinement_on_reconnect() {
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await
         .unwrap();
-    resumed.start_turn("resumed", &spec.config).await.unwrap();
+    resumed
+        .start_turn("sandbox-boundary", &spec.config)
+        .await
+        .unwrap();
     completed(resumed.as_mut()).await;
     resumed.close().await.unwrap();
 
@@ -209,6 +215,10 @@ async fn confined_session_cancels_and_keeps_confinement_on_reconnect() {
             .filter(|entry| entry.get("args").is_some() && entry["args"] != json!(["models"]))
             .collect();
     assert_eq!(session_launches.len(), 3);
+    assert_eq!(
+        std::fs::read_to_string(Path::new(&spec.cwd).join("acp-worktree-ok.txt")).unwrap(),
+        "ok"
+    );
     for launch in &session_launches {
         let args = launch["args"].as_array().unwrap();
         assert!(

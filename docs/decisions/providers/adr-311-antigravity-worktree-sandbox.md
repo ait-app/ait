@@ -13,6 +13,9 @@ paths:
 
 # ADR-311：Antigravity 沙箱化 Worktree 写入隔离
 
+后续修订：[ADR-312](adr-312-antigravity-acp-migration.md) 将主会话取消改为 ACP `session/cancel`，
+创建、恢复与配置切换继续保留本决策的 OS 写入隔离。
+
 ## 背景
 
 [ADR-215](../workspace/adr-215-sandboxed-worktree-isolation.md) 与

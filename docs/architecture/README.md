@@ -56,7 +56,10 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。运行时不按 provider id 分支：诊断来源、Catalog 标签与默认模式、
 重启继续、子会话发现与导入模式都由 adapter 在 `AgentClient` 上按行为声明，`provider-builtin` 的守卫测试拒绝运行时生产代码引用内置 id
 （[ADR-299](../decisions/providers/adr-299-runtime-reads-adapter-capabilities.md)）。`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider-builtin` 仅以 dev 边启用
-`provider` 的 `test-support` feature；反向只有 `provider` 以 dev 边启用 `provider-codex` 的 `test-support`，供运行时执行测试驱动 Codex 假程序。`provider-codex` 以 dev 边启用 `provider-native` 的 `test-support`，回放从真实 CLI 录下的 stdio 帧（[ADR-298](../decisions/providers/adr-298-provider-stdio-replay-transcripts.md)）。非 dev 边启用会被依赖守卫拒绝。
+`provider` 的 `test-support` feature；反向只有 `provider` 以 dev 边启用 `provider-codex` 的 `test-support`，供运行时执行测试驱动 Codex 假程序。`provider-codex` 与 `provider-antigravity` 以 dev 边启用 `provider-native` 的 `test-support`，回放从真实 CLI 录下的 stdio 帧（[ADR-298](../decisions/providers/adr-298-provider-stdio-replay-transcripts.md)）。非 dev 边启用会被依赖守卫拒绝。
+Antigravity 的主会话由其 adapter 统一通过官方 ACP 运行，支持 ACP 的旧版仍可使用；缺失能力在对应操作提示升级，
+1.5.15 是后台任务、子代理和取消收尾修复的推荐版本，不是整项 Provider 的准入门槛。
+旧 handle 按原 conversation 直接经 ACP 恢复，摘要与额度查询保持既有辅助命令边界（[ADR-312](../decisions/providers/adr-312-antigravity-acp-migration.md)）。
 `domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
 RPC envelope 的 JSON 编解码由 `model::rpc` 统一提供；metadata 与 filesystem 继续在各自
 边界内定义错误码，并把错误值交给共享编码器。

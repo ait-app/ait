@@ -96,16 +96,17 @@ async fn image_requests_reach_agy_and_remain_visible_in_reopened_history() {
     }
     assert_eq!(sources[0], sources[1]);
     let calls = logs(&directory);
-    let sent: Vec<_> = calls.iter().filter_map(|call| call.get("input")).collect();
+    let sent: Vec<_> = calls
+        .iter()
+        .filter(|call| call["rpc"]["method"] == "session/prompt")
+        .collect();
     assert_eq!(sent.len(), 2);
-    for (input, source) in sent.into_iter().zip(sources) {
-        let blocks = input["message"]["content"].as_array().unwrap();
-        assert!(blocks.iter().all(|block| block["type"] == "text"));
-        assert_eq!(
-            blocks.last().unwrap()["text"],
-            format!("Attached image: {source}")
-        );
-        assert!(!input.to_string().contains(&image.data));
+    for prompt in sent {
+        let blocks = prompt["rpc"]["params"]["prompt"].as_array().unwrap();
+        let last = blocks.last().unwrap();
+        assert_eq!(last["type"], "image");
+        assert_eq!(last["mimeType"], "image/png");
+        assert_eq!(last["data"], image.data);
     }
 }
 
@@ -132,7 +133,7 @@ async fn unsupported_schema_has_an_actionable_reason_before_admission() {
     assert!(
         logs(&directory)
             .iter()
-            .all(|call| call.get("input").is_none())
+            .all(|call| call["rpc"]["method"] != "session/prompt")
     );
     session
         .start_turn("valid retry", &spec.config)
@@ -173,23 +174,28 @@ async fn multiple_images_keep_attachment_order_without_exposing_paths_as_user_te
             _ => None,
         })
         .unwrap();
-    assert_eq!(input["text"], "context\nquestion\nnotes");
+    assert_eq!(input["text"], "context\n\nquestion\n\nnotes");
     let sources = input["imageSources"].as_array().unwrap();
     assert_eq!(sources.len(), 4);
     let calls = logs(&directory);
-    let sent = calls.iter().find_map(|call| call.get("input")).unwrap();
-    let blocks = sent["message"]["content"].as_array().unwrap();
+    let sent = calls
+        .iter()
+        .find(|call| call["rpc"]["method"] == "session/prompt")
+        .unwrap();
+    let blocks = sent["rpc"]["params"]["prompt"].as_array().unwrap();
     assert_eq!(blocks.len(), 7);
     assert_eq!(blocks[0]["text"], "context");
     assert_eq!(blocks[1]["text"], "question");
     assert_eq!(blocks[6]["text"], "notes");
-    for ((block, source), extension) in blocks[2..6]
-        .iter()
-        .zip(sources)
-        .zip(["png", "jpg", "gif", "webp"])
-    {
+    for ((block, source), (mime, extension)) in blocks[2..6].iter().zip(sources).zip([
+        ("image/png", "png"),
+        ("image/jpeg", "jpg"),
+        ("image/gif", "gif"),
+        ("image/webp", "webp"),
+    ]) {
+        assert_eq!(block["type"], "image");
+        assert_eq!(block["mimeType"], mime);
         let source = source.as_str().unwrap();
-        assert_eq!(block["text"], format!("Attached image: {source}"));
         assert_eq!(Path::new(source).extension().unwrap(), extension);
         assert_eq!(std::fs::read(source).unwrap(), b"hello");
     }
@@ -245,7 +251,7 @@ async fn invalid_images_and_storage_failure_are_reported_before_native_admission
     assert!(
         logs(&directory)
             .iter()
-            .all(|call| call.get("input").is_none())
+            .all(|call| call["rpc"]["method"] != "session/prompt")
     );
     std::fs::remove_file(image_directory).unwrap();
     session.start_input(&prompt, &spec.config).await.unwrap();
@@ -273,7 +279,7 @@ async fn invalid_configuration_keeps_a_specific_input_diagnostic() {
     assert!(
         logs(&directory)
             .iter()
-            .all(|call| call.get("input").is_none())
+            .all(|call| call["rpc"]["method"] != "session/prompt")
     );
     session.close().await.unwrap();
 }

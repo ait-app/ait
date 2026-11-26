@@ -159,9 +159,11 @@ async fn authenticated_multi_turn_and_resume() {
             .await
             .contains("agy-provider-smoke")
     );
+    let checkpoint = session.persistence().unwrap();
+    assert_eq!(checkpoint.session_id, handle.session_id);
     session.close().await.unwrap();
     let mut resumed = client
-        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .resume_session(&checkpoint, &spec, AgentResumePurpose::Interactive)
         .await
         .unwrap();
     resumed
@@ -176,6 +178,6 @@ async fn authenticated_multi_turn_and_resume() {
             .await
             .contains("agy-provider-smoke")
     );
-    assert_eq!(resumed.persistence().unwrap(), handle);
+    assert_eq!(resumed.persistence().unwrap().session_id, handle.session_id);
     resumed.close().await.unwrap();
 }

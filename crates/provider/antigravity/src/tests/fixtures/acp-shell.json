@@ -1,0 +1,54 @@
+{
+  "source": "Official AGY 1.5.18, Linux x86_64, real ACP smoke in a temporary workspace on 2026-11-26; only run_command notifications retained.",
+  "updates": [
+    {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "call_9959053714276242572",
+      "name": "run_command",
+      "args": {
+        "CommandLine": "printf ACP_SHELL_OK",
+        "WaitMsBeforeAsync": 5000,
+        "toolSummary": "Print ACP shell marker"
+      },
+      "status": "in_progress",
+      "kind": "execute",
+      "title": "printf ACP_SHELL_OK",
+      "rawInput": {
+        "CommandLine": "printf ACP_SHELL_OK",
+        "WaitMsBeforeAsync": 5000,
+        "toolSummary": "Print ACP shell marker"
+      }
+    },
+    {
+      "sessionUpdate": "tool_call_update",
+      "toolCallId": "call_9959053714276242572",
+      "name": "run_command",
+      "args": {
+        "CommandLine": "printf ACP_SHELL_OK",
+        "WaitMsBeforeAsync": 5000,
+        "toolSummary": "Print ACP shell marker"
+      },
+      "status": "completed",
+      "kind": "execute",
+      "title": "printf ACP_SHELL_OK",
+      "rawInput": {
+        "CommandLine": "printf ACP_SHELL_OK",
+        "WaitMsBeforeAsync": 5000,
+        "toolSummary": "Print ACP shell marker"
+      },
+      "rawOutput": {
+        "output": "Created At: 2026-11-26T15:35:44+08:00\nCompleted At: 2026-11-26T15:35:45+08:00\nCommand exited with code 0.\n\nCommand output:\nACP_SHELL_OK",
+        "exit_code": 0
+      },
+      "content": [
+        {
+          "type": "content",
+          "content": {
+            "type": "text",
+            "text": "Created At: 2026-11-26T15:35:44+08:00\nCompleted At: 2026-11-26T15:35:45+08:00\nCommand exited with code 0.\n\nCommand output:\nACP_SHELL_OK"
+          }
+        }
+      ]
+    }
+  ]
+}

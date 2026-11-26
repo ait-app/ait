@@ -1,12 +1,11 @@
-//! Google Antigravity's official `agy` CLI over its headless NDJSON protocol.
+//! Google Antigravity's official CLI, using the installed server's ACP capabilities.
 
+mod acp;
 mod config;
 mod diagnostics;
 mod discovery;
 mod input;
 mod quota;
-mod session;
-mod streaming;
 mod summary;
 mod transport;
 
@@ -133,17 +132,31 @@ impl AgentClient for AntigravityClient {
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
-        Ok(provider_native::configuration::executable(&self.program))
+        if !provider_native::configuration::executable(&self.program) {
+            return Ok(false);
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
+        Ok(acp::available(self, &cwd).await)
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
-        if !self.is_available().await? {
+        if !provider_native::configuration::executable(&self.program) {
             return Ok("Antigravity CLI (agy) executable is unavailable".to_owned());
         }
         let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        if !acp::available(self, &cwd).await {
+            return Ok("Antigravity CLI could not start `agy acp --help`. Check the CLI installation; versions without ACP need an upgrade to agy 1.5.15 or newer.".to_owned());
+        }
+        let status = acp::version::probe(self, &cwd).await;
         let catalog =
             discovery::catalog(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
-        Ok(format!("Antigravity CLI ready; {} models", catalog.len()))
+        Ok(format!(
+            "Antigravity CLI ready; {} models. {}",
+            catalog.len(),
+            status.upgrade_guidance().unwrap_or_else(|| {
+                "ACP capabilities are negotiated with the installed CLI.".to_owned()
+            })
+        ))
     }
 
     async fn usage(&self) -> Result<Value, AgentSessionError> {
@@ -172,7 +185,11 @@ impl AgentClient for AntigravityClient {
         &self,
         spec: &AgentSessionSpec,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
-        Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+        Ok(Box::new(
+            acp::open(self, spec, None)
+                .await
+                .map_err(acp::OpenError::session)?,
+        ))
     }
 
     async fn create_session_with_environment(
@@ -194,7 +211,11 @@ impl AgentClient for AntigravityClient {
         if purpose == AgentResumePurpose::History {
             return Err(AgentSessionError::Unavailable);
         }
-        Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+        Ok(Box::new(
+            acp::open(self, spec, Some(handle))
+                .await
+                .map_err(acp::OpenError::session)?,
+        ))
     }
 }
 

@@ -23,6 +23,8 @@ workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# Record the real CLI protocol and replay it offline within the owning adapter.
+provider-native = { workspace = true, features = ["test-support"] }
 # Drive the adapter through the runtime's AgentManager and timeline test entry points.
 provider = { workspace = true, features = ["test-support"] }
 model.workspace = true

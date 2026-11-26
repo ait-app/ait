@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn maps_only_explicit_full_access_to_skip_permissions() {
+fn accepts_valid_modes_and_models() {
     for mode in [
         None,
         Some("default"),
@@ -16,36 +16,8 @@ fn maps_only_explicit_full_access_to_skip_permissions() {
             ..StoredAgentConfig::default()
         };
         validate(&config).unwrap();
-        // The resolved selection, not the stored model ID, reaches the native command line.
-        let selection = Selection {
-            model: Some("gemini-test".to_owned()),
-            effort: Some("high".to_owned()),
-        };
-        let args = arguments(&config, &selection, Some("conversation-id"), false);
-        assert_eq!(
-            args.iter()
-                .any(|arg| arg == "--dangerously-skip-permissions"),
-            mode == Some("full-access")
-        );
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["--conversation", "conversation-id"])
-        );
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["--model", "gemini-test"])
-        );
-        assert!(args.windows(2).any(|pair| pair == ["--effort", "high"]));
-        assert!(args.iter().any(|arg| arg == "--disable-slash-commands"));
-        assert!(!args.iter().any(|arg| arg == "--settings"));
-
-        let confined = arguments(&config, &selection, Some("conversation-id"), true);
-        assert!(
-            confined
-                .windows(2)
-                .any(|pair| pair == ["--settings", "{\"enableTerminalSandbox\":false}"])
-        );
     }
+    assert_eq!(modes().len(), 4);
 }
 
 #[test]
@@ -99,18 +71,4 @@ fn rejects_settings_that_cannot_be_delivered_natively() {
         validate_directory("relative"),
         Err(AgentSessionError::Rejected)
     );
-}
-
-#[test]
-fn runtime_reports_only_native_model_facts() {
-    let config = StoredAgentConfig::default();
-    let init = json!({"permission_mode":"request-review"});
-    let info = runtime("id", &config, None, &init);
-    assert_eq!(info.model, None);
-    assert_eq!(info.thinking_option_id, None);
-    let info = runtime("id", &config, Some("high"), &init);
-    assert_eq!(info.thinking_option_id.as_deref(), Some("high"));
-    assert_eq!(info.mode_id.as_deref(), Some("default"));
-    assert_eq!(info.extra.unwrap()["permissionMode"], "request-review");
-    assert_eq!(modes().len(), 4);
 }

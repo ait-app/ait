@@ -1,6 +1,7 @@
 # Antigravity CLI
 
-Ait 的 `antigravity` Provider 使用 Google 官方 AGY CLI，支持官方脚本与 Homebrew cask 安装。
+Ait 的 `antigravity` Provider 使用 Google 官方 AGY CLI，主会话通过官方 ACP（`agy acp`）运行，
+支持 ACP 的旧版也可使用，推荐 **AGY 1.5.15 或更新版本**以获得后台任务、子代理与取消收尾修复。
 仅安装 Antigravity IDE 不足以启动这个 Provider。
 
 ## 安装与登录
@@ -39,56 +40,77 @@ export AIT_SERVER_ANTIGRAVITY_BIN="/custom/path/agy"
 ```
 
 显式路径不可用时 Provider 显示 unavailable，不切换到其他安装。
-模型列表从当前 CLI 的 `agy models` 获取；需使用支持官方 stream input/output 的较新版本。
-协议基础验证使用 1.3.0，模型与思考等级的分组对照 1.4.7；1.5.16 的录制回归另覆盖
-调度工具参数错误、命令拒绝和后续成功轮次，不代表所有新版工具路径均已验证。
+不按版本号禁用 Provider：只读检查 `agy acp --help` 成功后可继续发现模型，具体能力由会话握手确认。
+完全不支持 ACP 的 CLI 需要升级；命令无法启动时同时提示检查安装，避免把启动故障一律归因于版本。
+Ait 不自动安装或升级 CLI。
+
+## ACP 运行状态
+
+主会话全部通过 `agy acp` 运行，不再保留 headless 主会话兼容路径。
+旧版可继续多轮文本对话和其握手声明支持的功能。缺少图片能力时，只拒绝带图输入并提示升级，
+纯文本仍可发送；缺少恢复能力时，当前会话仍可继续，聊天中提示恢复和配置切换需要升级。
+配置切换因恢复能力缺失而被拒绝时，保留原连接和原配置，不丢弃仍可用的对话。
+版本低于 1.5.15 或无法确认版本时，遇到 shell/子代理调用或取消操作会显示对应升级提示；
+旧版可能提前结束后台任务所在轮次，因此其完成状态和用量可能不完整。提示只进入显示时间线，不注入模型输入。
+已经观察到的未完成工具仍会触发失败收尾，不能将未确认完成的操作显示为成功。
+无 `transport` 标记的旧会话 handle 会按原原生 conversation UUID 直接通过 ACP 恢复，不重放历史，
+恢复后累计用量从新的 ACP 轮次起算。
+
+1.5.18 的真实测试发现原生 ACP 不返回子代理 `conversation_id` 与 `log_uri`；
+子代理执行本身正常，卡片只展示原生实际返回的信息。
+结构化摘要生成仍使用隔离、禁止工具的 headless `--json-schema` 调用；
+账号额度仍使用只读内置命令 `agy --print /usage --output-format json`，不增加轮询。
+协议切换不承诺消除个人订阅的条款风险。
+
+已录制 Linux x86_64 / AGY 1.5.18 的多轮、配置切换、关闭恢复、图片、文件工具、原生子代理交互，
+脱敏后在 adapter 测试中离线回放；补充 smoke 确认普通模式审批拒绝、取消、shell 输出与退出码、
+子代理写入文件及后台 shell 在关联 prompt 完成前结束。macOS 和 Windows 的真机验收尚未完成。
+旧版兼容另实测 Linux x86_64 / AGY 1.5.13 与 1.5.15 的三轮文本对话和关闭后恢复；
+这不表示 1.5.13 的后台任务和子代理收尾问题已修复。
+录制测试默认跳过，需显式指定已登录的官方测试程序与私有录制输出路径；见
+[原生 ACP 测试](../../crates/provider/antigravity/src/acp/tests/native.rs)和
+[录制回放操作说明](provider-replay.md)。
 
 ## 执行模式与会话
 
-| 模式                      | 原生行为                                                                |
-| ------------------------- | ----------------------------------------------------------------------- |
-| Local Permissions（默认） | 保留本机 AGY 权限规则；headless 中无法询问的工具会被原生拒绝            |
-| Accept Edits              | `--mode accept-edits`，允许编辑；需要审批的命令仍会在 headless 中被拒绝 |
-| Plan                      | `--mode plan`                                                           |
-| Full Access               | `--dangerously-skip-permissions`，全部工具调用自动批准                  |
+| 模式                      | 原生行为                                                   |
+| ------------------------- | ---------------------------------------------------------- |
+| Local Permissions（默认） | 保留本机 AGY 权限规则；需要交互审批的工具由 adapter 拒绝   |
+| Accept Edits              | 原生 `accept-edits` 模式，允许编辑；需要审批的命令仍被拒绝 |
+| Plan                      | 原生 `plan` 模式                                           |
+| Full Access               | `--dangerously-skip-permissions`，全部工具调用自动批准     |
 
-Google 的 headless 接口没有交互审批回传。需要运行特定命令时，可按
-[官方 Headless 文档](https://antigravity.google/docs/cli/headless)配置 AGY 自己的权限规则，
-或显式选择 Full Access。Ait 不改写全局权限文件。
+普通模式的交互审批回调由 adapter 自动拒绝，不增加审批弹窗。
+需要运行特定命令时，可在 AGY 自身配置权限规则，或显式选择 Full Access；Ait 不改写全局权限文件。
 
 在沙箱化 Worktree（`sandbox: worktree_writes`）中，交互会话进程（含取消或切换配置后的重连）受外层
 Seatbelt / `bubblewrap` 写入隔离约束：允许写入当前 worktree、Git 目录及 `~/.gemini/antigravity-cli`，
 但该目录下的 `builtin`、`hooks.json`、`plugins`、`settings.json` 与整个 `~/.gemini/config` 保持只读；
 启动参数自动追加不落盘的 `--settings '{"enableTerminalSandbox":false}'`，避免与外层沙箱嵌套冲突。
 
-工具被自动拒绝时，AGY 1.3.0 可能返回 `SUCCESS`、空响应和 `denied_actions`，
-且工具完成事件不带 `error`。Ait 根据拒绝列表将对应工具显示为失败；没有响应的拒绝轮次
-也显示失败，并在会话错误和活动日志中提示配置 `permissions.allow` 或选择 Full Access。
-已有响应且原生成功的轮次保留响应，对被拒绝工具仍显示失败。
-AGY 1.2.13 的工具 `ERROR` 步骤也会保留原生错误。`denied_actions` 是进程级累计列表，
-Ait 只将新增拒绝用于本轮判断；重连后重新计数，避免旧拒绝让后续成功工具显示失败。
+ACP 工具卡片保留原生状态和错误。交互审批被拒绝后，若原生以空响应完成，
+Ait 将本轮显示为权限失败；已有响应且原生成功的轮次保留响应。
+轮次结束时仍未收尾的工具会统一结束状态，避免卡片一直显示运行中。
 
-AGY 的 stderr 会持续、有界地读取，仅公开权限、登录、额度、模型/API 或协议失败的分类说明；
-原始诊断不进入 Ait 日志或快照。更详细的原生日志位于 `~/.gemini/antigravity-cli/log/`，incident 导出默认从该目录采集。
-自定义日志目录可通过 `AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR` 覆盖。协议校验失败会保留
-固定的具体说明和来源，例如 `step_lifecycle`、`unfinished_steps`、`usage` 或 `denied_actions`；
-不记录失败帧的原始内容。
+AGY 的 stderr 与 RPC 错误会做有界分类诊断，仅公开权限、登录、额度、模型/API 或协议失败说明；
+原始诊断不进入 Ait 日志或快照。更详细的原生日志位于 `~/.gemini/antigravity-cli/log/`，
+incident 导出默认从该目录采集，可通过 `AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR` 覆盖。
 
 模型和思考等级分开选择。`agy models` 把每个模型的每个 effort 各列一条记录
 （如 `gemini-test-high` 与 `Gemini Test (High)`）；ID 以 `-<effort>` 结尾且标签以对应的
 `(<Effort>)` 结尾的记录归并为一个模型，effort 成为该模型的思考等级选项，
 按 low、medium、high、xhigh、max 排列。其余记录保持为单独的模型，没有思考等级。
 
-启动时传 `--model <模型> --effort <等级>`；没有选择思考等级时不传 `--effort`，由 AGY 决定。
-AGY 不报告默认 effort，Ait 以该模型在原生列表中的第一条变体作为默认思考等级。
+ACP 根据原生配置选项设置模型、思考等级和模式，并复核整份最终快照；
+若后续选项导致已选模型或等级变化，拒绝发送本轮输入并保留原配置。
+模型列表不报告默认 effort，Ait 以该模型在原生列表中的第一条变体作为选择器默认思考等级。
 所选模型不提供的等级在发送前拒绝，并提示重新选择。
-分组之前保存的完整 slug（如 `gemini-test-high`）仍然有效：按模型加 effort 启动，
+分组之前保存的完整 slug（如 `gemini-test-high`）仍然有效：按模型加 effort 解析，
 显式选择的思考等级优先于 slug 中的 effort；运行信息显示归并后的模型和实际使用的等级。
 
 会话支持多轮文本和图片、工具进度、累计 token 用量与 conversation ID 恢复；
 模型或模式修改在下轮开始前通过同一 conversation ID 重启原生连接。
-读写、编辑和子代理步骤使用对应的工具卡片；子代理保留原生 child conversation ID 和日志 URI，
-不导入子代理 transcript。原生没有返回写入内容或 diff 时，卡片只展示文件路径。
+读写、编辑、shell 和子代理步骤使用对应的工具卡片；原生没有返回写入内容或 diff 时，卡片只展示文件路径。
 
 Ait 关闭或重启不会删除原生 conversation，已存 Ait 时间线也会保留。
 需要在终端继续时使用会话页面的恢复命令：
@@ -97,14 +119,10 @@ Ait 关闭或重启不会删除原生 conversation，已存 Ait 时间线也会�
 agy --conversation <conversation-id>
 ```
 
-Unix 取消等待原生中断确认；确认后下一轮重新连接同一 conversation。
-支持 `ERROR` / `interrupted` 形式的原生确认。取消超时或进程提前退出时显示失败并清理活动轮次，
-下一条用户消息仍可重连。原生错误、协议错误和进程崩溃同样会回收连接，避免重复结束事件；
-发送失败的消息不会自动重发。
-当前 Windows adapter 不支持取消。关闭仍会回收拥有的原生进程。
-
-协议回归样本对照 [Paseo `dc07efe937c3`](https://github.com/getpaseo/paseo/tree/dc07efe937c3160e8fe83d02dc972c8a0b014957/plugins/antigravity-provider)
-（2026-10-27 检查的最新 main），涵盖其 AGY 1.2.13 原始录制与 Ait 的 1.3.0 合成场景。
+取消发送 `session/cancel`，等待关联 prompt 的原生终态；确认后下一轮重新连接同一 conversation。
+取消超时或进程提前退出时显示失败并清理活动轮次，下一条用户消息仍可重连。
+原生错误、协议错误和进程崩溃同样会回收连接，避免重复结束事件；发送失败的消息不会自动重发。
+Windows ACP 的真实取消行为尚未验证。关闭仍会回收拥有的原生进程。
 
 ## 账号额度
 
@@ -125,15 +143,15 @@ Ait 使用同一个 AGY 安装的 `agy --print /usage --output-format json` 读�
 
 ## 当前接口范围
 
-文本、文本附件和 PNG/JPEG/GIF/WebP 图片支持。AGY 的流式输入只接受文本块，
-Ait 将图片保存到 daemon 数据目录的私有 `agents/provider-images`，通过文件路径交给
-原生读图工具；不把图片写到工作区，也不更改原生权限。历史消息保留图片预览，
-关闭会话后图片仍可用于历史和恢复。实际读图仍受所选模型能力和 AGY 原生工具权限约束。
+文本、文本附件和 PNG/JPEG/GIF/WebP 图片支持。ACP 直接发送原生图片块，
+同时将图片保存到 daemon 数据目录的私有 `agents/provider-images`，供历史消息预览和关闭后恢复；
+不把图片写到工作区，也不更改原生权限。实际读图仍受所选模型能力和 AGY 原生权限约束。
 
 单轮 JSON schema、system prompt、Ait 会话级 MCP 配置、
 运行中 steer、完整原生历史导入/列举与 rewind 尚未接入。
 不支持的输入与配置在发送前拒绝，保留具体输入错误原因；图片无法保存时提示检查磁盘空间和目录权限。
 AGY 自身已配置的工具与 MCP 仍由原生 CLI 加载。
 
-设计见 [ADR-087](../decisions/providers/adr-087-antigravity-cli-provider.md)，
+设计见 [ADR-087](../decisions/providers/adr-087-antigravity-cli-provider.md) 与
+[ACP 迁移决策](../decisions/providers/adr-312-antigravity-acp-migration.md)，
 验证见 [报告](../archive/reports/providers/antigravity-cli.md)。
