@@ -357,6 +357,14 @@ for line in sys.stdin:
             {"name": "disabled", "description": "Disabled", "enabled": False, "path": str(root / "disabled" / "SKILL.md")}
         ]}]}
     elif method == "thread/list":
+        if mode == "subagent-list-rejected":
+            emit({"id": request["id"], "error": {"code": -32603, "message": "subagent discovery failed"}})
+            continue
+        if mode == "subagent-list-closed":
+            sys.exit(0)
+        if mode == "subagent-list-malformed":
+            emit({"id": request["id"], "result": {"data": [{}], "nextCursor": None}})
+            continue
         pages = root / "session-pages.json"
         if pages.exists():
             result = json.loads(pages.read_text())[params.get("cursor") or "first"]

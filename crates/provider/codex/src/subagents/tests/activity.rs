@@ -16,10 +16,10 @@ fn unknown_activity_kinds_do_not_fail_the_parent_or_change_child_lifecycle() {
         let activity = json!({"threadId":"root","item":{"type":"subAgentActivity",
             "id":"future","kind":"future_activity","agentThreadId":receiver}});
         for method in ["item/started", "item/completed"] {
-            assert!(
+            assert_eq!(
                 live.observe(method, &activity, ("root", "/tmp"), &images)
-                    .unwrap()
-                    .is_empty()
+                    .unwrap(),
+                Vec::new()
             );
             assert_eq!(live.children(), children);
         }
@@ -60,19 +60,19 @@ fn completion_updates_only_known_children_and_is_idempotent_in_either_event_orde
             );
             assert_eq!(live.children()[0].descriptor["status"], "completed");
         }
-        assert!(
+        assert_eq!(
             live.observe("item/completed", &activity, ("root", "/tmp"), &images)
-                .unwrap()
-                .is_empty()
+                .unwrap(),
+            Vec::new()
         );
         assert_eq!(live.children()[0].parent_id, "root");
 
         let mut unknown = activity;
         unknown["item"]["agentThreadId"] = json!("unknown");
-        assert!(
+        assert_eq!(
             live.observe("item/completed", &unknown, ("root", "/tmp"), &images)
-                .unwrap()
-                .is_empty()
+                .unwrap(),
+            Vec::new()
         );
         assert_eq!(live.children().len(), 1);
         assert!(!live.contains("unknown"));
@@ -101,10 +101,10 @@ fn completion_preserves_a_childs_native_failed_or_canceled_status() {
         let completion = json!({"threadId":"root","turnId":"parent-turn","item":{
             "type":"subAgentActivity","id":"child-completed","kind":"completed",
             "agentThreadId":"child","agentPath":"/root/reviewer"}});
-        assert!(
+        assert_eq!(
             live.observe("item/completed", &completion, ("root", "/tmp"), &images)
-                .unwrap()
-                .is_empty()
+                .unwrap(),
+            Vec::new()
         );
         assert_eq!(live.children()[0].descriptor["status"], expected);
     }

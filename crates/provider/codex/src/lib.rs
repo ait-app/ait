@@ -132,14 +132,27 @@ impl CodexClient {
 
     async fn restore_children(
         &self,
-        restore: bool,
+        resume: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
         cwd: &str,
-        id: &str,
-    ) -> Result<subagents::Live, AgentSessionError> {
-        if restore {
-            subagents::Live::restore(self.native_subagents(cwd).await?, id)
-        } else {
-            Ok(subagents::Live::default())
+    ) -> subagents::Live {
+        let Some((handle, AgentResumePurpose::Interactive)) = resume else {
+            return subagents::Live::default();
+        };
+        match self
+            .native_subagents(cwd)
+            .await
+            .and_then(|children| subagents::Live::restore(children, &handle.session_id))
+        {
+            Ok(children) => children,
+            Err(error) => {
+                tracing::warn!(
+                    provider = "codex",
+                    operation = "restore_subagents",
+                    error = ?error,
+                    "Subagent discovery failed; continuing parent session recovery"
+                );
+                subagents::Live::default()
+            }
         }
     }
 
@@ -182,12 +195,15 @@ impl CodexClient {
         resume: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         self.validate_remote(spec).await?;
+        let history = resume.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History);
+        // A resumed Goal may start immediately. Finish auxiliary discovery before opening
+        // its writer so slow or failed discovery cannot interrupt that native continuation.
+        let children = self.restore_children(resume, &spec.cwd).await;
         let confined = spec.confinement.is_some();
         let mut transport = self
             .initialized_transport(&spec.cwd, spec.confinement.as_ref())
             .await?;
         let result = async {
-            let history = resume.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History);
             let mut sandbox = if history {
                 sandbox::Sandbox::default()
             } else {
@@ -253,9 +269,7 @@ impl CodexClient {
                     latest_plan: None,
                     stream: streaming::Stream::default(),
                     terminal: terminal::Terminal::default(),
-                    children: self
-                        .restore_children(resume.is_some() && !history, &spec.cwd, &id)
-                        .await?,
+                    children,
                     notes: provider_native::notes::Notes::restore(saved(resume, "controlNotes"))?,
                     plan_updates: plan_updates(saved(resume, "planUpdates")),
                     last_anchor: None,
@@ -351,8 +365,7 @@ impl AgentClient for CodexClient {
                 .as_ref()
                 .and_then(|metadata| metadata.get("asyncQuestions")),
         )
-        .map(|questions| questions.pending())
-        .unwrap_or_default()
+        .map_or_else(|_| Vec::new(), |questions| questions.pending())
         .into_iter()
         .chain(
             plans::Plan::restore(

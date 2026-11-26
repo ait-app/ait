@@ -2,6 +2,171 @@ use super::*;
 use std::collections::BTreeMap;
 
 #[tokio::test]
+async fn queued_input_survives_subagent_discovery_failure_after_restart() {
+    use domain::agent_runtime::{AgentRuntimeStatus, registry::AgentRuntimeRegistry};
+    use provider::testing::{request, worker_at};
+
+    let fixture = Fixture::new();
+    let (execution, _) = worker_at(
+        fixture.root.path(),
+        &fixture.cwd,
+        model::creation::Creations::default(),
+        Box::new(fixture.client()),
+    );
+    let created = request(
+        &execution,
+        "agent.create.request",
+        json!({"config":{"provider":"codex","cwd":fixture.cwd}}),
+    )
+    .await;
+    let id = created["agentId"].as_str().unwrap();
+    execution.shutdown().await.unwrap();
+    fixture.mode("subagent-list-rejected");
+    let (restarted, registry) = worker_at(
+        fixture.root.path(),
+        &fixture.cwd,
+        model::creation::Creations::default(),
+        Box::new(fixture.client()),
+    );
+    let input = json!({"agentId":id,"text":"after restart","messageId":"queued-resume"});
+    let sent = request(&restarted, "agent.message.send.request", input.clone()).await;
+    let finished = request(
+        &restarted,
+        "agent.finish.wait.request",
+        json!({"agentId":id,"timeoutMs":5000}),
+    )
+    .await;
+    let duplicate = request(&restarted, "agent.message.send.request", input).await;
+    let record = registry.get(id).unwrap().unwrap();
+    restarted.shutdown().await.unwrap();
+
+    assert_eq!(sent["accepted"], true);
+    assert_eq!(finished["lastMessage"], "Echo: after restart");
+    assert_eq!(duplicate["accepted"], true);
+    assert_eq!(record.last_status, AgentRuntimeStatus::Idle);
+    assert_eq!(record.last_error, None);
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|request| request["method"] == "turn/start")
+            .count(),
+        1,
+        "the durable receipt must prevent duplicate input"
+    );
+}
+
+#[tokio::test]
+async fn interactive_resume_survives_failed_subagent_discovery() {
+    for mode in [
+        "subagent-list-rejected",
+        "subagent-list-closed",
+        "subagent-list-malformed",
+    ] {
+        let fixture = Fixture::new();
+        let client = fixture.client();
+        let spec = fixture.spec();
+        let mut session = client.create_session(&spec).await.unwrap();
+        let handle = session.persistence().unwrap();
+        session.close().await.unwrap();
+        fixture.mode(mode);
+
+        let mut resumed = client
+            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+            .await
+            .expect("subagent discovery must not reject the parent session");
+        assert_eq!(resumed.persistence(), Some(handle));
+        assert_eq!(resumed.subagents(), Vec::new());
+        assert!(resumed.failure_diagnostic().is_none());
+        resumed.start_turn("continued", &spec.config).await.unwrap();
+        assert_eq!(
+            terminal(resumed.as_mut()).await.unwrap(),
+            AgentTurnEvent::Completed(Some("Echo: continued".into()))
+        );
+        resumed.close().await.unwrap();
+
+        let requests = fixture.requests();
+        let discovery = requests
+            .iter()
+            .position(|request| request["method"] == "thread/list")
+            .unwrap();
+        let resume = requests
+            .iter()
+            .position(|request| request["method"] == "thread/resume")
+            .unwrap();
+        assert!(
+            discovery < resume,
+            "discovery must precede native continuation"
+        );
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|request| request["method"] == "turn/start")
+                .count(),
+            1
+        );
+    }
+}
+
+#[tokio::test]
+async fn interactive_resume_restores_only_verified_descendants_before_continuation() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    for (id, parent) in [
+        ("child", handle.session_id.as_str()),
+        ("nested", "child"),
+        ("unrelated", "foreign"),
+    ] {
+        std::fs::write(
+            fixture.cwd.join(format!("native-session-{id}.json")),
+            json!({"parentThreadId":parent}).to_string(),
+        )
+        .unwrap();
+    }
+
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    let children = resumed.subagents();
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[0].id, "child");
+    assert_eq!(children[0].parent_id, handle.session_id);
+    assert_eq!(children[1].id, "nested");
+    assert_eq!(children[1].parent_id, "child");
+    resumed.close().await.unwrap();
+
+    let requests = fixture.requests();
+    let discovery = requests
+        .iter()
+        .position(|request| request["method"] == "thread/list")
+        .unwrap();
+    let resume = requests
+        .iter()
+        .position(|request| request["method"] == "thread/resume")
+        .unwrap();
+    assert!(discovery < resume);
+    let mut history = client
+        .resume_session(&handle, &spec, AgentResumePurpose::History)
+        .await
+        .unwrap();
+    history.close().await.unwrap();
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|request| request["method"] == "thread/list")
+            .count(),
+        1,
+        "history access must not discover child sessions"
+    );
+}
+
+#[tokio::test]
 async fn unarchive_failure_does_not_retry_resume_or_submit_a_turn() {
     let fixture = Fixture::new();
     fixture.mode("unarchive-denied");

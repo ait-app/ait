@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Codex sessions can resume and accept queued input when native subagent discovery fails.
+  Discovery finishes before the native writer resumes, so its failure cannot interrupt a Goal
+  that has already continued.
+
 - Add independent `aitd-bin` and `aitd-git` Arch packages with an opt-in systemd user service.
   Stable releases can publish both desktop and daemon binary recipes; Git recipes remain locally maintained.
 

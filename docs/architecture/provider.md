@@ -448,6 +448,8 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   回退 `thread/read`，其他错误保持可见
   （[ADR-191](../decisions/providers/adr-191-codex-native-realtime-voice.md)，历史限制已由
   [ADR-192](../decisions/providers/adr-192-codex-incremental-history-projection.md) 修订）。
+  交互恢复前先用独立只读连接发现可信子会话；目录读取或校验失败只记录告警，不拒绝主会话恢复。
+  查询在原生 writer 恢复之前完成，避免 Goal 已自动续跑后被辅助查询失败中断；只读历史访问不查询子目录。
 - Oh My Pi 每个会话由一个 `omp --mode rpc-ui` 进程经原生 JSONL RPC 驱动，不经过 ACP；整轮在
   `prompt_result` 加 `session_settled` 或 `get_state.isSettled` 核对后完成，最低版本 18.12.6。
   完整规则见 [Oh My Pi 现行规格](omp.md)
