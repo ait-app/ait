@@ -74,12 +74,7 @@ impl Session {
                 return Err(AgentSessionError::Rejected);
             }
             Builtin::Goal => {
-                let supported = self.commands.catalog().is_some_and(|entries| {
-                    entries
-                        .iter()
-                        .any(|entry| entry["name"] == "goal" && entry["source"] == "builtin")
-                });
-                if !supported {
+                if !self.commands.handles_goal(command_text) {
                     return Err(AgentSessionError::Rejected);
                 }
                 ("goal", goal_arguments(args)?, Some(Pending::Goal))

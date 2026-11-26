@@ -129,3 +129,81 @@ fn failed_or_malformed_catalogs_are_unavailable_instead_of_pending() {
     commands.update(&json!({"commands":"invalid"}));
     assert_eq!(commands.route("/record"), Some(CommandRoute::Unavailable));
 }
+
+#[test]
+fn goal_rpc_support_is_independent_of_completion_but_respects_native_claims() {
+    let mut commands = Commands::default();
+    commands.observe_state(&json!({"goal":null}));
+    assert!(!commands.handles_goal("/goal show"));
+    commands.update(&json!({"commands":[]}));
+    assert!(commands.handles_goal("/goal show"));
+    assert!(
+        commands
+            .catalog()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["name"] == "goal")
+    );
+
+    for source in ["extension", "skill", "future-source"] {
+        commands.update(&json!({"commands":[{"name":"goal","source":source}]}));
+        assert!(!commands.handles_goal("/goal show"), "{source}");
+        let catalog = commands.catalog().unwrap();
+        assert_eq!(
+            catalog
+                .iter()
+                .filter(|entry| entry["name"] == "goal")
+                .count(),
+            1
+        );
+    }
+    commands.update(&json!({"commands":[
+        {"name":"custom","source":"extension","aliases":["goal"]}
+    ]}));
+    assert!(!commands.handles_goal("/goal show"));
+    assert!(
+        !commands
+            .catalog()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["name"] == "goal")
+    );
+
+    commands.update(&json!({"commands":[
+        {"name":"goal","source":"builtin","aliases":["g"]}
+    ]}));
+    assert!(commands.handles_goal("/g show"));
+    commands.update(&json!({"commands":[
+        {"name":"goal","source":"builtin"},
+        {"name":"goal","source":"extension"}
+    ]}));
+    assert!(!commands.handles_goal("/goal show"));
+}
+
+#[test]
+fn goal_capability_is_reset_by_a_process_without_valid_native_state() {
+    let mut commands = Commands::default();
+    commands.update(&json!({"commands":[]}));
+    for state in [json!({}), json!({"goal":{}}), json!({"goal":"invalid"})] {
+        commands.observe_state(&json!({"goal":null}));
+        assert!(commands.handles_goal("/goal show"));
+        commands.observe_state(&state);
+        assert_eq!(
+            commands.route("/goal show"),
+            Some(CommandRoute::Unavailable)
+        );
+        assert!(
+            !commands
+                .catalog()
+                .unwrap()
+                .iter()
+                .any(|entry| entry["name"] == "goal")
+        );
+    }
+    commands.observe_state(&json!({"goal":{"enabled":false,"goal":{
+        "objective":"Saved goal","status":"paused"
+    }}}));
+    assert!(commands.handles_goal("/goal resume"));
+    commands.update(&json!({"commands":"invalid"}));
+    assert!(!commands.handles_goal("/goal resume"));
+}

@@ -5,6 +5,7 @@ mod command_provenance;
 mod commands;
 #[cfg(target_os = "macos")]
 mod confinement;
+mod goals;
 mod images;
 mod interactions;
 mod settlement;

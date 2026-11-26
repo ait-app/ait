@@ -35,8 +35,8 @@ export const agentControls = {
     clear: "Effacer l’objectif",
     failed: "Échec de l’opération sur l’objectif",
     changed: "L’objectif a changé. Annulez la modification puis rouvrez-le.",
-    tokensUsed: "Tokens utilisés : {{count}}",
-    tokenBudget: "Budget de tokens : {{count}}",
+    tokensUsed: "Tokens utilisés : {{count, number}}",
+    tokenBudget: "Budget de tokens : {{count, number}}",
     pill: "Goal · {{status}}",
     status: {
       blocked: "Bloqué",

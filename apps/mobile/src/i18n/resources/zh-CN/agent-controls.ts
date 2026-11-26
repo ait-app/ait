@@ -35,8 +35,8 @@ export const agentControls = {
     clear: "清除目标",
     failed: "目标操作失败",
     changed: "目标已更新，请取消编辑后重新打开。",
-    tokensUsed: "已用 Token：{{count}}",
-    tokenBudget: "Token 预算：{{count}}",
+    tokensUsed: "已用 Token：{{count, number}}",
+    tokenBudget: "Token 预算：{{count, number}}",
     pill: "Goal · {{status}}",
     status: {
       blocked: "已阻塞",

@@ -35,8 +35,8 @@ export const agentControls = {
     clear: "Clear goal",
     failed: "Goal operation failed",
     changed: "The goal changed. Cancel editing and reopen it.",
-    tokensUsed: "Tokens used: {{count}}",
-    tokenBudget: "Token budget: {{count}}",
+    tokensUsed: "Tokens used: {{count, number}}",
+    tokenBudget: "Token budget: {{count, number}}",
     pill: "Goal · {{status}}",
     status: {
       blocked: "Blocked",

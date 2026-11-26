@@ -35,8 +35,8 @@ export const agentControls = {
     clear: "Limpar meta",
     failed: "Falha na operação da meta",
     changed: "A meta mudou. Cancele a edição e abra novamente.",
-    tokensUsed: "Tokens usados: {{count}}",
-    tokenBudget: "Orçamento de tokens: {{count}}",
+    tokensUsed: "Tokens usados: {{count, number}}",
+    tokenBudget: "Orçamento de tokens: {{count, number}}",
     pill: "Goal · {{status}}",
     status: {
       blocked: "Bloqueada",

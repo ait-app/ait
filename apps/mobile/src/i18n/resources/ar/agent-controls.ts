@@ -35,8 +35,8 @@ export const agentControls = {
     clear: "مسح الهدف",
     failed: "فشلت عملية الهدف",
     changed: "تغير الهدف. ألغِ التعديل وافتحه مجددًا.",
-    tokensUsed: "الرموز المستخدمة: {{count}}",
-    tokenBudget: "ميزانية الرموز: {{count}}",
+    tokensUsed: "الرموز المستخدمة: {{count, number}}",
+    tokenBudget: "ميزانية الرموز: {{count, number}}",
     pill: "Goal · {{status}}",
     status: {
       blocked: "محظور",

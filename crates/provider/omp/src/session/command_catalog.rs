@@ -26,9 +26,23 @@ pub(super) struct Commands {
     catalog: Option<Catalog>,
     generation: u64,
     pending: Option<Pending>,
+    goal_supported: bool,
 }
 
 impl Commands {
+    /// Read native Goal support from the session state, independently of slash completion.
+    pub(super) fn observe_state(&mut self, state: &Value) {
+        self.goal_supported = state
+            .get("goal")
+            .and_then(|goal| provider_native::goal::snapshot(goal, false))
+            .is_some();
+    }
+
+    /// Permit Goal RPC only after native state and current command ownership agree.
+    pub(super) fn handles_goal(&self, text: &str) -> bool {
+        self.goal_supported && self.route(text) == Some(CommandRoute::OutOfBand)
+    }
+
     pub(super) fn refresh(&mut self, transport: &mut Transport) -> bool {
         if let Some(pending) = self.pending.take() {
             pending.cancel.cancel();
@@ -105,7 +119,16 @@ impl Commands {
     }
 
     pub(super) fn catalog(&self) -> Option<Vec<Value>> {
-        self.catalog.as_ref().map(Catalog::project)
+        let catalog = self.catalog.as_ref()?;
+        let mut commands = catalog.project();
+        if self.goal_supported && !catalog.contains("goal") {
+            commands.push(json!({
+                "name":"goal", "source":"builtin", "kind":"command",
+                "description":"Manage the native goal",
+                "argumentHint":"[<objective>|show|pause|resume|clear]"
+            }));
+        }
+        Some(commands)
     }
 
     pub(super) fn route(&self, text: &str) -> Option<CommandRoute> {
@@ -122,6 +145,11 @@ impl Commands {
             );
         };
         let route = match catalog.claim(name) {
+            Some(Claim::Builtin(canonical))
+                if canonical.eq_ignore_ascii_case("goal") && !self.goal_supported =>
+            {
+                CommandRoute::Unavailable
+            }
             Some(Claim::Ambiguous) => CommandRoute::Unavailable,
             Some(Claim::Builtin(canonical)) => {
                 let (_, args) = commands::split(text).expect("validated slash text");
@@ -148,6 +176,9 @@ impl Commands {
                 } else {
                     CommandRoute::Foreground
                 }
+            }
+            None if name.eq_ignore_ascii_case("goal") && !self.goal_supported => {
+                CommandRoute::Unavailable
             }
             None if commands::builtin(text).is_some() => CommandRoute::OutOfBand,
             None if commands::gui_managed(text).is_some() => CommandRoute::Unavailable,

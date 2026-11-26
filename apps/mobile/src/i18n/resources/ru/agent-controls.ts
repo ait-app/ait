@@ -35,8 +35,8 @@ export const agentControls = {
     clear: "Удалить цель",
     failed: "Ошибка операции с целью",
     changed: "Цель изменилась. Отмените редактирование и откройте её снова.",
-    tokensUsed: "Использовано токенов: {{count}}",
-    tokenBudget: "Бюджет токенов: {{count}}",
+    tokensUsed: "Использовано токенов: {{count, number}}",
+    tokenBudget: "Бюджет токенов: {{count, number}}",
     pill: "Goal · {{status}}",
     status: {
       blocked: "Заблокирована",

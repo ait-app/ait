@@ -397,6 +397,13 @@ async fn goal_commands_use_native_rpc_and_publish_current_state_without_inferenc
     while session.command_catalog().is_none() {
         next(session.as_mut()).await.unwrap();
     }
+    assert!(
+        session
+            .command_catalog()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["name"] == "goal" && entry["source"] == "builtin" })
+    );
     for (text, expected) in [
         ("/goal Ship feature", "active"),
         ("/goal pause", "paused"),
@@ -426,4 +433,27 @@ async fn goal_commands_use_native_rpc_and_publish_current_state_without_inferenc
     let calls = calls_after(root.path(), 0);
     assert_eq!(count(&calls, "goal"), 4);
     assert_eq!(count(&calls, "prompt"), 0);
+}
+
+#[tokio::test]
+async fn restored_native_goal_is_available_before_any_prompt_or_goal_notification() {
+    let (root, client, spec) = fixture_with(&[("OMP_FIXTURE_GOAL", "1")]);
+    let mut session = client.create_session(&spec).await.unwrap();
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let saved = json!({"objective":"Finish the saved work","status":"paused","tokensUsed":42});
+    std::fs::write(root.path().join("agent/goal.json"), saved.to_string()).unwrap();
+    let mut restored = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    let info = restored.runtime_info().await.unwrap();
+    let goal = &info.extra.unwrap()["goal"];
+    assert_eq!(goal["objective"], saved["objective"]);
+    assert_eq!(goal["status"], "paused");
+    assert_eq!(goal["actions"]["resume"], true);
+    restored.close().await.unwrap();
+    let calls = calls_after(root.path(), 0);
+    assert_eq!(count(&calls, "prompt"), 0);
+    assert_eq!(count(&calls, "goal"), 0);
 }

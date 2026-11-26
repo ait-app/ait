@@ -317,6 +317,7 @@ pub(super) async fn open(
     // OMP's todo state at attach, unless the replayed history already shows it (M4).
     stream.state_todos(&state);
     let mut commands = command_catalog::Commands::default();
+    commands.observe_state(&state);
     let _ = commands.refresh(&mut transport);
     Ok(Session {
         client: client.clone(),
@@ -468,6 +469,7 @@ impl Session {
         self.usage.reset();
         self.cancel_requests.clear();
         self.input_requests.clear();
+        self.commands.observe_state(&state);
         if self.commands.refresh(&mut self.transport) {
             self.stream
                 .events

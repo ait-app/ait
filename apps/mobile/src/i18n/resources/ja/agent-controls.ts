@@ -35,8 +35,8 @@ export const agentControls = {
     clear: "目標を解除",
     failed: "目標の操作に失敗しました",
     changed: "目標が更新されました。編集をキャンセルして開き直してください。",
-    tokensUsed: "使用トークン：{{count}}",
-    tokenBudget: "トークン予算：{{count}}",
+    tokensUsed: "使用トークン：{{count, number}}",
+    tokenBudget: "トークン予算：{{count, number}}",
     pill: "Goal · {{status}}",
     status: {
       blocked: "ブロック中",

@@ -35,8 +35,8 @@ export const agentControls = {
     clear: "목표 지우기",
     failed: "목표 작업 실패",
     changed: "목표가 변경되었습니다. 편집을 취소하고 다시 여세요.",
-    tokensUsed: "사용 토큰: {{count}}",
-    tokenBudget: "토큰 예산: {{count}}",
+    tokensUsed: "사용 토큰: {{count, number}}",
+    tokenBudget: "토큰 예산: {{count, number}}",
     pill: "Goal · {{status}}",
     status: {
       blocked: "차단됨",

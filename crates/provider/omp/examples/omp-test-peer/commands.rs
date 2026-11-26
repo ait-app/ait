@@ -78,7 +78,7 @@ impl Peer {
                 let mut commands =
                     vec![json!({"name": "review", "description": "Review", "source": "skill"})];
                 commands.extend(self.read_plugins());
-                if env_set("OMP_FIXTURE_GOAL") {
+                if env_set("OMP_FIXTURE_GOAL_COMMAND") {
                     commands.push(json!({"name":"goal","source":"builtin","description":"Goal"}));
                 }
                 self.response(command, json!({"commands": commands}));
@@ -149,7 +149,7 @@ impl Peer {
         if env_set("OMP_FIXTURE_GOAL") {
             let path = self.root.join("goal.json");
             state["goal"] = if path.exists() {
-                super::read_json(&path)
+                json!({"enabled":false,"mode":"active","goal":super::read_json(&path)})
             } else {
                 Value::Null
             };
