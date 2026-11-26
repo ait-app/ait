@@ -9,6 +9,13 @@ export const sharing = {
   directHint: "按邮箱或用户名邀请。",
   openInvitations: "在网页中管理邀请",
   openInvitationsError: "无法打开分享页面。",
+  invitation: {
+    recipient: "邮箱或用户名",
+    generate: "生成邀请链接",
+    copyLink: "复制链接",
+    signIn: "登录 AIT 后即可生成邀请链接。",
+    error: "无法生成邀请链接。",
+  },
   directUnsupported: "当前在线服务不支持直接分享。",
   manage: "管理",
   refresh: "刷新",

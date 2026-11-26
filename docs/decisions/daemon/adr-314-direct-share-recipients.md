@@ -15,6 +15,8 @@ paths:
 
 # ADR-314：中心授权直接分享的接收人
 
+后续修订：[ADR-315](../clients/adr-315-ait-share-invitations.md) 将链接生成接入 AIT 账号会话。
+
 ## 背景
 
 只面向一名接收人的资源分享无需创建群组。接收人接受邀请时 Host 可能离线，

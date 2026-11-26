@@ -9,6 +9,13 @@ const sharedSharing = {
   directHint: "Convide por e-mail ou nome de usuário.",
   openInvitations: "Gerenciar convites na web",
   openInvitationsError: "Não foi possível abrir a página de compartilhamento.",
+  invitation: {
+    recipient: "E-mail ou nome de usuário",
+    generate: "Gerar link de convite",
+    copyLink: "Copiar link",
+    signIn: "Entre no AIT para gerar um link de convite.",
+    error: "Não foi possível gerar um link de convite.",
+  },
   directUnsupported: "Este serviço não oferece compartilhamento direto.",
   manage: "Gerenciar",
   refresh: "Atualizar",

@@ -19,6 +19,9 @@ const state = vi.hoisted(() => ({
   activeServerId: "remote" as string | null,
   localServerId: "local" as string | null,
   openExternalUrl: vi.fn(async (_url: string) => {}),
+  createShareInvitation:
+    vi.fn<(center: string, shareId: string, recipient: string) => Promise<string>>(),
+  copy: vi.fn(async (_url: string) => true),
 }));
 
 vi.mock("@react-native-async-storage/async-storage", () => ({
@@ -30,8 +33,28 @@ vi.mock("@/runtime/host-runtime", async (importOriginal) => ({
   useHostRuntimeClient: (serverId: string) => state.clients.get(serverId) ?? null,
 }));
 vi.mock("@/runtime/account-state", () => ({
-  useAccountState: (select: (account: { center: string }) => unknown) =>
-    select({ center: "https://center.test/api" }),
+  useAccountState: (
+    select: (account: { center: string; status: string; accountId: string }) => unknown,
+  ) => select({ center: "https://center.test/api", status: "online", accountId: "owner" }),
+  createShareInvitation: state.createShareInvitation,
+}));
+vi.mock("expo-clipboard", () => ({ setStringAsync: state.copy }));
+vi.mock("@/components/ui/form-field", () => ({
+  Field: ({ label, children }: { label: string; children: ReactNode }) => (
+    <div>
+      {label}
+      {children}
+    </div>
+  ),
+  FormTextInput: ({
+    accessibilityLabel,
+    onChangeText,
+  }: {
+    accessibilityLabel: string;
+    onChangeText: (value: string) => void;
+  }) => (
+    <input aria-label={accessibilityLabel} onChange={(event) => onChangeText(event.target.value)} />
+  ),
 }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: state.openExternalUrl }));
 vi.mock("@/hooks/use-is-local-daemon", () => ({
@@ -173,6 +196,8 @@ beforeEach(async () => {
     ["guest", client()],
   ]);
   state.openExternalUrl.mockClear();
+  state.createShareInvitation.mockReset();
+  state.copy.mockClear();
   state.activeServerId = "remote";
   state.localServerId = "local";
 });
@@ -266,7 +291,7 @@ describe("project sharing host selection", () => {
     expect(view.queryByText(i18n.t("sharing.loadError"))).toBeNull();
   });
 
-  it("opens invitations for a published direct share even without any groups", async () => {
+  it("creates and copies an invitation for a published direct share without any groups", async () => {
     const remote = client();
     const grouped = share("remote-project");
     const direct = { ...grouped, groupId: null, audience: "people", state: "pending" } as const;
@@ -295,7 +320,32 @@ describe("project sharing host selection", () => {
       });
       const inviteLabel = i18n.t("sharing.openInvitations");
       expect(view.queryByRole("button", { name: inviteLabel })).toBeNull();
+      const generateLabel = i18n.t("sharing.invitation.generate");
+      expect(view.queryByRole("button", { name: generateLabel })).toBeNull();
       await act(async () => vi.advanceTimersByTimeAsync(1500)); // virtual time
+
+      const link = "https://center.test/dash/share-invite#issued";
+      state.createShareInvitation.mockResolvedValue(link);
+      fireEvent.change(
+        view.getByRole("textbox", { name: i18n.t("sharing.invitation.recipient") }),
+        {
+          target: { value: " @alice " },
+        },
+      );
+      await act(async () => fireEvent.click(view.getByRole("button", { name: generateLabel })));
+      expect(state.createShareInvitation).toHaveBeenCalledExactlyOnceWith(
+        "https://center.test/api",
+        published.shareId,
+        "@alice",
+      );
+      expect(view.getByText(link)).toBeTruthy();
+      expect(state.openExternalUrl).not.toHaveBeenCalled();
+      await act(async () =>
+        fireEvent.click(view.getByRole("button", { name: i18n.t("sharing.invitation.copyLink") })),
+      );
+      expect(state.copy).toHaveBeenCalledExactlyOnceWith(link);
+      expect(view.getByRole("button", { name: i18n.t("common.states.copied") })).toBeTruthy();
+
       fireEvent.click(view.getByRole("button", { name: inviteLabel }));
       expect(state.openExternalUrl).toHaveBeenCalledWith(
         `https://center.test/dash/shares/${published.shareId}`,

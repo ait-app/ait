@@ -16,6 +16,7 @@ import { useAccountState } from "@/runtime/account-state";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { refreshOutgoingShares } from "@/sharing/share-lists";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
+import { ShareInvitationForm } from "./share-invitation-form";
 
 export interface ShareResourceTarget {
   serverId: string;
@@ -120,6 +121,8 @@ function ShareManagerContent({ target: initialTarget }: { target: ShareResourceT
   const [loadState, setLoadState] = useState<"loading" | "loaded" | "failed">("loading");
   const [pendingAudience, setPendingAudience] = useState<string | null>(null);
   const center = useAccountState((state) => state.center);
+  const accountId = useAccountState((state) => state.accountId);
+  const signedIn = useAccountState((state) => state.status !== "logged_out");
   const [error, setError] = useState<string | null>(null);
   const direct = settings.find(
     (setting) => setting.audience === "people" && setting.state !== "revoked",
@@ -322,7 +325,21 @@ function ShareManagerContent({ target: initialTarget }: { target: ShareResourceT
           </View>
           {direct?.state === "accepted" && direct.shareId ? (
             <View style={styles.invitationActions}>
-              <Button variant="secondary" size="sm" onPress={openInvitations}>
+              {signedIn ? (
+                <ShareInvitationForm
+                  key={JSON.stringify([center, accountId, direct.shareId])}
+                  center={center}
+                  shareId={direct.shareId}
+                />
+              ) : (
+                <Text style={styles.groupMeta}>{t("sharing.invitation.signIn")}</Text>
+              )}
+              <Button
+                style={styles.manageInvitations}
+                variant="ghost"
+                size="sm"
+                onPress={openInvitations}
+              >
                 {t("sharing.openInvitations")}
               </Button>
             </View>
@@ -448,8 +465,11 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
   },
   invitationActions: {
-    alignItems: "flex-start",
+    gap: theme.spacing[2],
     padding: theme.spacing[3],
+  },
+  manageInvitations: {
+    alignSelf: "flex-start",
   },
   error: {
     color: theme.colors.destructive,

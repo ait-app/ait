@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACCOUNT_HOST_OFFLINE_RETENTION_MS,
   accountCommand,
+  createShareInvitation,
   loadAccountInfo,
   useAccountState,
 } from "./account-state";
@@ -43,6 +44,20 @@ describe("desktop account host persistence", () => {
     expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith("account_info");
     expect(mocks.discover).not.toHaveBeenCalled();
   });
+  it("passes invitation creation to desktop without reading account credentials", async () => {
+    const center = "https://center.test/api";
+    const shareId = "55555555-5555-4555-8555-555555555555";
+    const recipient = "alice@example.test";
+    const url = "https://center.test/dash/share-invite#issued";
+    mocks.invoke.mockResolvedValue(url);
+    await expect(createShareInvitation(center, shareId, recipient)).resolves.toBe(url);
+    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith("account_share_invite", {
+      center,
+      shareId,
+      recipient,
+    });
+  });
+
   it("announces a Hub-only host without requiring legacy Relay metadata", async () => {
     mocks.invoke.mockResolvedValue({
       status: "online",

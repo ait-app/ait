@@ -8,6 +8,13 @@ const sharedSharing = {
   directHint: "이메일 또는 사용자 이름으로 초대하세요.",
   openInvitations: "웹에서 초대 관리",
   openInvitationsError: "공유 페이지를 열 수 없습니다.",
+  invitation: {
+    recipient: "이메일 또는 사용자 이름",
+    generate: "초대 링크 만들기",
+    copyLink: "링크 복사",
+    signIn: "초대 링크를 만들려면 AIT에 로그인하세요.",
+    error: "초대 링크를 만들 수 없습니다.",
+  },
   directUnsupported: "이 서비스는 직접 공유를 지원하지 않습니다.",
   manage: "관리",
   refresh: "새로 고침",

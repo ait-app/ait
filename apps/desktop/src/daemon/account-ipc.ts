@@ -181,6 +181,14 @@ export function createAccountIpc(
           return snapshot();
         case "account_info":
           return manager.getAccountInfo();
+        case "account_share_invite":
+          if (
+            typeof args.center !== "string" ||
+            typeof args.shareId !== "string" ||
+            typeof args.recipient !== "string"
+          )
+            throw new Error("Invalid share invitation request.");
+          return manager.createShareInvitation(args.center, args.shareId, args.recipient);
         case "account_hub_status":
           return hub.snapshot();
         case "account_hub_shares":

@@ -8,6 +8,13 @@ const sharedSharing = {
   directHint: "أرسل دعوة باستخدام البريد الإلكتروني أو اسم المستخدم.",
   openInvitations: "إدارة الدعوات على الويب",
   openInvitationsError: "تعذّر فتح صفحة المشاركة.",
+  invitation: {
+    recipient: "البريد الإلكتروني أو اسم المستخدم",
+    generate: "إنشاء رابط دعوة",
+    copyLink: "نسخ الرابط",
+    signIn: "سجّل الدخول إلى AIT لإنشاء رابط دعوة.",
+    error: "تعذّر إنشاء رابط دعوة.",
+  },
   directUnsupported: "لا تدعم هذه الخدمة المشاركة المباشرة.",
   manage: "إدارة",
   refresh: "تحديث",

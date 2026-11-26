@@ -68,6 +68,19 @@ export async function loadAccountInfo(): Promise<AccountInfo> {
   return manager.getAccountInfo();
 }
 
+/** Create a sharing link through the platform that owns the signed-in credentials. */
+export async function createShareInvitation(
+  center: string,
+  shareId: string,
+  recipient: string,
+): Promise<string> {
+  const invoke = getDesktopHost()?.invoke;
+  if (invoke)
+    return (await invoke("account_share_invite", { center, shareId, recipient })) as string;
+  const manager = await (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount());
+  return manager.createShareInvitation(center, shareId, recipient);
+}
+
 let commandTail = Promise.resolve<unknown>(undefined);
 let snapshotSequence = 0;
 

@@ -605,6 +605,37 @@ export class AccountSessionManager {
     };
   }
 
+  /** Issue a one-time link using the signed-in owner's account. */
+  async createShareInvitation(center: string, shareId: string, recipient: string): Promise<string> {
+    const account = this.account;
+    const generation = this.generation;
+    if (!account || this.suspended || this.closing) throw new Error("Sign in first.");
+    if (normalizeCenter(center) !== account.center)
+      throw new Error("The account service changed. Refresh and try again.");
+    if (shareId.length !== 36 || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(shareId))
+      throw new Error("Invalid share ID.");
+
+    const contact = recipient.trim();
+    if (!contact || contact === "@" || contact.length > 320)
+      throw new Error("Enter an email address or username.");
+    const invitee =
+      contact.includes("@") && !contact.startsWith("@")
+        ? { email: contact }
+        : { username: contact.replace(/^@/, "") };
+    const issued = await this.api<{ token?: unknown }>(
+      `/v1/shares/${shareId}/invitations`,
+      "POST",
+      invitee,
+    );
+    if (this.account !== account || this.generation !== generation)
+      throw new Error("The account changed. Refresh and try again.");
+    if (typeof issued?.token !== "string" || !/^[0-9a-f]{64}$/.test(issued.token))
+      throw new Error("The service returned an invalid invitation.");
+    const url = new URL("/dash/share-invite", account.center);
+    url.hash = issued.token;
+    return url.href;
+  }
+
   /** Approve one machine authorization. The daemon consumes and maintains its own credentials. */
   async authorizeHost(runtime: AccountRuntime): Promise<DeviceAuthorization> {
     for (const value of [runtime.serverId, runtime.instanceId, runtime.name, runtime.platform]) {

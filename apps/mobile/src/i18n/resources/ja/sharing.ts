@@ -8,6 +8,13 @@ const sharedSharing = {
   directHint: "メールアドレスまたはユーザー名で招待します。",
   openInvitations: "ウェブで招待を管理",
   openInvitationsError: "共有ページを開けませんでした。",
+  invitation: {
+    recipient: "メールアドレスまたはユーザー名",
+    generate: "招待リンクを作成",
+    copyLink: "リンクをコピー",
+    signIn: "招待リンクを作成するには AIT にサインインしてください。",
+    error: "招待リンクを作成できませんでした。",
+  },
   directUnsupported: "このサービスは直接共有に対応していません。",
   manage: "管理",
   refresh: "更新",

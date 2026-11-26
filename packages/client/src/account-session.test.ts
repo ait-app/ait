@@ -235,6 +235,65 @@ describe("account information", () => {
   });
 });
 
+describe("direct share invitations", () => {
+  const share = "55555555-5555-4555-8555-555555555555";
+  const center = "https://aitapp.cn/api";
+  const token = "a".repeat(64);
+
+  it.each([
+    [" @alice ", { username: "alice" }],
+    ["alice", { username: "alice" }],
+    ["alice@example.test", { email: "alice@example.test" }],
+  ])("issues a link for %s using the current account", async (recipient, invitee) => {
+    const f = fixture();
+    await f.login();
+    f.http.mockClear();
+    f.http.mockResolvedValueOnce(Response.json({ token }, { status: 201 }));
+    await expect(f.manager.createShareInvitation(center, share, recipient)).resolves.toBe(
+      `https://aitapp.cn/dash/share-invite#${token}`,
+    );
+    expect(f.http).toHaveBeenCalledExactlyOnceWith(
+      `${center}/v1/shares/${share}/invitations`,
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(invitee),
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    await f.manager.logout();
+  });
+
+  it("checks the center and share ID, and rejects malformed issued tokens", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockClear();
+    await expect(
+      f.manager.createShareInvitation("https://other.test/api", share, "alice"),
+    ).rejects.toThrow("account service changed");
+    await expect(f.manager.createShareInvitation(center, "../other", "alice")).rejects.toThrow(
+      "Invalid share ID",
+    );
+    expect(f.http).not.toHaveBeenCalled();
+
+    f.http.mockResolvedValueOnce(Response.json({ token: "https://other.test" }));
+    await expect(f.manager.createShareInvitation(center, share, "alice")).rejects.toThrow(
+      "invalid invitation",
+    );
+    await f.manager.logout();
+  });
+
+  it("does not return a previously authorized link after sign-out", async () => {
+    const f = fixture();
+    await f.login();
+    const reply = Promise.withResolvers<Response>();
+    f.http.mockReturnValueOnce(reply.promise);
+    const pending = f.manager.createShareInvitation(center, share, "alice");
+    await f.manager.logout();
+    reply.resolve(Response.json({ token }));
+    await expect(pending).rejects.toThrow("The account changed");
+  });
+});
+
 it("does not import Hosts from a link to a different account center", async () => {
   const f = fixture();
   const h = hubFixture();

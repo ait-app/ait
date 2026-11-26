@@ -114,7 +114,9 @@
   （[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)，修订
   [ADR-180](../decisions/daemon/adr-180-hub-serve-endpoint.md)、
   [ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)）。
-- 直接分享沿用同一访客连接。中心保存已接受邀请的接收人，并随授权变化推送 `share_status`。
+- 直接分享沿用同一访客连接。AIT 使用当前平台的账号会话向中心签发邀请，桌面端通过主进程执行该请求
+  （[ADR-315](../decisions/clients/adr-315-ait-share-invitations.md)）。
+  中心保存已接受邀请的接收人，并随授权变化推送 `share_status`。
   daemon 继续校验分享身份、资源范围及 `denied`。旧中心拒绝含直接分享的发布时，daemon 在当前逻辑链路
   仅发布群组分享，建立新逻辑链路时再尝试发布完整列表
   （[ADR-314](../decisions/daemon/adr-314-direct-share-recipients.md)）。

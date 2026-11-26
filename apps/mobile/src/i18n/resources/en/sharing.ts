@@ -9,6 +9,13 @@ export const sharing = {
   directHint: "Invite people by email or username.",
   openInvitations: "Manage invitations on the web",
   openInvitationsError: "Could not open the sharing page.",
+  invitation: {
+    recipient: "Email or username",
+    generate: "Generate invitation link",
+    copyLink: "Copy link",
+    signIn: "Sign in to AIT to generate an invitation link.",
+    error: "Could not generate an invitation link.",
+  },
   directUnsupported: "This service does not support direct sharing.",
   manage: "Manage",
   refresh: "Refresh",

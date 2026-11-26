@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   unpublish: vi.fn(),
   info: vi.fn(),
+  invite: vi.fn(),
   deleteAccount: vi.fn(),
   encryptionAvailable: true,
   deps: null as AccountDependencies | null,
@@ -65,6 +66,7 @@ vi.mock("./account-session.js", () => ({
     }
     authorizeHost = mocks.publish;
     getAccountInfo = mocks.info;
+    createShareInvitation = mocks.invite;
   },
 }));
 vi.mock("./account-transport.js", () => ({ AccountTransportManager: class {} }));
@@ -102,6 +104,22 @@ describe("desktop built-in daemon synchronization preference", () => {
     await expect(invoke()(event, "account_info")).resolves.toEqual(info);
     expect(mocks.info).toHaveBeenCalledExactlyOnceWith();
   });
+  it("issues an invitation through the credential-owning manager", async () => {
+    const center = "https://example.test/api";
+    const shareId = "55555555-5555-4555-8555-555555555555";
+    const recipient = "@alice";
+    const link = "https://example.test/dash/share-invite#issued";
+    mocks.invite.mockResolvedValue(link);
+    const command = invoke();
+    await expect(
+      command(event, "account_share_invite", { center, shareId, recipient }),
+    ).resolves.toBe(link);
+    await expect(command(event, "account_share_invite", { center, shareId })).rejects.toThrow(
+      "Invalid share invitation request",
+    );
+    expect(mocks.invite).toHaveBeenCalledExactlyOnceWith(center, shareId, recipient);
+  });
+
   it("defaults to automatic synchronization for new and existing desktop profiles", async () => {
     writeFileSync(
       path.join(mocks.userDataPath, "account-node.json"),
