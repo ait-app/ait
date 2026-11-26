@@ -1,4 +1,5 @@
 mod deadline;
+mod preparation;
 
 use super::*;
 use crate::storage::side::SideStore;
@@ -14,6 +15,8 @@ use provider_core::protocol::side_questions::{
 #[derive(Debug, Default)]
 struct RunnerState {
     asks: usize,
+    prepare_delay: std::time::Duration,
+    prepare_error: Option<AgentSessionError>,
     lose_ack: bool,
     fail_cancel: bool,
     reject_context: bool,
@@ -397,6 +400,16 @@ impl AgentClient for Factory {
             .lock()
             .expect("factory selections")
             .push(spec.clone());
+        let (delay, error) = {
+            let state = self.runner.0.lock().expect("runner");
+            (state.prepare_delay, state.prepare_error)
+        };
+        if !delay.is_zero() {
+            let _ = tokio::time::timeout(delay, std::future::pending::<()>()).await; // virtual time
+        }
+        if let Some(error) = error {
+            return Err(error);
+        }
         if spec.session.config.model.is_none() {
             return Err(AgentSessionError::Unavailable);
         }

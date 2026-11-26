@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed BTW cold starts being cut short by the question's acceptance deadline. A failed
+  auxiliary startup now returns a rejected receipt so the question can be retried.
+
 - Add independent `aitd-bin` and `aitd-git` Arch packages with an opt-in systemd user service.
   Stable releases can publish both desktop and daemon binary recipes; Git recipes remain locally maintained.
 

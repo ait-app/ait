@@ -1,8 +1,6 @@
 //! BTW admission and settlement, independent of the main writer and input FIFO.
 
 use crate::rpc::ErrorCode;
-
-const SIDE_ADMISSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 use crate::service::agent_manager::{AgentManager, AgentManagerError};
 use crate::storage::side::{AskClaim, capture_snapshot, now_millis};
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
@@ -13,6 +11,11 @@ use provider_core::protocol::side_questions::{
     SideTransferRequest, SideTransferResponse, SideTurnStatus, reason,
 };
 use sha2::Digest;
+
+// Native cold starts (OMP allows 20 seconds for ready) need a separate budget from
+// acknowledging an ask. Preparation cannot submit a question to the provider.
+const SIDE_PREPARATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const SIDE_ADMISSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 impl AgentManager {
     /// Release auxiliary resources without closing or mutating the foreground writer.
@@ -114,8 +117,11 @@ impl AgentManager {
             Ok(()) => {}
             Err(ErrorCode::UnsupportedCapability) => return reject(reason::UNSUPPORTED_PROVIDER),
             Err(error) => {
-                reject("runtime_inspection_failed")?;
-                return Err(error);
+                tracing::warn!(agent_id = %request.agent_id, error_code = ?error,
+                    "Could not prepare side-question runtime");
+                // No ask reached the runner. Return the durable rejection so clients
+                // do not mistake a failed cold start for uncertain acceptance.
+                return reject("runtime_inspection_failed");
             }
         }
         let runner = self
@@ -299,7 +305,7 @@ impl AgentManager {
             .try_acquire_owned()
             .map_err(|_| ErrorCode::ResourceExhausted)?;
         let runner = match tokio::time::timeout(
-            SIDE_ADMISSION_TIMEOUT,
+            SIDE_PREPARATION_TIMEOUT,
             client.create_side_questions(&SideRunnerSpec {
                 session,
                 directory,
@@ -307,8 +313,11 @@ impl AgentManager {
             }),
         )
         .await
-        .map_err(|_| ErrorCode::AgentIo)?
-        {
+        .map_err(|_| {
+            tracing::warn!(agent_id = agent, provider = %record.provider,
+                "Side-question runtime preparation timed out");
+            ErrorCode::AgentIo
+        })? {
             Ok(runner) => runner,
             Err(AgentSessionError::Unavailable) => {
                 self.publish_side_metadata(
