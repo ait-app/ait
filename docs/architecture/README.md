@@ -150,6 +150,7 @@ Pi 扩展 `notify` 由 provider 投影为持久化的会话通知；通知队列
 新定时任务保存固定 Workspace 身份，执行时校验归属，在该 Workspace 内选择或创建 Agent。
 新建 Agent 的收尾不归档 Workspace；旧未绑定任务保留兼容分支，见[任务手册](../operations/schedules.md)。
 Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档使 Bot 退役（`retired`）并删除其记忆，见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)。
+核心 Bot 方法保留已发布客户端的能力协商；旧单对话重置返回版本不兼容错误，不能扩大为共享上下文重置，见 [ADR-309](../decisions/bot/adr-309-bot-legacy-client-negotiation.md)。
 Telegram、飞书、Lark、微信、QQ 和 iMessage 均接纳任意发送者，旧发送者列表仅兼容读取；
 群聊仍需开启并遵守平台触发规则，QQ 全量推送也接纳普通群消息。见 [ADR-290](../decisions/bot/adr-290-open-channel-senders.md)。
 飞书与国际版 Lark 共用消息传输实现，凭据验证、API、WebSocket 端点和账号独占按区域隔离，见 [ADR-272](../decisions/bot/adr-272-lark-channel.md)。

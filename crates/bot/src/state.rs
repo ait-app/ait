@@ -305,6 +305,13 @@ impl State {
                     json!({"conversations":self.conversations.values().filter(|conversation| conversation.bot_id == bot).map(|conversation| self.project_conversation(conversation)).collect::<Vec<_>>()}),
                 )
             }
+            "bot.conversation.reset.request" => {
+                let request: protocol::ConversationRequest = decode(params)?;
+                let bot = self.current(&request.workspace_id)?.id;
+                self.conversation(bot, request.conversation_id)?;
+                // An old client's per-chat confirmation cannot authorize a Bot-wide reset.
+                Err(ErrorCode::IncompatibleVersion)
+            }
             "bot.context.reset.request" => self.reset_context(&decode(params)?),
             "bot.chat.list.request" => self.list_chats(&decode(params)?),
             "bot.chat.update.request" => self.update_chat(&decode(params)?),
