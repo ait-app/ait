@@ -1,6 +1,6 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.29 - 2026-11-27
 
 - Desktop and mobile recommend an official service entry by IP. Choose Mainland China, Global,
   Automatic, or a custom URL from sign-in or Online Service settings.
@@ -17,6 +17,9 @@
 
 - Menus, workspace details and other popups opened over the desktop browser pane now appear
   above the page instead of behind it.
+
+- The signed-in account name in the sidebar footer keeps the full width of the button, with the
+  remaining time shown underneath, so a narrow sidebar no longer truncates the name.
 
 ## 0.2.28 - 2026-11-26
 
