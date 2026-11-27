@@ -226,9 +226,10 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 客户端、连接与品牌
 
+- [ADR-317：Workspace 浏览器回到渲染进程 `<webview>`](clients/adr-317-browser-webview-tag.md)
 - [ADR-316：AIT 通过当前账号签发分享邀请](clients/adr-316-ait-share-invitations.md)
 - [ADR-314：Hub 跨数据面路由——`redirect` 与到其它 DP 的链路](clients/adr-314-hub-cross-dp-routing.md)
-- [ADR-284：Workspace 浏览器由主进程 WebContentsView 托管](clients/adr-284-browser-webcontents-view.md)
+- [ADR-284：Workspace 浏览器由主进程 WebContentsView 托管](clients/adr-284-browser-webcontents-view.md)（已由 [ADR-317](clients/adr-317-browser-webview-tag.md) 取代）
 - [ADR-281：可分享的 Workspace 记事本标签页](clients/adr-281-workspace-notebook-tab.md)（经 [ADR-297](workspace/adr-297-notepad-file-in-data-directory.md) 修订）
 - [ADR-236：GitHub Release 附带 Google 签名的 Android APK](clients/adr-236-google-signed-apk-release-asset.md)
 - [ADR-235：稳定版 Release 通过 API 启动 iOS 内部 TestFlight 构建](clients/adr-235-ios-testflight-in-release-workflow.md)

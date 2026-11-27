@@ -11,7 +11,6 @@ import { PaseoBrowserWebviewRegistry } from "./registry.js";
 export {
   BROWSER_NEW_TAB_REQUEST_EVENT,
   decideBrowserWindowOpenRequest,
-  isAllowedBrowserWebviewUrl,
   PendingBrowserWindowOpenRequests,
 };
 
