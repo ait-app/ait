@@ -48,7 +48,7 @@ pub(super) enum Managed {
     TerminalOnly,
 }
 
-/// Slash commands Ait blocks from OMP: every row of `docs/plans/pr612-split/sources.json`'s
+/// Slash commands Ait blocks from OMP: every row of `docs/archive/plans/pr612-split/sources.json`'s
 /// `commands_tsv` whose entry strategy blocks the native slash entry, one entry per name
 /// including aliases. Blocked text is refused in the input box, left out of completion, and
 /// answered in the timeline; it never reaches OMP, so a native handler cannot change a

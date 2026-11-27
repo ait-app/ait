@@ -1,5 +1,14 @@
 # Task board reference implementation — visual QA
 
+> 已归档（2026-11-27）：#641、#648 的任务看板视觉验收记录，原为仓库根目录的 `design-qa.md`，只对应当时的提交。
+> 文中 `/tmp/...` 截图未入库；#641 提交的对照图与实现截图随本页保存：
+> [改造前对照](task-board-design-qa-2026-11-10/comparison-before.webp)、
+> [对照](task-board-design-qa-2026-11-10/comparison.webp)、
+> [详情对照](task-board-design-qa-2026-11-10/comparison-detail.webp)、
+> [桌面实现](task-board-design-qa-2026-11-10/implementation-desktop.png)、
+> [移动端实现](task-board-design-qa-2026-11-10/implementation-mobile.png)。
+> 当前行为见[任务总览](../../../operations/task-board.md)。
+
 Result: **passed for the task-board scope**, with the intentional Ait adaptations below. GitHub attachment upload is blocked separately: the GitHub connector has no upload endpoint and Cua Driver reports no available browser windows. Screenshots remain outside Git; none are included in the code commit.
 
 ## Target and source

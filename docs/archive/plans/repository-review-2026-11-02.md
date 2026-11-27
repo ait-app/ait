@@ -1,5 +1,7 @@
 # 2026-11-02 仓库审查遗留事项
 
+> 已归档（2026-11-27）：未勾选的条目已移入[审查遗留事项](../../plans/review-followups.md)，以那里为准；本页保留已修复条目的修复说明与回归测试。
+
 来源：2026-11-02 全仓库审查。已确认的缺陷已在同一 PR 中修复；本清单只记录复核后确认、
 但当时尚未修复的问题。每项保留原始触发条件，完成后勾选并记录修复与回归测试。
 
@@ -12,7 +14,7 @@
       `pendingReadiness`。daemon 一直没写出 `daemon ready` 就退出 Desktop 时，挂起的进程会被
       写进 `desktop-daemon.json`，下次启动只能反复探测失败。建议只在就绪确认后交接，
       或在退出时停止未就绪的进程（需修订 ADR-207）。
-      修复：交接前检查 `pendingReadiness`，从未输出就绪日志的子进程由现有退出流程停止；日志就绪后的握手失败仍允许交接。已修订 [ADR-207](../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。回归：`does not hand over a child that never reported ready` 及原有交接、退出生命周期测试。
+      修复：交接前检查 `pendingReadiness`，从未输出就绪日志的子进程由现有退出流程停止；日志就绪后的握手失败仍允许交接。已修订 [ADR-207](../../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。回归：`does not hand over a child that never reported ready` 及原有交接、退出生命周期测试。
 
 ## 节点授权与发布（`crates/host-link`）
 
@@ -38,7 +40,7 @@
       `bins/daemon/src/host/mcp_socket.rs` 先 `bind` 再按路径 `set_permissions`，后者跟随
       符号链接。父目录可被他人写入时存在竞争窗口。所有请求仍需 Bearer 令牌，影响较低。
       建议在 `bind` 前临时设置 umask `0o177`，或要求父目录归当前用户所有且为 0700。
-      修复：绑定前验证父目录不是符号链接、归当前用户所有且权限为 0700；不修改进程全局 umask。已修订 [ADR-203](../decisions/daemon/adr-203-mcp-unix-socket.md)，回归位于 `host/mcp_socket/tests.rs`。
+      修复：绑定前验证父目录不是符号链接、归当前用户所有且权限为 0700；不修改进程全局 umask。已修订 [ADR-203](../../decisions/daemon/adr-203-mcp-unix-socket.md)，回归位于 `host/mcp_socket/tests.rs`。
 
 ## Provider
 
@@ -109,7 +111,7 @@
       `guest/policy/node.rs` 允许节点访客调用 `bot.*` 与 `schedule.*`（例如把 Bot Channel 指向
       访客自己的聊天账号，或创建启动无标签 Agent 的定时任务）；撤销只处理连接、访客终端和带
       访客标签的 Agent。建议记录创建者并在撤销时删除或暂停，或在 ADR-208 中明确说明该边界。
-      修复：后台自动化写操作仅限所有者；节点访客保留 Bot 与定时任务读取，客户端同步只读入口。边界记录在 [ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)。回归：`node_guests_can_read_but_cannot_start_persistent_automation` 及客户端只读回归。
+      修复：后台自动化写操作仅限所有者；节点访客保留 Bot 与定时任务读取，客户端同步只读入口。边界记录在 [ADR-208](../../decisions/daemon/adr-208-workspace-share-guests.md)。回归：`node_guests_can_read_but_cannot_start_persistent_automation` 及客户端只读回归。
 
 - [x] **项目访客可永久删除所有者的其他分享设置。**
       `workspace.archive` 属于 `WorkspaceManage`。项目访客归档项目内另有独立工作区分享的工作区时，

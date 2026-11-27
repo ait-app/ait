@@ -395,7 +395,7 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   不能冒充已写入磁盘。取消/到期/失败释放文件，artifact 丢失不得自动重新导出。
 - 接口、内部所有权、HTTP 限定 CORS 扩展及各平台完成语义见
   [ADR-239](../decisions/providers/adr-239-persisted-timeline-export-downloads.md)；
-  原生手机和打包桌面验证限制见 [task26 记录](../plans/pr612-split/task26.json)。
+  原生手机和打包桌面验证限制见 [task26 记录](../archive/plans/pr612-split/task26.json)。
 
 ## 账号用量
 
