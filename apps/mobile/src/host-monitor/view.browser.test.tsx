@@ -76,3 +76,61 @@ it("keeps the close button over the same point when a sampled host disconnects a
     container.remove();
   }
 });
+
+it("truncates the host label instead of letting the metrics overlap it in a narrow sidebar", async () => {
+  await i18n.changeLanguage("en");
+  const container = document.createElement("div");
+  container.style.cssText = "position:fixed;bottom:50px;left:0;width:200px";
+  document.body.append(container);
+  const root = createRoot(container);
+  const host = { serverId: "a", label: "owl-home-workstation" };
+  const sample = {
+    at: 1,
+    cpuPercent: 25,
+    memoryUsedBytes: 512,
+    memoryTotalBytes: 1024,
+    rxBytesPerSecond: null,
+    txBytesPerSecond: null,
+  };
+  try {
+    flushSync(() =>
+      root.render(
+        <HostMonitorView
+          host={host}
+          hosts={[host]}
+          picked={null}
+          onSelect={vi.fn()}
+          open={false}
+          onOpenChange={vi.fn()}
+          supported
+          restricted={false}
+          failed={false}
+          onRetry={vi.fn()}
+          connected
+          snapshot={{
+            platform: "linux",
+            cpuCount: 4,
+            uptimeSeconds: 800,
+            current: sample,
+            history: [sample],
+            disks: [],
+          }}
+        />,
+      ),
+    );
+    const byTestId = (id: string) =>
+      document.querySelector<HTMLElement>(`[data-testid="${id}"]`)!.getBoundingClientRect();
+    const trigger = byTestId("sidebar-host-monitor");
+    const cpu = byTestId("sidebar-host-monitor-cpu");
+    const memory = byTestId("sidebar-host-monitor-memory");
+    const label = [...container.querySelectorAll<HTMLElement>("div")]
+      .filter((node) => node.textContent === host.label && node.children.length === 0)[0]!
+      .getBoundingClientRect();
+    expect(label.right).toBeLessThanOrEqual(cpu.left);
+    expect(cpu.right).toBeLessThanOrEqual(memory.left);
+    expect(memory.right).toBeLessThanOrEqual(trigger.right);
+  } finally {
+    flushSync(() => root.unmount());
+    container.remove();
+  }
+});

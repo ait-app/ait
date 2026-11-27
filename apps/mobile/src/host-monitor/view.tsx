@@ -547,13 +547,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   caption: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   small: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm - 1 },
+  // Natural width, right-aligned: the host label gives way, the metrics never shrink or overlap it.
   summaryMetrics: {
-    flex: 1,
-    minWidth: 0,
-    marginLeft: 4,
+    flexShrink: 0,
+    marginLeft: "auto",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
     gap: 14,
   },
   summaryMetric: { flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0 },
