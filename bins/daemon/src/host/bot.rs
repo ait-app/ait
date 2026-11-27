@@ -8,6 +8,7 @@ use bot::service::{Bots, Dependencies};
 use domain::ChannelId;
 use model::ErrorCode;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::worktrees::WorktreeProvisioning;
 use persistence::storage::bot::{FileStore, SecretFiles};
 use provider::service::agent_execution::AgentExecution;
 use secrecy::{ExposeSecret, SecretString};
@@ -63,6 +64,7 @@ pub(super) fn compose<
     projects: &P,
     execution: AgentExecution,
     scopes: Arc<Scopes>,
+    worktrees: Arc<dyn WorktreeProvisioning>,
 ) -> anyhow::Result<Bots> {
     let root = data.join("workspace-bots");
     let bots = Bots::spawn(Dependencies {
@@ -75,6 +77,7 @@ pub(super) fn compose<
         }),
         scopes,
         image_directory: Some(data.join("agents/provider-images")),
+        worktrees,
     })
     .context("start Bot service")?;
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {

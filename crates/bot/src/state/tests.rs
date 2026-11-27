@@ -1,4 +1,6 @@
-use domain::bot::{ChannelConfig, TurnStatus};
+use domain::bot::{
+    ChannelConfig, GithubReviewContext, GithubReviewTrigger, TurnContext, TurnStatus,
+};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use model::bot::Store;
@@ -152,7 +154,154 @@ fn external(channel: ChannelId, sender: &str, message: &str) -> Incoming {
         reply_to: None,
         sender_type: None,
         passive: false,
+        context: None,
     }
+}
+
+/// A GitHub review channel of the Bot in [`WORKSPACE`] for `owner/repository`.
+fn github_channel(state: &mut crate::state::State) -> ChannelId {
+    let channel = ChannelId::generate();
+    state
+        .execute(
+            "bot.channel.create.request",
+            json!({
+                "workspaceId":WORKSPACE,
+                "channelId":channel,
+                "enabled":true,
+                "config":{
+                    "kind":"github",
+                    "appId":"123",
+                    "privateKeyRef":"env:AIT_SERVER_CREDENTIAL_GITHUB_PRIVATE_KEY",
+                    "webhookSecretRef":"env:AIT_SERVER_CREDENTIAL_GITHUB_WEBHOOK_SECRET",
+                    "installationId":"456",
+                    "mention":"ait-review",
+                    "repositories":[{
+                        "fullName":"owner/repository",
+                        "projectId":"project-1",
+                        "allowedSenders":["maintainer"]
+                    }]
+                }
+            }),
+        )
+        .unwrap();
+    channel
+}
+
+/// A review request for pull request 7 at a fixed head, to run in `workspace`.
+fn review_input(
+    channel: ChannelId,
+    text: &str,
+    trigger: GithubReviewTrigger,
+    workspace: &str,
+) -> Incoming {
+    Incoming {
+        channel_id: channel,
+        peer: "repo:5:pr:7".to_owned(),
+        sender: "github-review".to_owned(),
+        thread: Some("2".repeat(40)),
+        message_id: "github-review:stable".to_owned(),
+        text: text.to_owned(),
+        reply_to: None,
+        context: Some(TurnContext::GithubReview(Box::new(GithubReviewContext {
+            repository: "owner/repository".to_owned(),
+            project_id: "project-1".to_owned(),
+            pull_number: 7,
+            title: "Change".to_owned(),
+            url: "https://github.com/owner/repository/pull/7".to_owned(),
+            base_ref: "main".to_owned(),
+            head_ref: "feature".to_owned(),
+            base_sha: "1".repeat(40),
+            head_sha: "2".repeat(40),
+            trigger,
+            trigger_user: "maintainer".to_owned(),
+            trigger_comment_id: None,
+            workspace_id: workspace.to_owned(),
+        }))),
+        sender_type: None,
+        passive: false,
+    }
+}
+
+#[test]
+fn github_review_triggers_for_the_same_head_reuse_the_first_turn() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = github_channel(&mut state);
+    let first = state
+        .accept(review_input(
+            channel,
+            "mention mandate",
+            GithubReviewTrigger::Mention,
+            "workspace-first",
+        ))
+        .unwrap();
+    let duplicate = state
+        .accept(review_input(
+            channel,
+            "assignment mandate",
+            GithubReviewTrigger::ReviewerAssignment,
+            "workspace-second",
+        ))
+        .unwrap();
+    assert_eq!(duplicate["duplicate"], true);
+    assert_eq!(duplicate["turn"]["id"], first["turn"]["id"]);
+}
+
+#[test]
+fn github_reviews_run_in_their_own_session_beside_the_shared_context() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = github_channel(&mut state);
+    let review = state
+        .accept(review_input(
+            channel,
+            "review",
+            GithubReviewTrigger::Mention,
+            OTHER_WORKSPACE,
+        ))
+        .unwrap();
+    let review: BotTurnId = serde_json::from_value(review["turn"]["id"].clone()).unwrap();
+    let conversation: ConversationId = serde_json::from_value(
+        state
+            .execute(
+                "bot.conversation.open.request",
+                json!({"workspaceId":WORKSPACE}),
+            )
+            .unwrap()["conversation"]["id"]
+            .clone(),
+    )
+    .unwrap();
+    state
+        .execute(
+            "bot.message.send.request",
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"one","text":"hello"}),
+        )
+        .unwrap();
+    // The review waits for its checkout; the owner's message runs in the shared context.
+    let shared = state.ready().unwrap();
+    assert_eq!(shared.len(), 1);
+    assert_eq!(shared[0].owner.workspace_id, WORKSPACE);
+    let preparations = state.review_preparations();
+    assert_eq!(preparations.len(), 1);
+    assert_eq!(preparations[0].turn_id, review);
+    state
+        .review_prepared(review, Ok(OTHER_WORKSPACE.to_owned()))
+        .unwrap();
+    // The shared context is busy, yet the review starts in its own checkout and session.
+    let ready = state.ready().unwrap();
+    assert_eq!(ready.len(), 1);
+    assert_eq!(ready[0].turn.id, review);
+    assert_eq!(ready[0].owner.workspace_id, OTHER_WORKSPACE);
+    assert_ne!(
+        ready[0].conversation.session_id,
+        shared[0].conversation.session_id
+    );
 }
 
 #[test]

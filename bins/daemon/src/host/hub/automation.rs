@@ -1,4 +1,4 @@
-//! Automation publication: the Host publishes the enabled Webhook channels of the Workspace Bots the Ait center may reach, on every fresh
+//! Automation publication: the Host publishes the enabled automation channels of the Workspace Bots the Ait center may reach, on every fresh
 //! serve link and after every change.
 //!
 //! The center opens automation sessions only to a link whose latest publication

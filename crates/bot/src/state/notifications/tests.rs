@@ -129,6 +129,7 @@ fn telegram_conversation(state: &mut State, channel: ChannelId) -> ConversationI
             reply_to: Some("41".into()),
             sender_type: None,
             passive: false,
+            context: None,
         })
         .unwrap();
     complete_ready(state, "on it");
@@ -484,6 +485,7 @@ fn a_silent_wake_reply_is_marked_delivered_without_sending() {
             reply_to: None,
             sender_type: None,
             passive: false,
+            context: None,
         })
         .unwrap();
     let user = complete_ready(&mut state, "NO_REPLY").remove(0);
@@ -987,6 +989,7 @@ fn an_observation_by_a_turn_a_restart_cut_short_never_suppresses_the_report() {
             reply_to: Some("42".into()),
             sender_type: None,
             passive: false,
+            context: None,
         })
         .unwrap();
     state.ready().unwrap();

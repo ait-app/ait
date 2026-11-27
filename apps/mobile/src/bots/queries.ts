@@ -61,6 +61,12 @@ export const botKeys = {
     workspaceId,
     builtinChannelId,
   ],
+  channelStatus: (serverId: string, workspaceId: string, channelId: string) => [
+    "bot-channel-status",
+    serverId,
+    workspaceId,
+    channelId,
+  ],
 };
 
 /** Whether a Bot request failed with the host error `code`, such as `bot_conflict`. */

@@ -1,6 +1,7 @@
 import {
   ALL_BOT_METHODS,
   BOT_CHAT_RECEPTION_METHODS,
+  BOT_GITHUB_SETUP_METHODS,
   BOT_SHARED_CONTEXT_METHODS,
 } from "@ait/protocol/bot/rpc-schemas";
 // Ait names declared by Rust capability components.
@@ -20,6 +21,7 @@ export interface MethodSpec {
 const BOT_CONFIGURATION_METHODS: readonly string[] = [
   ...BOT_CHAT_RECEPTION_METHODS,
   ...BOT_SHARED_CONTEXT_METHODS,
+  ...BOT_GITHUB_SETUP_METHODS,
 ];
 const EXTERNAL_PLATFORM_BOT_METHOD = /^bot\.channel\.(feishu|lark|telegram|weixin|qq|imessage)\./;
 

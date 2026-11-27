@@ -28,7 +28,8 @@
 - [BTW 侧会话](operations/btw.md)：浮窗问答、连续追问、关闭恢复与展开为完整会话。
 - [Provider TODO](architecture/provider.md#原生-todo)：原生任务完整快照、支持范围与输入区 TODO 胶囊。
 - [OpenCode 子会话终态核对](architecture/provider.md#各原生适配器的特有约束)：已验证的原生子项通过只读持久记录纠正遗漏的完成通知。
-- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
+- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)、
+  [GitHub Bot PR Review](operations/github-bot-review.md)。
 - [主机资源监控](architecture/connection.md#主机资源监控)：侧栏读数、历史与采样生命周期。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 - [会话导出](architecture/provider.md#会话导出)：下载整个已保存 Timeline 或对话内容为 Markdown/HTML，不打断活动轮次。

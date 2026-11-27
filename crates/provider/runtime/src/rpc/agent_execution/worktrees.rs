@@ -52,6 +52,8 @@ pub(super) fn intent(request: &CreateRequest) -> Result<Option<WorktreeCreation>
                 forge: Some("github".into()),
                 number: *pr_number,
                 project_path: None,
+                expected_head_sha: None,
+                expected_base_sha: None,
             });
         }
         None => {
@@ -117,6 +119,8 @@ fn legacy(input: &mut WorktreeCreation, git: &GitOptions) -> Result<bool, ErrorC
                     forge: Some("github".into()),
                     number,
                     project_path: None,
+                    expected_head_sha: None,
+                    expected_base_sha: None,
                 },
             )
         });

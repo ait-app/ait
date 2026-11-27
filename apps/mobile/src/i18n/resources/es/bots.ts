@@ -1,3 +1,5 @@
+import { bots as enBots } from "../en/bots";
+
 export const bots = {
   modeCapWarning:
     "Los modos que permiten a los agentes ejecutar comandos también les permiten leer las credenciales de Ait de este equipo y eludir los límites de Ait del Bot. Permítelos solo para trabajo que dejarías hacer a un agente sin supervisión.",
@@ -82,6 +84,7 @@ export const bots = {
   tooLong: "Los mensajes deben tener como máximo 16 KiB.",
   memoryTooLong: "La memoria debe tener como máximo 32 KiB.",
   channels: "Canales",
+  githubChannel: enBots.githubChannel,
   addChannel: "Añadir canal",
   channelType: "Tipo de canal",
   telegram: "Telegram",

@@ -15,6 +15,7 @@ const WEBHOOK_METHODS: [&str; 3] = [
     "bot.webhook.delivery.ack.request",
     "bot.webhook.conversation.close.request",
 ];
+const GITHUB_METHOD: &str = "bot.github.webhook.receive.request";
 
 /// Turn methods shared with owner sessions; the turn must be in a Webhook channel.
 const TURN_METHODS: [&str; 2] = ["bot.turn.get.request", "bot.turn.cancel.request"];
@@ -26,7 +27,7 @@ const TURN_METHODS: [&str; 2] = ["bot.turn.get.request", "bot.turn.cancel.reques
 /// `InvalidMessage` for malformed arguments.
 pub(crate) async fn request(state: &Shared, request: &Request) -> Result<(), ErrorCode> {
     let method = request.method.as_str();
-    if WEBHOOK_METHODS.contains(&method) {
+    if WEBHOOK_METHODS.contains(&method) || method == GITHUB_METHOD {
         // The Bot itself refuses anything but the Workspace's enabled Webhook channels.
         return Ok(());
     }

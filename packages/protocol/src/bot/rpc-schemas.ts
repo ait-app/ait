@@ -220,6 +220,14 @@ export const BOT_REQUEST_SCHEMAS = [
     channelId: z.guid(),
   }),
   z.strictObject({
+    type: z.literal("bot.channel.github.create.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    channelId: z.guid(),
+    config: BotChannelConfigSchema,
+    enabled: z.boolean().optional(),
+  }),
+  z.strictObject({
     type: z.literal("bot.channel.telegram.pair.start.request"),
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
@@ -499,6 +507,17 @@ export const BOT_RESPONSE_SCHEMAS = [
     }),
   }),
   z.object({
+    type: z.literal("bot.channel.github.create.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["created", "failed"]),
+      reason: WebhookFailureSchema.optional(),
+      channel: BotChannelSchema.optional(),
+      secret: z.string().optional(),
+      url: z.string().optional(),
+    }),
+  }),
+  z.object({
     type: z.literal("bot.channel.telegram.pair.start.response"),
     payload: z.object({
       requestId: z.string(),
@@ -754,6 +773,7 @@ export const BOT_WEBHOOK_SETUP_METHODS = [
   "bot.channel.webhook.create.request",
   "bot.channel.webhook.rotate.request",
 ] as const;
+export const BOT_GITHUB_SETUP_METHODS = ["bot.channel.github.create.request"] as const;
 const OPTIONAL_BOT_METHODS: readonly string[] = [
   "bot.conversation.reset.request",
   ...BOT_CHAT_RECEPTION_METHODS,
@@ -769,6 +789,7 @@ const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_QQ_SETUP_METHODS,
   ...BOT_IMESSAGE_SETUP_METHODS,
   ...BOT_WEBHOOK_SETUP_METHODS,
+  ...BOT_GITHUB_SETUP_METHODS,
 ];
 export const BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value).filter(
   (method) => !OPTIONAL_BOT_METHODS.includes(method),

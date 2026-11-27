@@ -7,4 +7,5 @@ export const KIND_LABELS = {
   qq: "bots.qq",
   photon_imessage: "bots.imessage",
   webhook: "bots.webhook",
+  github: "bots.githubChannel.github",
 } as const;

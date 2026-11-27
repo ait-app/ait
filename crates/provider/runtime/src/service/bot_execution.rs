@@ -32,6 +32,9 @@ pub enum Action {
         message_id: String,
         /// Bounded input text.
         text: String,
+        /// Optional provider-independent structured-output JSON Schema.
+        #[serde(default)]
+        output_schema: Option<Value>,
     },
     /// Read the committed Bot status and visible assistant messages without waiting for idle.
     Poll {

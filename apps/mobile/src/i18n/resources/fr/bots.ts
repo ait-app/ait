@@ -1,3 +1,5 @@
+import { bots as enBots } from "../en/bots";
+
 export const bots = {
   modeCapWarning:
     "Les modes qui permettent aux agents d'exécuter des commandes leur permettent aussi de lire les identifiants Ait de cet ordinateur et de contourner les limites Ait du Bot. N'autorisez-les que pour un travail que vous laisseriez un agent faire sans surveillance.",
@@ -84,6 +86,7 @@ export const bots = {
   tooLong: "Les messages ne doivent pas dépasser 16 Kio.",
   memoryTooLong: "La mémoire ne doit pas dépasser 32 Kio.",
   channels: "Canaux",
+  githubChannel: enBots.githubChannel,
   addChannel: "Ajouter un canal",
   channelType: "Type de canal",
   telegram: "Telegram",

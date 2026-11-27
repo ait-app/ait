@@ -2,6 +2,7 @@ import {
   BOT_CHAT_RECEPTION_METHODS,
   BOT_SHARED_CONTEXT_METHODS,
   BOT_FEISHU_SETUP_METHODS,
+  BOT_GITHUB_SETUP_METHODS,
   BOT_LARK_SETUP_METHODS,
   BOT_IMESSAGE_SETUP_METHODS,
   BOT_WEBHOOK_SETUP_METHODS,
@@ -121,6 +122,10 @@ export function serverInfo(
       serverFeatures.has("workspace-bots-v2") &&
       BOT_METHODS.every(has) &&
       BOT_WEBHOOK_SETUP_METHODS.every(has),
+    workspaceBotGithubSetup:
+      serverFeatures.has("workspace-bots-v2") &&
+      BOT_METHODS.every(has) &&
+      BOT_GITHUB_SETUP_METHODS.every(has),
     providersSnapshot: has("provider.snapshot.get.request"),
     providersSnapshotCwd: has("provider.snapshot.get.request"),
     directorySync: !scopedGuest && supportsDirectories && serverFeatures.has("directory-sync-v1"),

@@ -105,6 +105,8 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
                         forge: Some("github".to_owned()),
                         number,
                         project_path: None,
+                        expected_head_sha: None,
+                        expected_base_sha: None,
                     }
                 })
             }),

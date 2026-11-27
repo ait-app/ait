@@ -70,6 +70,7 @@ fn said(state: &mut State, channel: ChannelId, sender: &str, message: &str) -> C
             reply_to: None,
             sender_type: None,
             passive: false,
+            context: None,
         })
         .unwrap();
     serde_json::from_value(accepted["turn"]["conversationId"].clone()).unwrap()

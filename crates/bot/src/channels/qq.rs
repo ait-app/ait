@@ -570,6 +570,7 @@ fn inbound(channel: &Channel, event: &str, data: &Value) -> Result<Option<Incomi
         reply_to: Some(message_id.to_owned()),
         sender_type: None,
         passive: false,
+        context: None,
     }))
 }
 

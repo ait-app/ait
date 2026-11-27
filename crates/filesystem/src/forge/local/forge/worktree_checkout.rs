@@ -6,7 +6,7 @@ use domain::workspace::worktrees::{
 };
 use model::workspace::worktrees::ChangeRequestResolver;
 
-const CHECKOUT_QUERY: &str = "query PullRequestCheckoutTarget($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { number baseRefName headRefName isCrossRepository headRepositoryOwner { login } headRepository { sshUrl url } } } }";
+const CHECKOUT_QUERY: &str = "query PullRequestCheckoutTarget($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { number baseRefName baseRefOid headRefName headRefOid isCrossRepository headRepositoryOwner { login } headRepository { sshUrl url } } } }";
 
 impl ChangeRequestResolver for LocalForge {
     /// Resolve a selected GitHub/GitLab request through the existing authenticated CLI.
@@ -61,7 +61,7 @@ impl ChangeRequestResolver for LocalForge {
                 head_ref,
             );
         }
-        self.github_checkout(&cwd, &context, source.number, head_ref)
+        self.github_checkout(&cwd, &context, source, head_ref)
     }
 }
 
@@ -70,7 +70,7 @@ impl LocalForge {
         &self,
         cwd: &std::path::Path,
         context: &ForgeContext,
-        number: u64,
+        source: &WorktreeChangeRequest,
         head_ref: Option<&str>,
     ) -> Result<ChangeRequestCheckout, WorktreeError> {
         let repository = self
@@ -91,6 +91,16 @@ impl LocalForge {
             .as_str()
             .ok_or_else(lookup_failed)?;
         let name = repository["name"].as_str().ok_or_else(lookup_failed)?;
+        let project_path = format!("{owner}/{name}");
+        if source
+            .project_path
+            .as_deref()
+            .is_some_and(|expected| !expected.eq_ignore_ascii_case(&project_path))
+        {
+            return Err(WorktreeError::Invalid(
+                "Pull request repository does not match the requested project".to_owned(),
+            ));
+        }
         let response = self
             .gh(
                 cwd,
@@ -106,17 +116,17 @@ impl LocalForge {
                     "-f".into(),
                     format!("name={name}"),
                     "-F".into(),
-                    format!("number={number}"),
+                    format!("number={}", source.number),
                 ],
                 READ_TIMEOUT,
             )
             .map_err(|_| lookup_failed())?;
         let response: Value = serde_json::from_str(&response).map_err(|_| lookup_failed())?;
         let facts = &response["data"]["repository"]["pullRequest"];
-        if facts["number"].as_u64() != Some(number) {
+        if facts["number"].as_u64() != Some(source.number) {
             return Err(lookup_failed());
         }
-        let mut target = parse_target(facts, number, head_ref)?;
+        let mut target = parse_target(facts, source, head_ref)?;
         if target.head_ref.is_empty() {
             let response = self
                 .gh(
@@ -125,7 +135,7 @@ impl LocalForge {
                     &[
                         "pr".into(),
                         "view".into(),
-                        number.to_string(),
+                        source.number.to_string(),
                         "--json".into(),
                         "headRefName".into(),
                     ],
@@ -137,7 +147,7 @@ impl LocalForge {
                 .as_str()
                 .ok_or_else(lookup_failed)?
                 .to_owned();
-            target = parse_target(facts, number, Some(&head))?;
+            target = parse_target(facts, source, Some(&head))?;
         }
         Ok(target)
     }
@@ -145,7 +155,7 @@ impl LocalForge {
 
 fn parse_target(
     value: &Value,
-    number: u64,
+    source: &WorktreeChangeRequest,
     head_ref: Option<&str>,
 ) -> Result<ChangeRequestCheckout, WorktreeError> {
     let cross = value["isCrossRepository"].as_bool().unwrap_or(false);
@@ -184,15 +194,25 @@ fn parse_target(
     } else {
         head.clone()
     };
+    let head_sha = checked_object(
+        value["headRefOid"].as_str(),
+        source.expected_head_sha.as_deref(),
+    )?;
+    let base_sha = checked_object(
+        value["baseRefOid"].as_str(),
+        source.expected_base_sha.as_deref(),
+    )?;
     Ok(ChangeRequestCheckout {
         forge: "github".to_owned(),
-        number,
+        number: source.number,
         head_ref: head,
         base_ref: value["baseRefName"]
             .as_str()
             .unwrap_or_default()
             .trim()
             .to_owned(),
+        head_sha,
+        base_sha,
         local_branch,
         track_origin: !cross,
         push_remote_url,
@@ -201,10 +221,28 @@ fn parse_target(
             .into_iter()
             .map(|remote| ChangeRequestCheckoutRef {
                 remote: remote.to_owned(),
-                reference: format!("refs/pull/{number}/head"),
+                reference: format!("refs/pull/{}/head", source.number),
             })
             .collect(),
     })
+}
+
+fn checked_object(
+    observed: Option<&str>,
+    expected: Option<&str>,
+) -> Result<Option<String>, WorktreeError> {
+    let observed = observed.filter(|value| valid_object(value));
+    let expected = expected.filter(|value| valid_object(value));
+    if expected.is_some() && observed != expected {
+        return Err(WorktreeError::Io(
+            "Pull request revision changed before its review checkout was prepared".to_owned(),
+        ));
+    }
+    Ok(expected.or(observed).map(str::to_owned))
+}
+
+fn valid_object(value: &str) -> bool {
+    matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn repository_identity(owner: &str, url: Option<&str>) -> String {

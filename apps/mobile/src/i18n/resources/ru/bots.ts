@@ -1,3 +1,5 @@
+import { bots as enBots } from "../en/bots";
+
 export const bots = {
   modeCapWarning:
     "Режимы, позволяющие агентам выполнять команды, также позволяют им читать учётные данные Ait на этом компьютере и обходить ограничения Ait для Bot. Разрешайте их только для работы, которую вы готовы доверить агенту без присмотра.",
@@ -84,6 +86,7 @@ export const bots = {
   tooLong: "Сообщение не должно превышать 16 КиБ.",
   memoryTooLong: "Память не должна превышать 32 КиБ.",
   channels: "Каналы",
+  githubChannel: enBots.githubChannel,
   addChannel: "Добавить канал",
   channelType: "Тип канала",
   telegram: "Telegram",

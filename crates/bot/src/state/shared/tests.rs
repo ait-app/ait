@@ -24,6 +24,7 @@ fn input(channel: ChannelId, peer: &str, message: &str) -> Incoming {
         reply_to: Some(message.into()),
         passive: false,
         sender_type: Some("user".into()),
+        context: None,
     }
 }
 

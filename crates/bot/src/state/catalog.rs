@@ -185,6 +185,24 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
             }
             key_ref
         }
+        ChannelConfig::Github {
+            app_id,
+            private_key_ref,
+            webhook_secret_ref,
+            installation_id,
+            mention,
+            repositories,
+        } => {
+            validate_github(
+                app_id,
+                private_key_ref,
+                webhook_secret_ref,
+                installation_id,
+                mention,
+                repositories,
+            )?;
+            return Ok(());
+        }
     };
     // A stored reference names only its own channel, so no client can borrow another's secret.
     let reference_allowed = match crate::ports::stored_credential_channel(reference) {
@@ -192,6 +210,62 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
         None => crate::ports::valid_credential_reference(reference),
     };
     if !reference_allowed {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    Ok(())
+}
+
+fn validate_github(
+    app_id: &str,
+    private_key_ref: &str,
+    webhook_secret_ref: &str,
+    installation_id: &str,
+    mention: &str,
+    repositories: &[domain::bot::GithubRepositoryBinding],
+) -> Result<(), ErrorCode> {
+    let numeric = |value: &str| {
+        !value.is_empty()
+            && value.len() <= 32
+            && value.bytes().all(|byte| byte.is_ascii_digit())
+            && value != "0"
+    };
+    let valid_login = |value: &str| {
+        !value.is_empty()
+            && value.len() <= 100
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    };
+    let mut names = BTreeSet::new();
+    let valid_repositories = !repositories.is_empty()
+        && repositories.len() <= 100
+        && repositories.iter().all(|binding| {
+            let parts = binding.full_name.split_once('/');
+            parts.is_some_and(|(owner, repository)| {
+                [owner, repository].iter().all(|part| {
+                    !part.is_empty()
+                        && !matches!(*part, "." | "..")
+                        && part.len() <= 100
+                        && part
+                            .bytes()
+                            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+                })
+            }) && names.insert(binding.full_name.to_ascii_lowercase())
+                && model::valid_id(&binding.project_id)
+                && !binding.allowed_senders.is_empty()
+                && binding.allowed_senders.len() <= 256
+                && binding
+                    .allowed_senders
+                    .iter()
+                    .all(|sender| valid_login(sender))
+        });
+    if !numeric(app_id)
+        || !numeric(installation_id)
+        || !valid_login(mention)
+        || !crate::ports::valid_credential_reference(private_key_ref)
+        || !crate::ports::valid_credential_reference(webhook_secret_ref)
+        || !valid_repositories
+    {
         return Err(ErrorCode::InvalidMessage);
     }
     Ok(())
@@ -225,6 +299,9 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
         ChannelConfig::Weixin { account_id, .. } => Some(("weixin", account_id)),
         ChannelConfig::Qq { app_id, .. } => Some(("qq", app_id)),
         ChannelConfig::PhotonImessage { project_id, .. } => Some(("photon", project_id)),
+        ChannelConfig::Github {
+            installation_id, ..
+        } => Some(("github", installation_id)),
     }
 }
 
@@ -373,11 +450,15 @@ impl State {
         }
         let mut released = Vec::new();
         let mut webhooks = Vec::new();
+        let mut github = Vec::new();
         for channel in catalog.channels.iter_mut().filter(|channel| {
             bots.contains(&channel.bot_id) && !matches!(channel.config, ChannelConfig::Builtin)
         }) {
             if !channel.deleted && matches!(channel.config, ChannelConfig::Webhook { .. }) {
                 webhooks.push(channel.id);
+            }
+            if !channel.deleted && matches!(channel.config, ChannelConfig::Github { .. }) {
+                github.push(channel.id);
             }
             channel.enabled = false;
             channel.deleted = true;
@@ -386,6 +467,7 @@ impl State {
         self.save_catalog(catalog)?;
         self.released_credentials.extend(released);
         self.released_webhooks.extend(webhooks);
+        self.released_github.extend(github);
         for bot in bots {
             self.stop_bot(*bot, true, None)?;
             self.delete_notifications(*bot)?;
@@ -533,10 +615,14 @@ impl State {
         channel.enabled = false;
         channel.deleted = true;
         let webhook = matches!(channel.config, ChannelConfig::Webhook { .. });
+        let github = matches!(channel.config, ChannelConfig::Github { .. });
         self.save_catalog(catalog)?;
         self.released_credentials.push(request.channel_id);
         if webhook {
             self.released_webhooks.push(request.channel_id);
+        }
+        if github {
+            self.released_github.push(request.channel_id);
         }
         Ok(json!({"deleted":true,"channelId":request.channel_id}))
     }
@@ -563,5 +649,23 @@ impl State {
             return Err(ErrorCode::BotConflict);
         }
         Ok(())
+    }
+
+    /// Return one enabled GitHub channel owned by the Workspace's current Bot.
+    pub(crate) fn github_channel(
+        &self,
+        workspace: &str,
+        channel: ChannelId,
+    ) -> Result<Channel, ErrorCode> {
+        let bot = self.current(workspace)?;
+        self.workspace(bot)?;
+        let channel = self.channel(bot.id, channel)?;
+        if channel.deleted
+            || !channel.enabled
+            || !matches!(channel.config, ChannelConfig::Github { .. })
+        {
+            return Err(ErrorCode::BotNotFound);
+        }
+        Ok(channel.clone())
     }
 }

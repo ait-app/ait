@@ -32,6 +32,7 @@ fn outbox(fixture: &Fixture) -> (ChannelId, Vec<Turn>) {
                 reply_to: Some(message.into()),
                 sender_type: None,
                 passive: false,
+                context: None,
             })
             .unwrap();
         let run = state.ready().unwrap().pop().unwrap();

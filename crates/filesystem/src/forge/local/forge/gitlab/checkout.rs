@@ -40,6 +40,8 @@ pub(in super::super) fn checkout(
         number,
         head_ref: head.to_owned(),
         base_ref: string(&mr, "target_branch").map_err(|_| failed())?,
+        head_sha: None,
+        base_sha: None,
         local_branch: head.to_owned(),
         untrusted_repository: fork.map(|(source, _)| format!("GitLab project {source}")),
         push_remote_url: None,

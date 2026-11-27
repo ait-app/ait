@@ -250,6 +250,7 @@ async fn telegram_accumulates_multiple_assistant_messages_in_one_reply() {
         reply_to: Some("42".into()),
         sender_type: None,
         passive: false,
+        context: None,
     })
     .await
     .unwrap();
@@ -331,6 +332,7 @@ async fn telegram_sends_markdown_images_with_native_photo_api() {
         reply_to: Some("42".into()),
         sender_type: None,
         passive: false,
+        context: None,
     })
     .await
     .unwrap();

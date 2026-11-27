@@ -1,3 +1,6 @@
+use serde_json::json;
+
+use crate::bot::ChannelConfig;
 use crate::{BotId, BotTurnId, ChannelId, ConversationId};
 
 #[test]
@@ -37,6 +40,25 @@ fn bot_identities_roundtrip_and_reject_nil_or_malformed_values() {
     ] {
         assert!(serde_json::from_str::<BotId>(invalid).is_err());
     }
+}
+
+#[test]
+fn github_channel_configuration_roundtrips_without_secret_values() {
+    let value = json!({
+        "kind":"github",
+        "appId":"123",
+        "privateKeyRef":"env:AIT_SERVER_CREDENTIAL_GITHUB_PRIVATE_KEY",
+        "webhookSecretRef":"env:AIT_SERVER_CREDENTIAL_GITHUB_WEBHOOK_SECRET",
+        "installationId":"456",
+        "mention":"ait-review",
+        "repositories":[{
+            "fullName":"owner/repository",
+            "projectId":"project-1",
+            "allowedSenders":["maintainer"]
+        }]
+    });
+    let config: ChannelConfig = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(config).unwrap(), value);
 }
 
 #[test]

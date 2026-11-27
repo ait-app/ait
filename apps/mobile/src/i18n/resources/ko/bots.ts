@@ -1,3 +1,5 @@
+import { bots as enBots } from "../en/bots";
+
 export const bots = {
   modeCapWarning:
     "에이전트가 명령을 실행할 수 있는 모드는 이 컴퓨터의 Ait 자격 증명을 읽고 Bot의 Ait 제한을 우회하는 것도 허용합니다. 에이전트가 무인으로 처리해도 되는 작업에만 허용하세요.",
@@ -78,6 +80,7 @@ export const bots = {
   tooLong: "메시지는 16 KiB 이하여야 합니다.",
   memoryTooLong: "메모리는 32 KiB 이하여야 합니다.",
   channels: "채널",
+  githubChannel: enBots.githubChannel,
   addChannel: "채널 추가",
   channelType: "채널 유형",
   telegram: "Telegram",

@@ -69,6 +69,7 @@ async fn perform(
                     "peer":run.conversation.peer,"sender":run.conversation.sender,"thread":run.conversation.thread,
                     "messageId":run.turn.message_id,"passive":run.turn.passive,"senderType":run.turn.sender_type}).to_string().replace('&', "&amp;").replace('\"', "&quot;").replace('<', "&lt;"),
                 text.replace("</", "<\\/")),
+            output_schema: review_schema(&run.turn, &run.config.provider),
         },
     );
     tokio::select! {
@@ -81,6 +82,39 @@ async fn perform(
     bots.progress(run.turn.id, TurnStatus::Running, None, None)
         .await?;
     wait_for_completion(bots, executor, run).await
+}
+
+fn review_schema(turn: &Turn, provider: &str) -> Option<serde_json::Value> {
+    turn.context
+        .as_ref()
+        .filter(|_| matches!(provider, "codex" | "claude"))
+        .map(|_| {
+            serde_json::json!({
+                "type":"object",
+                "additionalProperties":false,
+                "required":["summary","findings"],
+                "properties":{
+                    "summary":{"type":"string"},
+                    "findings":{
+                        "type":"array",
+                        "maxItems":100,
+                        "items":{
+                            "type":"object",
+                            "additionalProperties":false,
+                            "required":["path","line","side","severity","title","body"],
+                            "properties":{
+                                "path":{"type":"string"},
+                                "line":{"type":"integer","minimum":1},
+                                "side":{"type":"string","enum":["LEFT","RIGHT"]},
+                                "severity":{"type":"string","enum":["high","medium","low"]},
+                                "title":{"type":"string"},
+                                "body":{"type":"string"}
+                            }
+                        }
+                    }
+                }
+            })
+        })
 }
 
 async fn wait_for_completion(
@@ -346,3 +380,7 @@ async fn cancel(
     bots.progress(run.turn.id, TurnStatus::Cancelled, None, None)
         .await
 }
+
+#[cfg(test)]
+#[path = "execution/tests.rs"]
+mod tests;
