@@ -45,7 +45,7 @@ impl ManagedRelay for ManagedRelayHandle {
     ) -> Result<(), Error> {
         self.hub
             .start(relay::hub::Grant {
-                center_url: host_link::center(),
+                center_url: ticket.center_url.unwrap_or_else(host_link::center),
                 hub_ticket: ticket.ticket,
                 node_session_id: session,
                 hub_features: ticket.features,

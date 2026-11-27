@@ -186,3 +186,59 @@ async fn internal_claim_is_unique_and_reports_only_public_binding() {
     api.begin_shutdown();
     api.wait_closed().await;
 }
+
+#[tokio::test]
+#[expect(
+    clippy::result_large_err,
+    reason = "tungstenite fixes the handshake callback error type"
+)]
+async fn managed_hub_dials_the_gateway_that_issued_its_ticket() {
+    use host_link::ManagedRelay;
+    use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+
+    let gateway = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut api = Api::new(
+        gateway.local_addr().unwrap(),
+        "stable".to_owned(),
+        "instance".to_owned(),
+        TOKEN.into(),
+        Services::default(),
+    )
+    .unwrap();
+    let handle = api.claim_managed_relay().unwrap();
+    let credential = "a".repeat(64);
+    let mut ticket = host_link::HubTicket::new(
+        credential.clone().into(),
+        ["lease", "credit", "download"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+    );
+    ticket.center_url = Some(format!("http://{}/api", gateway.local_addr().unwrap()));
+
+    handle
+        .start_hub(uuid::Uuid::new_v4(), ticket, None)
+        .await
+        .unwrap();
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let (tcp, _) = gateway.accept().await.unwrap();
+        let mut socket =
+            tokio_tungstenite::accept_hdr_async(tcp, |request: &Request, response: Response| {
+                assert_eq!(request.uri().path(), "/api/v1/hub");
+                assert_eq!(
+                    request.headers()["authorization"],
+                    format!("Bearer {credential}")
+                );
+                Ok(response)
+            })
+            .await
+            .unwrap();
+        assert!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
+    })
+    .await
+    .expect("Hub hello should reach the ticket issuer");
+    handle.stop().await;
+    api.begin_shutdown();
+    api.wait_closed().await;
+}

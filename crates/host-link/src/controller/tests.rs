@@ -212,6 +212,7 @@ impl Center for Mock {
         let hub_ticket = seen.register_hub_ticket.map(|prefix| crate::HubTicket {
             ticket: format!("{prefix}-{}", seen.registrations.len()).into(),
             features: seen.hub_features.clone(),
+            center_url: None,
             expires_at: Some(tokio::time::Instant::now() + Duration::from_secs(30)),
         });
         Ok(Session {

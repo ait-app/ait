@@ -1,3 +1,5 @@
+mod entry;
+
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -14,7 +16,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub(crate) struct HttpCenter {
     client: reqwest::Client,
-    base: String,
+    entry: entry::Entry,
     pub(super) hostname: Option<String>,
 }
 
@@ -49,7 +51,7 @@ impl HttpCenter {
             .map_err(|_| Error::Unavailable)?;
         Ok(Self {
             client,
-            base: host_link::center(),
+            entry: entry::Entry::official(host_link::center_override()),
             hostname: super::system_hostname(),
         })
     }
@@ -57,8 +59,26 @@ impl HttpCenter {
     #[cfg(test)]
     pub(super) fn test_center(base: String) -> Self {
         let mut center = Self::new().expect("build test HTTP client");
-        center.base = base;
+        center.entry = entry::Entry::official(Some(base));
         center
+    }
+
+    /// Returns the selected official entry for the redacted runtime status, if resolved.
+    pub(super) fn selected_official_entry(&self) -> Option<&str> {
+        self.entry
+            .selected()
+            .filter(|base| matches!(*base, host_link::CENTER | entry::GLOBAL_CENTER))
+    }
+
+    /// Returns the built-in approval page for the selected entry, never a remote-supplied URL.
+    /// Returns `Unavailable` if neither official entry responds.
+    pub(super) async fn approval_uri(&self) -> Result<&'static str, Error> {
+        let base = self.entry.resolve(&self.client).await?;
+        Ok(if base == entry::GLOBAL_CENTER {
+            entry::GLOBAL_VERIFICATION_URI
+        } else {
+            VERIFICATION_URI
+        })
     }
 
     async fn request(
@@ -68,9 +88,10 @@ impl HttpCenter {
         bearer: Option<&SecretString>,
         body: Value,
     ) -> Result<Value, Error> {
+        let base = self.entry.resolve(&self.client).await?;
         let mut request = self
             .client
-            .request(method, format!("{}{path}", self.base))
+            .request(method, format!("{base}{path}"))
             .json(&body);
         if let Some(token) = bearer {
             request = request.bearer_auth(token.expose_secret());
@@ -128,10 +149,9 @@ impl HttpCenter {
                 body,
             )
             .await?;
-        Ok(HubTicket::new(
-            ticket(&value, "hub_ticket")?,
-            hub_features(&value)?,
-        ))
+        let mut ticket = HubTicket::new(ticket(&value, "hub_ticket")?, hub_features(&value)?);
+        ticket.center_url = self.entry.selected().map(str::to_owned);
+        Ok(ticket)
     }
 
     pub(crate) async fn authorize(&self, machine: &Machine) -> Result<Authorization, Error> {
@@ -147,8 +167,10 @@ impl HttpCenter {
         let user = value["user_code"].as_str().ok_or(Error::Protocol)?;
         let expires = value["expires_in"].as_u64().ok_or(Error::Protocol)?;
         let interval = value["interval"].as_u64().ok_or(Error::Protocol)?;
-        if value["verification_uri"] != VERIFICATION_URI
-            || code.len() != 64
+        if !matches!(
+            value["verification_uri"].as_str(),
+            Some(VERIFICATION_URI | entry::GLOBAL_VERIFICATION_URI)
+        ) || code.len() != 64
             || !code.bytes().all(|b| b.is_ascii_hexdigit())
             || user.len() != 14
             || !user.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')
@@ -187,7 +209,11 @@ fn hub_features(value: &Value) -> Result<Vec<String>, Error> {
 
 /// The serve ticket a registration may carry. It is only used for a `serve` Hub
 /// endpoint at the protocol path, within its stated lifetime.
-fn registration_ticket(value: &Value, features: &[String]) -> Option<HubTicket> {
+fn registration_ticket(
+    value: &Value,
+    features: &[String],
+    center: Option<&str>,
+) -> Option<HubTicket> {
     if value["hub_ep"] != "serve" || value["hub_path"] != "/v1/hub" {
         return None;
     }
@@ -195,6 +221,7 @@ fn registration_ticket(value: &Value, features: &[String]) -> Option<HubTicket> 
     Some(HubTicket {
         ticket: ticket(value, "hub_ticket").ok()?,
         features: features.to_vec(),
+        center_url: center.map(str::to_owned),
         expires_at: Some(tokio::time::Instant::now() + Duration::from_secs(lifetime)),
     })
 }
@@ -326,7 +353,7 @@ impl Center for HttpCenter {
             id,
             lease_until: Utc::now() + chrono::Duration::seconds(lease),
             renew_after_seconds: renew,
-            hub_ticket: registration_ticket(&value, &hub_features),
+            hub_ticket: registration_ticket(&value, &hub_features, self.entry.selected()),
         })
     }
     async fn renew(&self, tokens: &Tokens, session: Uuid) -> Result<DateTime<Utc>, Error> {

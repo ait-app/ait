@@ -1,3 +1,5 @@
+use host_link::VERIFICATION_URI;
+
 use super::*;
 use clap::Parser;
 

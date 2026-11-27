@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use chrono::Utc;
-use host_link::{Center, CredentialStore, Error, Machine, Pending, State, VERIFICATION_URI};
+use host_link::{Center, CredentialStore, Error, Machine, Pending, State};
 use secrecy::{ExposeSecret, SecretString};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -169,7 +169,7 @@ async fn authenticate(
         }
     });
     store.save(state)?;
-    show_approval(state)?;
+    show_approval(center, state).await?;
     complete_login(center, store, state, cancel).await?;
     Ok(())
 }
@@ -199,7 +199,7 @@ async fn restore_login(
         state.pending,
         Some(Pending::Web { .. } | Pending::Enrollment { .. })
     ) {
-        show_approval(state).map_err(|_| Error::Unavailable)?;
+        show_approval(center, state).await?;
         complete_login(center, store, state, cancel).await?;
         return Ok(Restored::Authorized);
     }
@@ -215,12 +215,14 @@ async fn restore_login(
     Ok(Restored::ExpiredAccess)
 }
 
-fn show_approval(state: &State) -> std::io::Result<()> {
+async fn show_approval(center: &HttpCenter, state: &State) -> Result<(), Error> {
     if let Some(Pending::Web { user_code, .. }) = &state.pending {
+        let verification_uri = center.approval_uri().await?;
         writeln!(
             std::io::stdout(),
-            "Open {VERIFICATION_URI}\nEnter code: {user_code}"
-        )?;
+            "Open {verification_uri}\nEnter code: {user_code}"
+        )
+        .map_err(|_| Error::Unavailable)?;
     }
     Ok(())
 }
@@ -288,6 +290,8 @@ enum Phase {
 struct RuntimeSnapshot {
     phase: Phase,
     binding: Option<host_link::Binding>,
+    #[serde(default)]
+    center: Option<String>,
     instance_id: Uuid,
     pid: u32,
     updated_at: chrono::DateTime<Utc>,
@@ -306,7 +310,14 @@ pub(super) fn status(data: &Path, json_output: bool) -> anyhow::Result<()> {
     let alive = runtime
         .as_ref()
         .and_then(|snapshot| process_alive(snapshot.pid));
-    let value = serde_json::json!({"mode":"daemon", "center":host_link::center(),
+    let center = host_link::center_override()
+        .or_else(|| {
+            runtime
+                .as_ref()
+                .and_then(|snapshot| snapshot.center.clone())
+        })
+        .unwrap_or_else(|| host_link::CENTER.to_owned());
+    let value = serde_json::json!({"mode":"daemon", "center":center,
         "server_id":server_id, "credentials_present":Store::credentials_present(data)?,
         "runtime_snapshot":runtime, "runtime_process_alive":alive});
     if json_output {
@@ -396,6 +407,7 @@ mod tests;
 #[derive(Debug, Clone)]
 pub(super) struct StatusRelay {
     inner: api::managed_relay::ManagedRelayHandle,
+    center: HttpCenter,
     directory: std::path::PathBuf,
     instance: Arc<InstanceLease>,
     revision: Arc<AtomicU64>,
@@ -409,11 +421,13 @@ impl StatusRelay {
         inner: api::managed_relay::ManagedRelayHandle,
         data: &Path,
         instance: Arc<InstanceLease>,
+        center: HttpCenter,
     ) -> Self {
         let directory = data.join("device");
         remove_stale_snapshots(&directory);
         Self {
             inner,
+            center,
             directory,
             instance,
             revision: Arc::new(AtomicU64::new(0)),
@@ -447,6 +461,7 @@ impl host_link::ManagedRelay for StatusRelay {
     async fn report(&self, phase: &'static str, binding: Option<&host_link::Binding>) {
         self.inner.report(phase, binding).await;
         let value = serde_json::json!({"mode":"managed", "phase":phase, "binding":binding,
+            "center": self.center.selected_official_entry(),
             "instance_id":self.instance.instance_id,"pid":std::process::id(),"updated_at":Utc::now()});
         let snapshot = self.clone();
         let revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;

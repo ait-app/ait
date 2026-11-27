@@ -198,8 +198,9 @@ Hub feature 协商与旧版本兼容见
 [ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)。
 中心拆成多个数据面时，客户端经可选 feature `redirect` 为其它数据面的 Host 另建链路，见
 [ADR-314](../decisions/clients/adr-314-hub-cross-dp-routing.md)与[连接规格](connection.md#在线连接hub)。
-官方服务的账号与 Host 身份跨入口共享，入口偏好由原生客户端持有，见
-[ADR-318](../decisions/clients/adr-318-official-service-entry.md)。
+官方服务的账号与 Host 身份跨入口共享。原生客户端持有账号入口偏好，daemon 按本机出口自主选路，见
+[ADR-318](../decisions/clients/adr-318-official-service-entry.md)和
+[ADR-319](../decisions/daemon/adr-319-daemon-official-entry.md)。
 单连接将客户端活动心跳作为可丢弃的周期快照，worker 队列满时仍保留业务连接。
 订阅清理拥有独立准入，主机采样独占一个受追踪任务并发布缓存，均不争抢普通业务容量。
 SDK 负责按连接代次退避清理、限制订阅恢复并发，并持有审批的待确认状态，禁止未知结果重发。

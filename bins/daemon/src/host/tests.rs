@@ -93,18 +93,15 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
         )
         .unwrap();
         let (store, state) = crate::device::load_state(root.path(), instance.server_id).unwrap();
+        let center = crate::device::HttpCenter::new().unwrap();
         let relay = crate::device::StatusRelay::new(
             api.claim_managed_relay().unwrap(),
             root.path(),
             instance.clone(),
+            center.clone(),
         );
-        let managed = host_link::service::Service::new(
-            crate::device::HttpCenter::new().unwrap(),
-            store,
-            relay,
-            state,
-            instance.instance_id,
-        );
+        let managed =
+            host_link::service::Service::new(center, store, relay, state, instance.instance_id);
         api.set_publication_control(managed.handle()).unwrap();
         let (stop, signal) = tokio::sync::oneshot::channel();
         let publication = hub::start(&api, sources.clone(), root.path(), instance.clone(), false)

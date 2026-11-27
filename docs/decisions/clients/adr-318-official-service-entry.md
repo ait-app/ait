@@ -14,6 +14,8 @@ paths:
 
 # ADR-318：官方服务的入口推荐与账号身份
 
+后续修订：[ADR-319](../daemon/adr-319-daemon-official-entry.md) 将入口自动选择扩展到 daemon。
+
 ## 背景
 
 大陆和海外节点使用不同域名，账号、设备和 Host 由同一个控制面管理。客户端按域名保存入口和 Host 绑定，

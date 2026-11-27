@@ -4,6 +4,7 @@
 
 - Desktop and mobile recommend an official service entry by IP. Choose Mainland China, Global,
   Automatic, or a custom URL from sign-in or Online Service settings.
+  The daemon also detects an official entry for machine authorization and Hub connections.
 
 - Start an Oh My Pi agent directly with `/goal`. Goal startup now reserves execution until
   the native run begins, Stop pauses pending goals, and native token budget limits display

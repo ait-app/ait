@@ -210,18 +210,15 @@ impl Server {
             data_dir.join("hub/shares.json"),
         )))?;
         let (store, state) = device;
+        let center = crate::device::HttpCenter::new()?;
         let relay = crate::device::StatusRelay::new(
             api.claim_managed_relay()?,
             &data_dir,
             instance.clone(),
+            center.clone(),
         );
-        let managed = host_link::service::Service::new(
-            crate::device::HttpCenter::new()?,
-            store,
-            relay,
-            state,
-            instance.instance_id,
-        );
+        let managed =
+            host_link::service::Service::new(center, store, relay, state, instance.instance_id);
         api.set_publication_control(managed.handle())?;
         let publication = hub::start(
             &api,

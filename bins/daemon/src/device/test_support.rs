@@ -60,12 +60,12 @@ async fn handler(
     State(state): State<Arc<Mutex<Seen>>>,
     uri: axum::http::Uri,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    body: Option<Json<Value>>,
 ) -> impl IntoResponse {
     let mut seen = state.lock().unwrap();
     seen.calls.push((
         uri.path().to_owned(),
-        body,
+        body.map_or(Value::Null, |Json(value)| value),
         headers
             .get("authorization")
             .map(|v| v.to_str().unwrap().to_owned()),

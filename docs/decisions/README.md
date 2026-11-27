@@ -38,6 +38,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-319：daemon 自主选择官方入口](daemon/adr-319-daemon-official-entry.md)
 - [ADR-315：中心授权直接分享的接收人](daemon/adr-315-direct-share-recipients.md)（经 [ADR-316](clients/adr-316-ait-share-invitations.md) 修订）
 - [ADR-313：连接清理独立准入、采样隔离与有界恢复](daemon/adr-313-connection-cleanup-and-sampling.md)
 - [ADR-305：跨主机 MCP——peer 会话与对端调用者](daemon/adr-305-cross-host-mcp-peer-sessions.md)
@@ -49,7 +50,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)（经 [ADR-313](daemon/adr-313-connection-cleanup-and-sampling.md) 修订）
 - [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)（经 [ADR-315](daemon/adr-315-direct-share-recipients.md) 修订）
 - [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
-- [ADR-201：daemon 统一拥有节点发布与机器授权](daemon/adr-201-daemon-owned-publication.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
+- [ADR-201：daemon 统一拥有节点发布与机器授权](daemon/adr-201-daemon-owned-publication.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md)、[ADR-319](daemon/adr-319-daemon-official-entry.md) 修订）
 - [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](daemon/adr-200-headless-independent-transports.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-181：Host 向 Hub 发布事件与目录摘要](daemon/adr-181-hub-host-publication.md)
 - [ADR-180：消息 Hub 服务端点（ait-hub-v1）](daemon/adr-180-hub-serve-endpoint.md)（经 [ADR-181](daemon/adr-181-hub-host-publication.md)、[ADR-200](daemon/adr-200-headless-independent-transports.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-204](clients/adr-204-hub-only-online-business-transport.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
@@ -226,7 +227,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 客户端、连接与品牌
 
-- [ADR-318：官方服务的入口推荐与账号身份](clients/adr-318-official-service-entry.md)
+- [ADR-318：官方服务的入口推荐与账号身份](clients/adr-318-official-service-entry.md)（经 [ADR-319](daemon/adr-319-daemon-official-entry.md) 修订）
 - [ADR-317：Workspace 浏览器回到渲染进程 `<webview>`](clients/adr-317-browser-webview-tag.md)
 - [ADR-316：AIT 通过当前账号签发分享邀请](clients/adr-316-ait-share-invitations.md)
 - [ADR-314：Hub 跨数据面路由——`redirect` 与到其它 DP 的链路](clients/adr-314-hub-cross-dp-routing.md)（经 [ADR-318](clients/adr-318-official-service-entry.md) 修订）
@@ -279,7 +280,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)（经 [ADR-175](clients/adr-175-android-play-gradle-release.md)、[ADR-234](clients/adr-234-play-internal-in-release-workflow.md) 修订）
 - [ADR-096：Desktop 内置 daemon 默认同步与手动下线](clients/adr-096-desktop-default-host-sync.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
 - [ADR-094：客户端统一使用 Ait 标准方法名](clients/adr-094-canonical-ait-client-methods.md)（经 [ADR-211](clients/adr-211-sdk-native-daemon-protocol.md) 修订）
-- [ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权](clients/adr-087-headless-device-authorization.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
+- [ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权](clients/adr-087-headless-device-authorization.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-319](daemon/adr-319-daemon-official-entry.md) 修订）
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](clients/adr-086-authing-native-login.md)（经 [ADR-087](clients/adr-087-headless-device-authorization.md)、[ADR-123](clients/adr-123-browser-only-account-login.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
 - [ADR-085：Daemon 同步的稳定节点身份](clients/adr-085-stable-daemon-publication.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
 - [ADR-084：iOS 在线服务账户与主机中继](clients/adr-084-ios-account-relay.md)（经 [ADR-086](clients/adr-086-authing-native-login.md)、[ADR-122](clients/adr-122-persistent-online-service-hosts.md) 修订）
