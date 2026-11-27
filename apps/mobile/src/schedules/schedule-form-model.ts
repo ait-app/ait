@@ -1,4 +1,5 @@
 import type {
+  AgentFeature,
   AgentMode,
   AgentModelDefinition,
   AgentProvider,
@@ -7,6 +8,7 @@ import type {
 import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
+import { applyFeatureValues, pruneFeatureValues } from "@/hooks/feature-preferences";
 import {
   buildSelectableProviderSelectorProviders,
   type ProviderSelectorProvider,
@@ -76,8 +78,23 @@ export interface ScheduleDisclosureState {
   showModelField: boolean;
   showThinkingField: boolean;
   showModeField: boolean;
+  showFeaturesField: boolean;
   showIsolationField: boolean;
   showArchiveOnFinishField: boolean;
+}
+
+/**
+ * The inputs a provider feature listing needs. Features such as a permission
+ * mode are provider-scoped and may change with model, mode or thinking, so all
+ * of them are part of the request.
+ */
+export interface ScheduleFeatureRequest {
+  serverId: string;
+  cwd: string;
+  provider: AgentProvider;
+  model?: string;
+  modeId?: string;
+  thinkingOptionId?: string;
 }
 
 export interface ScheduleProviderSnapshotRequest {
@@ -124,6 +141,14 @@ export interface ScheduleFormState {
   modelSelectorProviders: ProviderSelectorProvider[];
   modeOptions: AgentMode[];
   availableThinkingOptions: NonNullable<AgentModelDefinition["thinkingOptions"]>;
+  /** Feature values the user changed in this form for the selected provider. */
+  featureValues: Record<string, unknown>;
+  /** The selected provider's features, carrying the values the schedule will use. */
+  features: AgentFeature[];
+  featureRequest: ScheduleFeatureRequest | null;
+  featureRequestKey: string | null;
+  /** Feature values the new agent is created with. */
+  submitFeatureValues: Record<string, unknown>;
   archiveOnFinish: boolean;
   isolation: "local" | "worktree";
   effectiveIsolation: "local" | "worktree";
@@ -155,6 +180,11 @@ export interface ScheduleFormModel {
   setModel: (provider: AgentProvider, modelId: string) => void;
   setThinking: (thinkingOptionId: string) => void;
   setSessionMode: (modeId: string) => void;
+  /** Late input: the feature list for one request. Stale keys are ignored. */
+  applyFeatures: (requestKey: string, features: readonly AgentFeature[]) => void;
+  /** Resolve a request whose listing failed; stored values are kept as they are. */
+  applyFeaturesUnavailable: (requestKey: string) => void;
+  setFeatureValue: (featureId: string, value: unknown) => void;
   setName: (value: string) => void;
   setPrompt: (value: string) => void;
   setMaxRuns: (value: string) => void;
@@ -550,6 +580,7 @@ function resolveDisclosure(state: ScheduleFormState): ScheduleDisclosureState {
       showModelField: false,
       showThinkingField: false,
       showModeField: false,
+      showFeaturesField: false,
       showIsolationField: false,
       showArchiveOnFinishField: false,
     };
@@ -567,6 +598,7 @@ function resolveDisclosure(state: ScheduleFormState): ScheduleDisclosureState {
     showThinkingField:
       showModelField && hasSelectedModel && state.availableThinkingOptions.length > 0,
     showModeField: showModelField && hasSelectedProvider && state.modeOptions.length > 0,
+    showFeaturesField: showModelField && hasSelectedProvider && state.features.length > 0,
     showIsolationField: !state.workspace && hasProject && state.canUseWorktreeIsolation,
     showArchiveOnFinishField:
       hasProject &&
@@ -610,11 +642,94 @@ function resolveCanSubmit(state: ScheduleFormState): boolean {
   });
 }
 
+/**
+ * What the feature fields derive from besides form state: the values the form
+ * starts from for the selected provider, and the latest feature listing.
+ * `resolvedFeatures` is null while no listing has answered `resolvedKey`, or
+ * when that listing failed.
+ */
+interface ScheduleFeatureContext {
+  baseValues: Record<string, unknown>;
+  resolvedKey: string | null;
+  resolvedFeatures: readonly AgentFeature[] | null;
+}
+
+const EMPTY_FEATURE_CONTEXT: ScheduleFeatureContext = {
+  baseValues: {},
+  resolvedKey: null,
+  resolvedFeatures: null,
+};
+
+function buildFeatureRequest(state: ScheduleFormState): ScheduleFeatureRequest | null {
+  const cwd = state.workingDir.trim();
+  if (
+    state.targetKind !== "new-agent" ||
+    !state.selectedServerId ||
+    !state.selectedProvider ||
+    !cwd
+  ) {
+    return null;
+  }
+  const model = state.selectedModel.trim();
+  const modeId = state.selectedMode.trim();
+  const thinkingOptionId = state.selectedThinkingOptionId.trim();
+  return {
+    serverId: state.selectedServerId,
+    cwd,
+    provider: state.selectedProvider,
+    ...(model ? { model } : {}),
+    ...(modeId ? { modeId } : {}),
+    ...(thinkingOptionId ? { thinkingOptionId } : {}),
+  };
+}
+
+/**
+ * A JSON tuple, not a delimiter join: the ids are opaque strings, and a join
+ * would let two different requests collide onto one key.
+ */
+export function buildScheduleFeatureRequestKey(
+  request: ScheduleFeatureRequest | null,
+): string | null {
+  if (!request) {
+    return null;
+  }
+  return JSON.stringify([
+    request.serverId,
+    request.cwd,
+    request.provider,
+    request.model ?? "",
+    request.modeId ?? "",
+    request.thinkingOptionId ?? "",
+  ]);
+}
+
+/**
+ * Providers reject feature ids they do not offer, so values are pruned to the
+ * current listing. Until a listing answers, create submits only what the user
+ * chose here and edit keeps the stored values; edit also keeps them when the
+ * listing is empty, since a provider that reports nothing cannot prove them stale.
+ */
+function resolveSubmitFeatureValues(input: {
+  mode: ScheduleFormState["mode"];
+  localValues: Record<string, unknown>;
+  effectiveValues: Record<string, unknown>;
+  resolvedFeatures: readonly AgentFeature[] | null;
+}): Record<string, unknown> {
+  if (!input.resolvedFeatures) {
+    return input.mode === "edit" ? input.effectiveValues : input.localValues;
+  }
+  if (input.mode === "edit" && input.resolvedFeatures.length === 0) {
+    return input.effectiveValues;
+  }
+  return pruneFeatureValues(input.effectiveValues, [...input.resolvedFeatures]);
+}
+
 function updateDerivedState(input: {
   state: ScheduleFormState;
   hosts: readonly ScheduleFormHost[];
   targets: readonly ScheduleProjectTarget[];
   providerEntries: readonly ProviderSnapshotEntry[];
+  featureContext: ScheduleFeatureContext;
 }): ScheduleFormState {
   const modeOptions = resolveModeOptions(input.providerEntries, input.state.selectedProvider);
   const availableThinkingOptions = resolveThinkingOptions(
@@ -648,8 +763,27 @@ function updateDerivedState(input: {
     serverId: input.state.selectedServerId,
     cwd: input.state.workingDir,
   });
+  const featureRequest = buildFeatureRequest(input.state);
+  const featureRequestKey = buildScheduleFeatureRequestKey(featureRequest);
+  const resolvedFeatures =
+    featureRequestKey !== null && featureRequestKey === input.featureContext.resolvedKey
+      ? input.featureContext.resolvedFeatures
+      : null;
+  const effectiveFeatureValues = {
+    ...input.featureContext.baseValues,
+    ...input.state.featureValues,
+  };
   const nextState: ScheduleFormState = {
     ...input.state,
+    features: applyFeatureValues([...(resolvedFeatures ?? [])], effectiveFeatureValues),
+    featureRequest,
+    featureRequestKey,
+    submitFeatureValues: resolveSubmitFeatureValues({
+      mode: input.state.mode,
+      localValues: input.state.featureValues,
+      effectiveValues: effectiveFeatureValues,
+      resolvedFeatures,
+    }),
     hosts: [...input.hosts],
     projectOptions: buildProjectOptions(input.targets, input.state.selectedServerId),
     projectDisplay: resolveProjectDisplay({
@@ -743,6 +877,11 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
     modelSelectorProviders: [],
     modeOptions: [],
     availableThinkingOptions: [],
+    featureValues: {},
+    features: [],
+    featureRequest: null,
+    featureRequestKey: null,
+    submitFeatureValues: {},
     archiveOnFinish: config?.archiveOnFinish ?? true,
     isolation: resolveInitialIsolation({ config, preferences: snapshot.defaults.preferences }),
     effectiveIsolation: "local",
@@ -756,6 +895,7 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
       showModelField: false,
       showThinkingField: false,
       showModeField: false,
+      showFeaturesField: false,
       showIsolationField: false,
       showArchiveOnFinishField: false,
     },
@@ -767,6 +907,10 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
     hosts: snapshot.hosts,
     targets: snapshot.defaults.projectTargets,
     providerEntries: [],
+    featureContext: {
+      ...EMPTY_FEATURE_CONTEXT,
+      baseValues: config?.featureValues ?? {},
+    },
   });
 }
 
@@ -924,17 +1068,40 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
   let providerEntries: ProviderSnapshotEntry[] = [];
   let userModified = { ...INITIAL_USER_MODIFIED, isolation: false };
   const timezone = snapshot.defaults.timezone ?? DEFAULT_TIMEZONE;
+  let resolvedFeatureKey: string | null = null;
+  let resolvedFeatures: readonly AgentFeature[] | null = null;
   let state = buildInitialState(snapshot);
+
+  // An edited schedule starts from its stored values for its own provider; a
+  // new one starts from the values last chosen for the provider.
+  function baseFeatureValues(provider: AgentProvider | null): Record<string, unknown> {
+    if (!provider) {
+      return {};
+    }
+    if (snapshot.mode === "edit") {
+      return initialAgentConfig?.provider === provider
+        ? (initialAgentConfig.featureValues ?? {})
+        : {};
+    }
+    return preferences?.providerPreferences?.[provider]?.featureValues ?? {};
+  }
 
   function publish(nextState: ScheduleFormState): void {
     if (closed) {
       return;
     }
+    // A feature id from one provider means nothing to another.
+    const providerChanged = nextState.selectedProvider !== state.selectedProvider;
     state = updateDerivedState({
-      state: nextState,
+      state: providerChanged ? { ...nextState, featureValues: {} } : nextState,
       hosts,
       targets: projectTargets,
       providerEntries,
+      featureContext: {
+        baseValues: baseFeatureValues(nextState.selectedProvider),
+        resolvedKey: resolvedFeatureKey,
+        resolvedFeatures,
+      },
     });
     for (const listener of listeners) {
       listener();
@@ -1190,6 +1357,28 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       }
       userModified = { ...userModified, modeId: true };
       publish({ ...state, selectedMode: modeId });
+    },
+    applyFeatures(requestKey, features) {
+      if (closed || requestKey !== state.featureRequestKey) {
+        return;
+      }
+      resolvedFeatureKey = requestKey;
+      resolvedFeatures = [...features];
+      publish({ ...state, featureValues: pruneFeatureValues(state.featureValues, [...features]) });
+    },
+    applyFeaturesUnavailable(requestKey) {
+      if (closed || requestKey !== state.featureRequestKey) {
+        return;
+      }
+      resolvedFeatureKey = requestKey;
+      resolvedFeatures = null;
+      publish(state);
+    },
+    setFeatureValue(featureId, value) {
+      if (closed || Object.is(state.featureValues[featureId], value)) {
+        return;
+      }
+      publish({ ...state, featureValues: { ...state.featureValues, [featureId]: value } });
     },
     setName(value) {
       publish({ ...state, name: value });

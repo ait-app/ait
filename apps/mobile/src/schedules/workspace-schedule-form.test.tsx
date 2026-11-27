@@ -8,7 +8,7 @@ import {
   ScheduleFormSheet,
   WorkspaceScheduleForm,
 } from "@/components/schedules/schedule-form-sheet";
-import type { ScheduleFormModel } from "./schedule-form-model";
+import type { ScheduleFormModel, ScheduleFormState } from "./schedule-form-model";
 import type { ProjectSummary } from "@/utils/projects";
 import { i18n } from "@/i18n/i18next";
 import type { HostChoice } from "@/hosts/host-groups";
@@ -126,6 +126,28 @@ vi.mock("@/schedules/use-schedule-form-provider-snapshot", () => ({
     return { isLoading: false, isFetching: false, isRefreshing: false };
   },
 }));
+vi.mock("@/schedules/use-schedule-form-features", () => ({
+  useScheduleFormFeatures: (model: ScheduleFormModel, state: ScheduleFormState) => {
+    const requestKey = state.featureRequestKey;
+    useEffect(() => {
+      if (!requestKey) return;
+      model.applyFeatures(requestKey, [
+        {
+          type: "select",
+          id: "permissionMode",
+          label: "Permission",
+          value: "auto",
+          options: [
+            { id: "default", label: "Default" },
+            { id: "auto", label: "Auto" },
+            { id: "bypassPermissions", label: "Bypass permissions" },
+          ],
+        },
+      ]);
+    }, [model, requestKey]);
+  },
+}));
+vi.mock("@/components/ui/switch", () => ({ Switch: () => null }));
 vi.mock("@/components/combined-model-selector", () => ({
   CombinedModelSelector: ({
     onSelect,
@@ -359,6 +381,36 @@ describe("workspace schedule form", () => {
       }),
     );
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("submits the permission a provider offers as a feature", async () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    chooseModel();
+    showSection("execution");
+    fireEvent.change(screen.getByTestId("schedule-feature-trigger-permissionMode"), {
+      target: { value: "bypassPermissions" },
+    });
+    fireEvent.change(getField("Prompt"), { target: { value: "Check this workspace" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+
+    await waitFor(() => expect(createSchedule).toHaveBeenCalledOnce());
+    expect(createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: {
+          type: "new-agent",
+          config: expect.objectContaining({
+            provider: "mock",
+            featureValues: { permissionMode: "bypassPermissions" },
+          }),
+        },
+      }),
+    );
   });
 
   it("leaves the new-workspace isolation preference alone when it submits", async () => {
