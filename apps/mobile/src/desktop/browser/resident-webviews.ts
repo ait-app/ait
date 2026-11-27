@@ -1,7 +1,5 @@
 import {
   getDesktopHost,
-  type DesktopBrowserViewBounds,
-  type DesktopBrowserViewEvent,
   type DesktopAttachedBrowserRegistration,
   type DesktopBrowserBridge,
 } from "@/desktop/host";
@@ -22,35 +20,7 @@ const residentWebviewSizesByBrowserId = new Map<string, { width: number; height:
 interface BrowserWebviewElement extends HTMLElement {
   src: string;
   getWebContentsId(): number;
-  canGoBack?: () => boolean;
-  canGoForward?: () => boolean;
-  goBack?: () => void;
-  goForward?: () => void;
-  reload?: () => void;
-  stop?: () => void;
-  loadURL?: (url: string) => Promise<void>;
-  getURL?: () => string;
-  isLoading?: () => boolean;
-  executeJavaScript?: (code: string) => Promise<unknown>;
 }
-
-interface BrowserViewProxyState {
-  browserId: string;
-  workspaceId: string;
-  url: string;
-  loading: boolean;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  destroyed: boolean;
-  unsubscribe?: () => void;
-  unsubscribePromise?: Promise<() => void>;
-}
-
-const BROWSER_VIEW_PROXY = Symbol("browser-view-proxy");
-
-type BrowserViewProxyElement = BrowserWebviewElement & {
-  [BROWSER_VIEW_PROXY]?: BrowserViewProxyState;
-};
 
 interface BrowserWebviewIdentity {
   browserId: string;
@@ -82,151 +52,6 @@ function getBrowserBridge(override?: BrowserWebviewProfileHost): BrowserWebviewP
     throw new Error("Electron browser profile bridge is unavailable");
   }
   return browser;
-}
-
-function getNativeBrowserBridge(): DesktopBrowserBridge | null {
-  const browser = getDesktopHost()?.browser;
-  return browser && typeof browser.createView === "function" ? browser : null;
-}
-
-function dispatchBrowserViewEvent(
-  element: BrowserViewProxyElement,
-  event: DesktopBrowserViewEvent,
-): void {
-  const browserEvent = new Event(event.type);
-  for (const [key, value] of Object.entries(event)) {
-    if (key === "browserId" || value === undefined) {
-      continue;
-    }
-    Object.defineProperty(browserEvent, key, { configurable: true, enumerable: true, value });
-  }
-  element.dispatchEvent(browserEvent);
-}
-
-function attachNativeBrowserView(
-  element: BrowserViewProxyElement,
-  input: BrowserWebviewIdentity & { initialUrl: string; profilePartition: string },
-): void {
-  const browser = getNativeBrowserBridge();
-  if (!browser?.createView) {
-    return;
-  }
-  const state: BrowserViewProxyState = {
-    browserId: input.browserId,
-    workspaceId: input.workspaceId,
-    url: input.initialUrl,
-    loading: false,
-    canGoBack: false,
-    canGoForward: false,
-    destroyed: false,
-  };
-  element[BROWSER_VIEW_PROXY] = state;
-
-  const handleEvent = (payload: unknown) => {
-    if (!payload || typeof payload !== "object") {
-      return;
-    }
-    const event = payload as Partial<DesktopBrowserViewEvent>;
-    if (event.browserId !== state.browserId || typeof event.type !== "string") {
-      return;
-    }
-    if (event.type === "did-start-loading") {
-      state.loading = true;
-    } else if (event.type === "did-stop-loading" || event.type === "did-fail-load") {
-      state.loading = false;
-    } else if (
-      (event.type === "did-navigate" || event.type === "did-navigate-in-page") &&
-      typeof event.url === "string"
-    ) {
-      state.url = event.url;
-    } else if (event.type === "destroyed") {
-      state.destroyed = true;
-      state.unsubscribe?.();
-    }
-    if (typeof event.canGoBack === "boolean") {
-      state.canGoBack = event.canGoBack;
-    }
-    if (typeof event.canGoForward === "boolean") {
-      state.canGoForward = event.canGoForward;
-    }
-    if (typeof event.isLoading === "boolean") {
-      state.loading = event.isLoading;
-    }
-    dispatchBrowserViewEvent(element, event as DesktopBrowserViewEvent);
-  };
-  const events = getDesktopHost()?.events;
-  const unsubscribe = events?.on?.("browser-view", handleEvent);
-  state.unsubscribePromise = unsubscribe ? Promise.resolve(unsubscribe) : undefined;
-  void state.unsubscribePromise?.then((unsubscribe) => {
-    state.unsubscribe = unsubscribe;
-    if (state.destroyed) {
-      unsubscribe();
-    }
-  });
-
-  const command = (name: "focus" | "go-back" | "go-forward" | "reload" | "stop") => {
-    void browser.commandView?.(state.browserId, name);
-  };
-  element.src = input.initialUrl;
-  element.getWebContentsId = () => -1;
-  element.canGoBack = () => state.canGoBack;
-  element.canGoForward = () => state.canGoForward;
-  element.goBack = () => command("go-back");
-  element.goForward = () => command("go-forward");
-  element.reload = () => command("reload");
-  element.stop = () => command("stop");
-  element.loadURL = (url) => {
-    state.url = url;
-    return browser.navigateView?.(state.browserId, url) ?? Promise.resolve();
-  };
-  element.getURL = () => state.url;
-  element.isLoading = () => state.loading;
-  element.executeJavaScript = (code) =>
-    browser.executeViewJavaScript?.(state.browserId, code) ?? Promise.resolve(null);
-  element.focus = () => command("focus");
-
-  void browser
-    .createView({
-      browserId: input.browserId,
-      workspaceId: input.workspaceId,
-      profilePartition: input.profilePartition,
-      initialUrl: input.initialUrl,
-    })
-    .catch((error: unknown) => {
-      state.loading = false;
-      dispatchBrowserViewEvent(element, {
-        browserId: state.browserId,
-        type: "did-fail-load",
-        errorCode: -2,
-        errorDescription: error instanceof Error ? error.message : "Failed to create browser view",
-        validatedURL: input.initialUrl,
-        isMainFrame: true,
-      });
-    });
-}
-
-function nativeBrowserViewBounds(
-  element: BrowserViewProxyElement,
-): ((bounds: DesktopBrowserViewBounds) => void) | null {
-  const browser = getNativeBrowserBridge();
-  const state = element[BROWSER_VIEW_PROXY];
-  if (!browser?.setViewBounds || !state) {
-    return null;
-  }
-  return (bounds) => {
-    void browser.setViewBounds?.(state.browserId, bounds);
-  };
-}
-
-function destroyNativeBrowserView(element: BrowserViewProxyElement): void {
-  const state = element[BROWSER_VIEW_PROXY];
-  if (!state || state.destroyed) {
-    return;
-  }
-  state.destroyed = true;
-  state.unsubscribe?.();
-  void state.unsubscribePromise?.then((unsubscribe) => unsubscribe());
-  void getNativeBrowserBridge()?.destroyView?.(state.browserId);
 }
 
 function registerBrowserWhenAttached(
@@ -397,11 +222,6 @@ export function applyInactiveBrowserWebviewViewport(
     rememberBrowserWebviewSize({ browserId, width: viewport.width, height: viewport.height });
   }
   applyResidentWebviewStyle(webview, trimNonEmpty(browserId));
-  nativeBrowserViewBounds(webview as BrowserViewProxyElement)?.({
-    container: { x: 0, y: 0, width: 1, height: 1 },
-    contents: { x: 0, y: 0, width: 1, height: 1 },
-    visible: false,
-  });
 }
 
 export function presentBrowserWebview(
@@ -461,21 +281,6 @@ export function presentBrowserWebview(
   webview.style.position = "absolute";
   webview.style.left = `${Math.round(anchorBounds.left - surfaceLeft)}px`;
   webview.style.top = `${Math.round(anchorBounds.top - surfaceTop)}px`;
-  nativeBrowserViewBounds(webview as BrowserViewProxyElement)?.({
-    container: {
-      x: surfaceLeft,
-      y: surfaceTop,
-      width: Math.max(1, surfaceRight - surfaceLeft),
-      height: Math.max(1, surfaceBottom - surfaceTop),
-    },
-    contents: {
-      x: Math.round(anchorBounds.left - surfaceLeft),
-      y: Math.round(anchorBounds.top - surfaceTop),
-      width: Math.max(1, viewport.mode === "responsive" ? anchorBounds.width : viewport.width),
-      height: Math.max(1, viewport.mode === "responsive" ? anchorBounds.height : viewport.height),
-    },
-    visible: hasVisibleArea,
-  });
 }
 
 export function prepareBrowserWebview(
@@ -493,24 +298,10 @@ export function prepareBrowserWebview(
   webview.setAttribute("allowpopups", "true");
   webview.setAttribute("spellcheck", "false");
   webview.setAttribute("autosize", "on");
-  const nativeBrowser = getNativeBrowserBridge();
-  if (nativeBrowser) {
-    attachNativeBrowserView(webview as BrowserViewProxyElement, {
-      browserId: input.browserId,
-      workspaceId: input.workspaceId,
-      initialUrl: input.initialUrl ?? "about:blank",
-      profilePartition: browser.profilePartition,
-    });
-    return;
-  }
   if (input.initialUrl) {
     (webview as BrowserWebviewElement).src = input.initialUrl;
   }
   registerBrowserWhenAttached(webview as BrowserWebviewElement, input, browser);
-}
-
-export function createBrowserWebviewElement(ownerDocument: Document): HTMLElement {
-  return ownerDocument.createElement(getNativeBrowserBridge() ? "div" : "webview");
 }
 
 export function ensureResidentBrowserWebview(input: {
@@ -542,7 +333,7 @@ export function ensureResidentBrowserWebview(input: {
     return existing;
   }
 
-  const webview = createBrowserWebviewElement(ownerDocument) as BrowserWebviewElement;
+  const webview = ownerDocument.createElement("webview") as BrowserWebviewElement;
   prepareBrowserWebview(webview, {
     browserId,
     workspaceId: input.workspaceId,
@@ -593,11 +384,6 @@ export function releaseResidentBrowserWebview(browserId: string, webview: HTMLEl
   if (webview.parentElement !== surface) {
     surface.appendChild(webview);
   }
-  nativeBrowserViewBounds(webview as BrowserViewProxyElement)?.({
-    container: { x: 0, y: 0, width: 1, height: 1 },
-    contents: { x: 0, y: 0, width: 1, height: 1 },
-    visible: false,
-  });
 }
 
 export function resizeResidentBrowserWebview(input: {
@@ -634,16 +420,12 @@ export function removeResidentBrowserWebview(browserId: string): void {
   residentWebviewsByBrowserId.delete(normalizedBrowserId);
   residentSurfacesByBrowserId.delete(normalizedBrowserId);
   residentWebviewSizesByBrowserId.delete(normalizedBrowserId);
-  if (resident) {
-    destroyNativeBrowserView(resident as BrowserViewProxyElement);
-    resident.remove();
-  }
+  resident?.remove();
   surface?.remove();
 }
 
 export function clearResidentBrowserWebviewsForTests(): void {
   for (const webview of residentWebviewsByBrowserId.values()) {
-    destroyNativeBrowserView(webview as BrowserViewProxyElement);
     webview.remove();
   }
   residentWebviewsByBrowserId.clear();

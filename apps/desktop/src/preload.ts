@@ -30,14 +30,6 @@ interface AttachedBrowserRegistration {
   webContentsId: number;
 }
 
-interface BrowserViewBounds {
-  container: { x: number; y: number; width: number; height: number };
-  contents: { x: number; y: number; width: number; height: number };
-  visible: boolean;
-}
-
-type BrowserViewCommand = "focus" | "go-back" | "go-forward" | "reload" | "stop";
-
 contextBridge.exposeInMainWorld("paseoDesktop", {
   platform: process.platform,
   windowChromeMode: readWindowChromeMode(),
@@ -135,21 +127,6 @@ contextBridge.exposeInMainWorld("paseoDesktop", {
     setShortcutPolicy: (input: BrowserKeyboardPolicy) =>
       ipcRenderer.invoke("paseo:browser:set-shortcut-policy", input),
     profilePartition: PASEO_BROWSER_PROFILE_PARTITION,
-    createView: (input: {
-      browserId: string;
-      workspaceId: string;
-      profilePartition: string;
-      initialUrl: string;
-    }) => ipcRenderer.invoke("paseo:browser:create-view", input),
-    destroyView: (browserId: string) => ipcRenderer.invoke("paseo:browser:destroy-view", browserId),
-    setViewBounds: (browserId: string, bounds: BrowserViewBounds) =>
-      ipcRenderer.invoke("paseo:browser:set-view-bounds", browserId, bounds),
-    navigateView: (browserId: string, url: string) =>
-      ipcRenderer.invoke("paseo:browser:navigate-view", browserId, url),
-    commandView: (browserId: string, command: BrowserViewCommand) =>
-      ipcRenderer.invoke("paseo:browser:command-view", browserId, command),
-    executeViewJavaScript: (browserId: string, code: string) =>
-      ipcRenderer.invoke("paseo:browser:execute-view-javascript", browserId, code),
     registerAttachedBrowser: (input: AttachedBrowserRegistration) =>
       ipcRenderer.invoke("paseo:browser:register-attached", input),
     unregisterWorkspaceBrowser: (browserId: string) =>

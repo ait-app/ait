@@ -1,6 +1,6 @@
 ---
 id: ADR-284
-status: accepted
+status: superseded
 date: 2026-11-16
 paths:
   - apps/desktop
@@ -8,6 +8,9 @@ paths:
 ---
 
 # ADR-284：Workspace 浏览器由主进程 WebContentsView 托管
+
+状态说明：Superseded（2026-11-27），由 [ADR-317](adr-317-browser-webview-tag.md) 取代：原生 view 无法被 web overlay 覆盖，浏览器回到 `<webview>`。
+以下保留 `WebContentsView` 方案的历史决策。
 
 ## 背景
 

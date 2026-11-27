@@ -11,6 +11,9 @@
   Its control stays visible before any workers start, and disconnected sessions mark task states
   as unconfirmed.
 
+- Menus, workspace details and other popups opened over the desktop browser pane now appear
+  above the page instead of behind it.
+
 ## 0.2.28 - 2026-11-26
 
 - Share a workspace, project, or Host directly with people. Generate and copy the invitation

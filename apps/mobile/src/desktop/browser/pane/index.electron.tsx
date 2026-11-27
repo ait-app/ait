@@ -66,7 +66,6 @@ import {
 } from "@/desktop/browser/store";
 import {
   applyInactiveBrowserWebviewViewport,
-  createBrowserWebviewElement,
   prepareBrowserWebview,
   presentBrowserWebview,
   rememberBrowserWebviewSize,
@@ -714,8 +713,7 @@ export function BrowserPane({
           browserErrorLabelsRef.current,
         );
         const residentWebview = takeResidentBrowserWebview(browserId) as ElectronWebview | null;
-        const webview =
-          residentWebview ?? (createBrowserWebviewElement(document) as ElectronWebview);
+        const webview = residentWebview ?? (document.createElement("webview") as ElectronWebview);
         webviewRef.current = webview;
         if (!residentWebview) {
           prepareBrowserWebview(webview, {
