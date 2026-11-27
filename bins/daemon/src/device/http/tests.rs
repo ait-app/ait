@@ -269,7 +269,6 @@ fn original_expiry_is_preserved_for_recovery_receipts_and_invalid_tokens_rejecte
         invalid[key] = value;
         assert!(decode_tokens(invalid).is_err());
     }
-    assert_eq!(HttpCenter::new().unwrap().base, host_link::center());
 }
 
 fn registration(machine: &Machine, wire: &Value, extra: &Value) -> Value {
@@ -383,6 +382,10 @@ async fn new_center_responses_declare_features_and_issue_a_serve_ticket_at_regis
     let issued = served.hub_ticket.expect("registration ticket");
     assert_eq!(issued.ticket.expose_secret(), "e".repeat(64));
     assert_eq!(issued.features, declared);
+    assert_eq!(
+        issued.center_url.as_deref(),
+        fixture.center.entry.selected()
+    );
     assert!(issued.usable());
     // Only a serve ticket is used; an unreadable declaration fails the registration.
     let access = register().await.unwrap();
@@ -390,6 +393,10 @@ async fn new_center_responses_declare_features_and_issue_a_serve_ticket_at_regis
     assert_eq!(register().await.unwrap_err(), Error::Protocol);
     let ticket = fixture.center.hub_ticket(&tokens, served.id).await.unwrap();
     assert_eq!(ticket.features, declared);
+    assert_eq!(
+        ticket.center_url.as_deref(),
+        fixture.center.entry.selected()
+    );
 }
 
 #[tokio::test]
@@ -423,4 +430,90 @@ async fn bulk_lane_tickets_name_the_lane() {
             &json!({"ep":"serve","lane":"bulk"})
         )
     );
+}
+
+#[tokio::test]
+async fn discovered_gateway_owns_authorization_registration_and_hub_ticket() {
+    let machine = declaration();
+    let wire = response(&machine);
+    let mainland = Fixture::new(vec![(
+        StatusCode::OK,
+        json!({"recommended_region":"global", "api_base_url":"https://untrusted.example/api"}),
+    )])
+    .await;
+    let overseas = Fixture::new(vec![
+        (StatusCode::OK, json!({"recommended_region": null})),
+        (
+            StatusCode::OK,
+            json!({"device_code":"b".repeat(64), "user_code":"ABCD-1234-EF56",
+            "verification_uri":VERIFICATION_URI, "expires_in":600, "interval":5}),
+        ),
+        (StatusCode::OK, wire.clone()),
+        (
+            StatusCode::OK,
+            registration(
+                &machine,
+                &wire,
+                &json!({
+                    "hub_features":["lease","credit","download"], "hub_ticket":"f".repeat(64),
+                    "hub_path":"/v1/hub", "hub_ep":"serve", "hub_expires_in_seconds":30
+                }),
+            ),
+        ),
+    ])
+    .await;
+    let overseas_url = overseas.center.entry.selected().unwrap();
+    let mut center = HttpCenter::new().unwrap();
+    center.entry = entry::Entry::new(
+        None,
+        [
+            mainland.center.entry.selected().unwrap().to_owned(),
+            overseas_url.to_owned(),
+        ],
+    );
+
+    let auth = center.authorize(&machine).await.unwrap();
+    let tokens = center
+        .poll(&auth.device_code, Uuid::new_v4())
+        .await
+        .unwrap();
+    let session = center
+        .register(&tokens, &machine, Uuid::new_v4(), Uuid::new_v4())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        session.hub_ticket.unwrap().center_url.as_deref(),
+        Some(overseas_url)
+    );
+    let mainland = mainland.seen.lock().unwrap();
+    assert_eq!(mainland.calls.len(), 1);
+    assert_eq!(mainland.calls[0].0, "/v1/client/bootstrap");
+    assert_eq!(mainland.calls[0].2, None);
+    let overseas = overseas.seen.lock().unwrap();
+    assert_eq!(
+        overseas
+            .calls
+            .iter()
+            .map(|(path, _, _)| path.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "/v1/client/bootstrap",
+            "/v1/auth/device/authorize",
+            "/v1/auth/device/token",
+            "/v1/nodes/register"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn approval_links_remain_pinned_to_the_official_sites() {
+    for (api, page) in [
+        (host_link::CENTER, VERIFICATION_URI),
+        (entry::GLOBAL_CENTER, entry::GLOBAL_VERIFICATION_URI),
+        ("http://localhost:1234/api", VERIFICATION_URI),
+    ] {
+        let center = HttpCenter::test_center(api.to_owned());
+        assert_eq!(center.approval_uri().await.unwrap(), page);
+    }
 }

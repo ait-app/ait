@@ -1,3 +1,4 @@
+import { sameAccountService } from "@ait/client/internal/account-session";
 import type { AccountSessionManager } from "./account-session.js";
 import {
   hasRustFeature,
@@ -85,13 +86,13 @@ export class AccountTransportManager {
     try {
       if (this.link?.pending) await this.link.whenReady(5000);
       const node =
-        this.link?.ready && this.link.centerUrl === center
+        this.link?.ready && sameAccountService(this.link.centerUrl, center)
           ? guest
             ? { node_id: guest.nodeId }
             : this.link.serveFor(host)
           : undefined;
       if (session.closed) return;
-      if (!this.link?.ready || this.link.centerUrl !== center)
+      if (!this.link?.ready || !sameAccountService(this.link.centerUrl, center))
         throw new Error("Online Hub is unavailable.");
       if (!node) throw new Error("Target Host is unavailable on Hub.");
       const target = guest

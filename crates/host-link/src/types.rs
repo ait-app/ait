@@ -125,6 +125,8 @@ pub struct HubTicket {
     /// `hub_features` the center declared with the ticket. The Hub link refuses
     /// to start when one it needs is missing.
     pub features: Vec<String>,
+    /// Gateway that issued the ticket. A manually constructed ticket may use the default.
+    pub center_url: Option<String>,
     /// Local expiry of a ticket issued ahead of use; `None` when used at once.
     pub expires_at: Option<tokio::time::Instant>,
 }
@@ -136,6 +138,7 @@ impl HubTicket {
         Self {
             ticket,
             features,
+            center_url: None,
             expires_at: None,
         }
     }

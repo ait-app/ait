@@ -104,6 +104,13 @@
 
 ## 在线连接（Hub）
 
+- 官方账号的身份和已保存的 Host 记录跨大陆、海外入口共享。新登录的自动入口通过免登录的地区推荐选择，
+  手动选择独立保存。单次浏览器登录绑定所选入口。已登录客户端切换官方入口时保留用户凭据并重新注册链路，
+  自建服务仍用自己的服务地址识别。Web 延续站点同源账号链路。见
+  [ADR-318](../decisions/clients/adr-318-official-service-entry.md)。
+- daemon 首次需要在线发布时自主探测官方入口。本次运行的机器请求共用选定入口，
+  Hub 连接使用签发对应 serve 票据的入口。见
+  [ADR-319](../decisions/daemon/adr-319-daemon-official-entry.md)。
 - 在线业务只经 Hub access → 中心 → Hub serve → daemon，没有传统 Relay、Yamux 或其他回退。
   客户端最多等待 Hub 就绪 5 秒；链路不可用、中心不匹配或目标无 serve 节点时明确失败，由既有重连处理
   （[ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)，修订

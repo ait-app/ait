@@ -22,6 +22,8 @@ paths:
 - 修订：[ADR-087](../clients/adr-087-headless-device-authorization.md)、[ADR-140](adr-140-headless-local-api-token.md)、[ADR-180](adr-180-hub-serve-endpoint.md)、[ADR-200](adr-200-headless-independent-transports.md)
 - 后续修订：[ADR-218](../clients/adr-218-hub-feature-negotiation.md) 起 daemon 只维护 Hub serve（及按需的 bulk 链路），不再建立 relay control 或下载 Relay；下文“维护 Hub serve 和下载 Relay”“重新建立两条链路”只剩 Hub。
 
+后续修订：[ADR-319](../daemon/adr-319-daemon-official-entry.md) 将入口自动选择扩展到 daemon。
+
 ## 背景
 
 原先普通启动由 Desktop 的账号管理器注册节点、续租并取得 Hub/Relay 票据，`run --headless`

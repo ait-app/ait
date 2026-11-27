@@ -110,6 +110,7 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
         api.claim_managed_relay().unwrap(),
         root.path(),
         Arc::new(InstanceLease::acquire(root.path()).unwrap()),
+        crate::device::HttpCenter::new().unwrap(),
     );
     assert!(!relay.hub_active().await);
     assert!(!relay.hub_online().await);

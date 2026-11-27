@@ -161,6 +161,7 @@ async fn registration_tickets_expire_locally() {
     let ticket = crate::HubTicket {
         ticket: "registered".into(),
         features: Vec::new(),
+        center_url: None,
         expires_at: Some(tokio::time::Instant::now() + Duration::from_secs(30)),
     };
     assert!(ticket.usable());

@@ -4,6 +4,7 @@ import { open, rename, unlink, type FileHandle } from "node:fs/promises";
 import { HubSessionClosedError, type HubSession } from "@ait/client/internal/hub";
 import path from "node:path";
 import { WebSocket } from "ws";
+import { sameAccountService } from "@ait/client/internal/account-session";
 import { normalizeCenter, type AccountSessionManager } from "./account-session.js";
 
 interface DirectDownloadTarget {
@@ -140,7 +141,7 @@ export class AccountDownloadManager {
       input = { ...input, direct: { ...input.direct, baseUrl: url.origin } };
     } else {
       const account = this.account.snapshot();
-      if (account.status === "logged_out" || account.center !== center)
+      if (account.status === "logged_out" || !sameAccountService(account.center, center))
         throw new Error("Sign in to the online service used by this host.");
     }
     const id = randomUUID();

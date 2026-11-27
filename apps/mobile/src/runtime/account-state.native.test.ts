@@ -10,6 +10,8 @@ import {
 const mocks = vi.hoisted(() => ({
   manager: {
     loginWithBrowser: vi.fn(),
+    loginWithSelectedEntry: vi.fn(),
+    changeEntry: vi.fn(),
     cancelLogin: vi.fn(),
     logout: vi.fn(),
     deleteAccount: vi.fn(),
@@ -60,6 +62,14 @@ beforeEach(() => {
 });
 
 describe("native mobile account commands", () => {
+  it("forwards the user's explicit entry choice", async () => {
+    mocks.platform = "android";
+    mocks.manager.snapshot.mockReturnValue({ status: "logged_out", selected: null });
+    const entry = { mode: "cn" };
+    await accountCommand("account_change_entry", { entry });
+    expect(mocks.manager.changeEntry).toHaveBeenCalledExactlyOnceWith(entry);
+  });
+
   it.each(["android", "ios"])(
     "clears %s host availability after account deletion",
     async (platform) => {
@@ -295,7 +305,8 @@ describe("native mobile account commands", () => {
         selected: null,
       });
       await accountCommand("account_login_hosted");
-      expect(mocks.manager.loginWithBrowser).toHaveBeenCalledExactlyOnceWith("");
+      expect(mocks.manager.loginWithSelectedEntry).toHaveBeenCalledExactlyOnceWith();
+      expect(mocks.manager.loginWithBrowser).not.toHaveBeenCalled();
       mocks.manager.snapshot.mockReturnValue({ status: "logged_out", selected: null });
       await accountCommand("account_logout");
       expect(mocks.manager.logout).toHaveBeenCalledOnce();

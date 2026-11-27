@@ -10,10 +10,10 @@ import {
   getBrowserAccount,
   subscribeBrowserAccount,
 } from "./browser-account";
-import { DEFAULT_ACCOUNT_CENTER } from "@ait/client/internal/account-session";
+import { DEFAULT_ACCOUNT_CENTER, sameAccountService } from "@ait/client/internal/account-session";
 import { revokeAccountPushNotifications } from "@/push-notifications";
 
-import type { AccountHost, AccountInfo } from "@ait/client/internal/account-session";
+import type { AccountEntry, AccountHost, AccountInfo } from "@ait/client/internal/account-session";
 export type { AccountHost } from "@ait/client/internal/account-session";
 
 export interface AccountState {
@@ -31,6 +31,7 @@ export interface AccountState {
   syncBuiltInDaemon?: boolean;
   accountExpiresAt?: string | null;
   loginPending?: boolean;
+  entry?: AccountEntry;
   accountId?: string;
 }
 
@@ -171,7 +172,10 @@ async function persistAccountHostSelection(
   } else if (previousServerId) {
     const host = store.getHosts().find((host) => host.serverId === previousServerId);
     for (const connection of host?.connections ?? []) {
-      if (connection.type === "accountRelay" && connection.center === snapshot.center) {
+      if (
+        connection.type === "accountRelay" &&
+        sameAccountService(connection.center, snapshot.center)
+      ) {
         await store.removeConnection(previousServerId, connection.id);
       }
     }
@@ -197,7 +201,13 @@ export async function accountCommand(
         case "account_login_hosted":
           if (args?.center !== undefined && typeof args.center !== "string")
             throw new Error("Invalid service URL.");
-          await manager.loginWithBrowser((args?.center as string) ?? "");
+          if (supportsBrowserAccount() || typeof args?.center === "string")
+            await manager.loginWithBrowser((args?.center as string | undefined) ?? "");
+          else await manager.loginWithSelectedEntry();
+          break;
+        case "account_change_entry":
+          if (supportsBrowserAccount()) throw new Error("Use this website's online service.");
+          await manager.changeEntry(args?.entry);
           break;
         case "account_logout":
           await revokeAccountPushNotifications();

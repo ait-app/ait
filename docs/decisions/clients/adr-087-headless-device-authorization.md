@@ -11,7 +11,8 @@ paths:
 
 # ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权
 
-> 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
+> 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。
+> [ADR-319](../daemon/adr-319-daemon-official-entry.md) 将单一固定中心扩展为两个官方入口。以下保留原决策背景。
 
 - 状态说明：已采纳；本分支实现，待两端发布
 - 源码基线：Ait `feat/authing-native-login` / `384f8735`；配套中心 [ait-server PR #9](https://github.com/ait-app/ait-server/pull/9)

@@ -1,3 +1,4 @@
+import { sameAccountService } from "@ait/client/internal/account-session";
 import type { HubLink } from "@ait/client/internal/hub";
 import { getNativeHubLink, registerNativeAccountTransport } from "../native-account";
 import { parseAccountRelayTarget } from "./account-relay-target";
@@ -128,7 +129,7 @@ export function createHubAccountRelayTransportFactory(
   return ({ url }) => {
     const target = parseAccountRelayTarget(url);
     const select = (link: HubLink | null): (() => Transport) => {
-      if (!link?.ready || link.centerUrl !== target.center)
+      if (!link?.ready || !sameAccountService(link.centerUrl, target.center))
         throw new Error(
           target.shareId ? "Shared resource is offline." : "Online Hub is unavailable.",
         );

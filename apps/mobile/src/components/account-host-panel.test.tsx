@@ -41,27 +41,30 @@ describe("AccountHostPanel browser login", () => {
     expect(view.queryByTestId("account-delete")).toBeNull();
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
-      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
-        center: "https://aitapp.cn/api",
-      }),
+      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted"),
     );
     expect(signedIn).toHaveBeenCalledOnce();
   });
 
-  it("keeps service settings optional and submits the edited service address", async () => {
+  it("labels the default entry Automatic and saves a custom service before signing in", async () => {
     const cancel = vi.fn();
     const view = render(<AccountHostPanel onCancel={cancel} />);
     expect(view.queryByTestId("account-center")).toBeNull();
-    fireEvent.click(view.getByTestId("account-service-settings"));
+    const entry = view.getByTestId("account-service-entry-trigger");
+    expect(entry.textContent).toBe("Automatic");
+    fireEvent.click(entry);
+    expect(view.getAllByText("Automatic", { exact: true })).toHaveLength(2);
+    fireEvent.click(await view.findByText("Custom URL"));
     fireEvent.change(view.getByLabelText("Service URL"), {
       target: { value: "https://private.example/api" },
     });
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
-      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
-        center: "https://private.example/api",
+      expect(accountCommand).toHaveBeenNthCalledWith(1, "account_change_entry", {
+        entry: { mode: "custom", center: "https://private.example/api" },
       }),
     );
+    expect(accountCommand).toHaveBeenNthCalledWith(2, "account_login_hosted");
     await waitFor(() =>
       expect(view.getByRole("button", { name: "Cancel" }).hasAttribute("disabled")).toBe(false),
     );

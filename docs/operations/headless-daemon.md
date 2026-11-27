@@ -1,8 +1,8 @@
 # Linux/macOS 无人值守 daemon
 
 中心需要支持 device authorization 和 Hub serve（声明全部 `hub_features`），并开启 `DEVICE_AUTH_ENABLED`、
-配置机器授权签名与回执密钥；旧中心仅支持 Relay 业务连接时不能使用当前客户端。生产中心固定为
-`https://aitapp.cn/api`，不能修改。Linux 的 systemd、macOS 的 launchd 安装与管理由外部脚本负责。
+配置机器授权签名与回执密钥；旧中心仅支持 Relay 业务连接时不能使用当前客户端。Linux 的 systemd、
+macOS 的 launchd 安装与管理由外部脚本负责。
 
 ## 获取 daemon
 
@@ -76,7 +76,7 @@ aitd login --name build-linux
 需要主动重新授权时执行 `aitd login --force`；配合 `--token-stdin` 可替换旧的未完成授权。
 该选项放弃旧请求的恢复并开始新授权，不删除机器身份或工作区数据。
 
-需要网页授权时，终端显示固定网页地址和验证码。在任意设备的浏览器登录原有账号，输入验证码，核对机器并确认。
+需要网页授权时，终端显示所选官方入口的网页地址和验证码。在任意设备的浏览器登录原有账号，输入验证码，核对机器并确认。
 可以新建 Host，也可以显式选择已有未绑定 Host；不会按名字合并机器。
 
 也可在网页 Host 详情签发一次性接入 JWT，通过 stdin 输入：
@@ -104,7 +104,14 @@ aitd run
 默认监听 `127.0.0.1:7316`，无需显示器、桌面应用或持续的 SSH 会话。没有 `service install` 子命令。
 直接 `aitd`、`aitd run` 与 Desktop 启动使用同一流程。`--headless` 已删除，既有脚本需移除该参数。
 未登录时本地 API 正常运行并报告 `unauthorized`，授权写入后自动发布。
-现有 listen/config/log-level/web-origin 参数继续可用，不提供中心参数。
+现有 listen/config/log-level/web-origin 参数继续可用。
+
+### 官方入口
+
+`aitd` 从运行所在主机探测大陆和海外入口，优先使用服务端推荐的可达入口。两个入口均未返回推荐时，
+优先使用可达的大陆入口。机器授权、续期和 Hub 使用同一个入口，进程重启后重新探测。本地 API
+可在离线时使用。`AIT_CENTER_URL` 可显式指定中心，常用于本地联调。通过 systemd 或 launchd 运行时，
+需分别给 CLI 和服务进程设置相同的覆盖值。
 
 ## 运行中的授权与统一断开
 
@@ -157,7 +164,7 @@ aitd status --json
 ```
 
 status 不要求本地 API token，不创建文件，不争用运行中服务的凭据锁。输出稳定 ID、是否存在
-凭据以及带时间戳的非秘密 runtime 缓存快照；`runtime_process_alive` 表示快照记录的进程是否仍存在
+凭据以及带时间戳的非秘密 runtime 缓存快照，其中包含运行时已选的官方入口；`runtime_process_alive` 表示快照记录的进程是否仍存在
 （PID 可能被复用，非 Unix 平台为 `null`）。缓存不是即时在线证明；鉴权后的本地
 `GET /api/device/authorization` 查看实时 Hub 与管理状态，`GET /api/hub/control` 查看 Hub。
 

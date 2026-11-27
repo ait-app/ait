@@ -13,6 +13,7 @@ paths:
 
 # ADR-314：Hub 跨数据面路由——`redirect` 与到其它 DP 的链路
 
+- 后续修订：[ADR-318](adr-318-official-service-entry.md)。
 - 修订：[ADR-182](adr-182-hub-account-client.md)、[ADR-204](adr-204-hub-only-online-business-transport.md)、[ADR-218](adr-218-hub-feature-negotiation.md)
 
 中心一侧见 `ait-server` 仓库的 `docs/cluster.md`（“数据面之间不共享任何东西”一节）。

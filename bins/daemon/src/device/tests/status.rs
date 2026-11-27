@@ -14,7 +14,12 @@ async fn cancelled_status_writes_keep_the_lease_and_cannot_overwrite_newer_repor
         api::Services::default(),
     )
     .unwrap();
-    let relay = StatusRelay::new(api.claim_managed_relay().unwrap(), root.path(), instance);
+    let relay = StatusRelay::new(
+        api.claim_managed_relay().unwrap(),
+        root.path(),
+        instance,
+        HttpCenter::test_center("https://hub.ait-app.com/api".to_owned()),
+    );
     let writer = relay.writer.clone();
     let (locked, ready) = std::sync::mpsc::channel();
     let (release, released) = std::sync::mpsc::channel();
@@ -45,6 +50,7 @@ async fn cancelled_status_writes_keep_the_lease_and_cannot_overwrite_newer_repor
         serde_json::from_slice(&std::fs::read(root.path().join("device/status.json")).unwrap())
             .unwrap();
     assert_eq!(status["phase"], "disconnected");
+    assert_eq!(status["center"], "https://hub.ait-app.com/api");
     api.begin_shutdown();
     api.wait_closed().await;
 }
