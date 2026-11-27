@@ -21,6 +21,12 @@
 - The signed-in account name in the sidebar footer keeps the full width of the button, with the
   remaining time shown underneath, so a narrow sidebar no longer truncates the name.
 
+- Antigravity sessions can run in AGY's Auto mode: edits and commands AGY judges safe run
+  without asking, while irreversible actions still need approval and are denied in headless mode.
+
+- Scheduled tasks can now pick provider features such as the permission mode, next to the
+  model, the thinking level and the mode.
+
 ## 0.2.28 - 2026-11-26
 
 - Share a workspace, project, or Host directly with people. Generate and copy the invitation
