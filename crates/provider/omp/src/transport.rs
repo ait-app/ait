@@ -12,6 +12,7 @@ use tokio::io::{
 };
 use tokio::process::ChildStdin;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
+use tokio::time::Instant;
 use tokio_util::task::AbortOnDropHandle;
 
 use super::framing::{Decoder, Frame, MAX_LINE};
@@ -315,6 +316,8 @@ pub(super) struct Transport {
     /// A background write failed or timed out, possibly leaving a partial line on OMP's
     /// stdin, so nothing more may be written.
     poisoned: Arc<AtomicBool>,
+    /// When [`Transport::awaits_exit`] began waiting for the reader.
+    exit_wait_started: Option<Instant>,
     messages: mpsc::Receiver<Frame>,
     reader: AbortOnDropHandle<()>,
     events: VecDeque<Frame>,
@@ -522,6 +525,7 @@ impl Transport {
             background_write: None,
             reply_write: None,
             poisoned: Arc::new(AtomicBool::new(false)),
+            exit_wait_started: None,
             messages,
             reader,
             events: VecDeque::new(),
@@ -869,6 +873,24 @@ impl Transport {
     /// Whether the OMP process has exited or this connection was closed.
     pub(super) fn exited(&self) -> bool {
         self.closing.load(Ordering::Acquire) || self.exit.borrow().is_some()
+    }
+
+    /// Whether a failed write may yet be explained by the reader as OMP's exit, so that the
+    /// caller polls again before reporting the failure. A write to an exited process usually
+    /// fails before the reader has recorded the exit status and stderr; the wait ends once
+    /// the reader stops, or [`EXIT_WAIT`] and [`STDERR_WAIT`] after the first call. Frames
+    /// still queued are discarded, as [`Transport::poll`] returns none after a failed write,
+    /// so that the reader reaches the end of stdout.
+    pub(super) fn awaits_exit(&mut self) -> bool {
+        if !self.poisoned.load(Ordering::Acquire)
+            || self.closing.load(Ordering::Acquire)
+            || self.reader.is_finished()
+        {
+            return false;
+        }
+        while self.messages.try_recv().is_ok() {}
+        let started = self.exit_wait_started.get_or_insert_with(Instant::now);
+        started.elapsed() < EXIT_WAIT + STDERR_WAIT
     }
 
     pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
