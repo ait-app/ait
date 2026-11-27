@@ -33,7 +33,6 @@ export const onlineService = {
   serviceEntry: "نقطة الوصول إلى الخدمة",
   activeEntry: "عنوان الاتصال الحالي",
   entryAuto: "تلقائي",
-  entryRecommended: "تلقائي (الموصى به: {{region}})",
   entryChina: "بر الصين الرئيسي",
   entryGlobal: "عالمي",
   entryCustom: "عنوان مخصص",

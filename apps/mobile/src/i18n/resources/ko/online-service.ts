@@ -34,7 +34,6 @@ export const onlineService = {
   serviceEntry: "서비스 접속 지점",
   activeEntry: "현재 접속 주소",
   entryAuto: "자동",
-  entryRecommended: "자동 (추천: {{region}})",
   entryChina: "중국 본토",
   entryGlobal: "글로벌",
   entryCustom: "사용자 지정 URL",

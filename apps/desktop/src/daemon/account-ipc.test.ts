@@ -61,9 +61,6 @@ vi.mock("./account-session.js", () => ({
     async changeEntry(entry: { mode: "cn" | "global" }) {
       await this.deps.saveEntry?.({ choice: entry });
     }
-    async recommendEntry() {
-      return "cn";
-    }
     async logout() {
       await this.deps.save(null);
       this.status = "logged_out";
@@ -105,7 +102,6 @@ afterEach(() => rmSync(mocks.userDataPath, { recursive: true, force: true }));
 
 it("persists the entry preference separately and restores it after restart", async () => {
   const command = invoke();
-  await expect(command(event, "account_entry_recommendation")).resolves.toBe("cn");
   await command(event, "account_change_entry", { entry: { mode: "global" } });
   await command(event, "account_logout");
   expect(stored().entry).toEqual({ choice: { mode: "global" } });

@@ -1,5 +1,5 @@
 import { supportsBrowserAccount } from "@/runtime/browser-account";
-import React, { useEffect, useRef, useState, type ReactNode } from "react";
+import React, { useRef, useState, type ReactNode } from "react";
 import { Keyboard, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ExternalLink, RotateCw } from "lucide-react-native";
@@ -7,12 +7,8 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { StatusBadge } from "./ui/status-badge";
 import { AdaptiveTextInput } from "./adaptive-text-input";
-import {
-  accountCommand,
-  loadAccountEntryRecommendation,
-  useAccountState,
-} from "@/runtime/account-state";
-import type { AccountEntry, AccountRegion } from "@ait/client/internal/account-session";
+import { accountCommand, useAccountState } from "@/runtime/account-state";
+import type { AccountEntry } from "@ait/client/internal/account-session";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { SettingsCard, SettingsRow, SettingsSection, SettingsSelect } from "./settings";
 
@@ -35,7 +31,6 @@ export function AccountHostPanel({
   currentAccountIdentity.current = accountIdentity;
   const browserAccount = supportsBrowserAccount();
   const entry = account.entry ?? { mode: "auto" };
-  const [recommended, setRecommended] = useState<AccountRegion | null>(null);
   const [editingCustom, setEditingCustom] = useState(false);
   const [customDraft, setCustomDraft] = useState<string | null>(null);
   const savedCustom = entry.mode === "custom" ? entry.center : "";
@@ -62,21 +57,6 @@ export function AccountHostPanel({
     }
   };
   const mode = entry.mode;
-  useEffect(() => {
-    if (browserAccount || mode !== "auto") return;
-    let current = true;
-    void loadAccountEntryRecommendation().then(
-      (region) => {
-        if (current) setRecommended(region);
-      },
-      () => {
-        if (current) setRecommended(null);
-      },
-    );
-    return () => {
-      current = false;
-    };
-  }, [browserAccount, mode]);
 
   const changeEntry = async (entry: AccountEntry) => {
     await accountCommand("account_change_entry", { entry });
@@ -91,16 +71,7 @@ export function AccountHostPanel({
       label={t("onlineService.serviceEntry")}
       value={choice}
       options={[
-        {
-          value: "auto",
-          label: recommended
-            ? t("onlineService.entryRecommended", {
-                region: t(
-                  recommended === "cn" ? "onlineService.entryChina" : "onlineService.entryGlobal",
-                ),
-              })
-            : t("onlineService.entryAuto"),
-        },
+        { value: "auto", label: t("onlineService.entryAuto") },
         { value: "cn", label: t("onlineService.entryChina") },
         { value: "global", label: t("onlineService.entryGlobal") },
         { value: "custom", label: t("onlineService.entryCustom") },

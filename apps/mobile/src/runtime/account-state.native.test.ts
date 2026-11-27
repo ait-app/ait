@@ -3,7 +3,6 @@ import type { HostProfile } from "@/types/host-connection";
 import {
   accountCommand,
   loadAccountInfo,
-  loadAccountEntryRecommendation,
   supportsAccountRelay,
   useAccountState,
 } from "./account-state";
@@ -12,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   manager: {
     loginWithBrowser: vi.fn(),
     loginWithSelectedEntry: vi.fn(),
-    recommendEntry: vi.fn(),
     changeEntry: vi.fn(),
     cancelLogin: vi.fn(),
     logout: vi.fn(),
@@ -64,11 +62,9 @@ beforeEach(() => {
 });
 
 describe("native mobile account commands", () => {
-  it("requests a recommendation and forwards the user's explicit choice", async () => {
+  it("forwards the user's explicit entry choice", async () => {
     mocks.platform = "android";
-    mocks.manager.recommendEntry.mockResolvedValueOnce("global");
     mocks.manager.snapshot.mockReturnValue({ status: "logged_out", selected: null });
-    await expect(loadAccountEntryRecommendation()).resolves.toBe("global");
     const entry = { mode: "cn" };
     await accountCommand("account_change_entry", { entry });
     expect(mocks.manager.changeEntry).toHaveBeenCalledExactlyOnceWith(entry);

@@ -13,12 +13,7 @@ import {
 import { DEFAULT_ACCOUNT_CENTER, sameAccountService } from "@ait/client/internal/account-session";
 import { revokeAccountPushNotifications } from "@/push-notifications";
 
-import type {
-  AccountEntry,
-  AccountHost,
-  AccountInfo,
-  AccountRegion,
-} from "@ait/client/internal/account-session";
+import type { AccountEntry, AccountHost, AccountInfo } from "@ait/client/internal/account-session";
 export type { AccountHost } from "@ait/client/internal/account-session";
 
 export interface AccountState {
@@ -85,17 +80,6 @@ export async function createShareInvitation(
     return (await invoke("account_share_invite", { center, shareId, recipient })) as string;
   const manager = await (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount());
   return manager.createShareInvitation(center, shareId, recipient);
-}
-
-/** Ask the process that owns account networking for a credential-free recommendation. */
-export async function loadAccountEntryRecommendation(): Promise<AccountRegion | null> {
-  const invoke = getDesktopHost()?.invoke;
-  if (invoke) {
-    const region = await invoke("account_entry_recommendation");
-    return region === "cn" || region === "global" ? region : null;
-  }
-  if (Platform.OS !== "android" && Platform.OS !== "ios") return null;
-  return (await getNativeAccount()).recommendEntry();
 }
 
 let commandTail = Promise.resolve<unknown>(undefined);

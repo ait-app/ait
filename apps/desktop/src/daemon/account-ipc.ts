@@ -235,8 +235,6 @@ export function createAccountIpc(
         case "account_hub_presence":
           await hubBridge.reportPresence(event.sender, args.presence);
           return null;
-        case "account_entry_recommendation":
-          return manager.recommendEntry();
         case "account_change_entry":
           await manager.changeEntry(args.entry);
           return snapshot();

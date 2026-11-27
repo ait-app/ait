@@ -31,7 +31,6 @@ export const onlineService = {
   serviceEntry: "服务入口",
   activeEntry: "当前连接地址",
   entryAuto: "自动",
-  entryRecommended: "自动（推荐：{{region}}）",
   entryChina: "中国大陆",
   entryGlobal: "海外",
   entryCustom: "自定义地址",

@@ -35,7 +35,6 @@ export const onlineService = {
   serviceEntry: "Точка доступа к сервису",
   activeEntry: "Текущий адрес",
   entryAuto: "Автоматически",
-  entryRecommended: "Автоматически (рекомендуется: {{region}})",
   entryChina: "Материковый Китай",
   entryGlobal: "Глобальный",
   entryCustom: "Свой URL",

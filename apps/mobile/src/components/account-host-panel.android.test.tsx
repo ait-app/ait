@@ -25,7 +25,6 @@ vi.mock("react-native", async (original) => {
 vi.mock("@/runtime/account-state", () => ({
   useAccountState: () => state.value,
   accountCommand: state.command,
-  loadAccountEntryRecommendation: vi.fn(async () => null),
 }));
 afterEach(() => {
   cleanup();
@@ -36,6 +35,7 @@ describe("Android account panel", () => {
   it("shows account controls without a separate online host picker", async () => {
     const view = render(<AccountHostPanel />);
     expect(view.getByText("Online")).toBeTruthy();
+    expect(view.getByTestId("account-service-entry-trigger").textContent).toBe("Automatic");
     expect(view.queryByText(/Waiting for this host/)).toBeNull();
     expect(view.queryByTestId("account-host-host")).toBeNull();
     expect(view.queryByText("My computer")).toBeNull();
