@@ -1762,12 +1762,21 @@ impl AgentSession for Session {
         Ok(())
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        // A write can notice an exit before the reader explains it; wait for the reason (D28).
+        if self.transport.awaits_exit() {
+            return Ok(None);
+        }
         match self.observe() {
             // The turn cannot outlive its connection: close its unfinished work, then report
             // the retained reason, such as the exit text, as the turn's failure (D16, D28).
             Err(error) if self.active.is_some() => {
                 self.fail_turn();
                 Ok(Some(self.stream.events.pop_front().ok_or(error)?))
+            }
+            // A connection that cannot be written to fails every later poll, so the events
+            // queued before it, ending with that failure, are returned ahead of the error.
+            Err(error) if self.transport.writer().is_err() => {
+                self.stream.events.pop_front().map(Some).ok_or(error)
             }
             result => result,
         }

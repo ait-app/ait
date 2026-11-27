@@ -1072,6 +1072,34 @@ async fn cancelling_after_the_process_exited_counts_as_stopped_and_reports_the_e
     session.close().await.unwrap();
 }
 
+#[tokio::test]
+async fn an_exit_first_seen_as_a_failed_write_still_fails_the_turn_with_the_exit() {
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    session.start_turn("crash", &spec.config).await.unwrap();
+    let queued = AgentTurnEvent::PermissionResolved("queued".to_owned());
+    session.stream.events.push_back(queued.clone());
+    // A write notices the exit before any poll does, while an earlier event is still queued.
+    let writer = session.transport.writer().unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while writer.send(&json!({"type": "get_state"})).await.is_ok() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+
+    let events = complete(&mut session).await;
+
+    assert_eq!(events, [queued, AgentTurnEvent::Failed]);
+    let message = session.failure_message().unwrap().into_owned();
+    assert!(
+        message.contains("exited unexpectedly with code 3"),
+        "{message}"
+    );
+    session.close().await.unwrap();
+}
+
 #[test]
 fn slash_commands_follow_paseos_parse() {
     for text in ["/compact", " /compact now ", "/skill:review x"] {
