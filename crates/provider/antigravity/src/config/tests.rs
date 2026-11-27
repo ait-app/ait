@@ -7,6 +7,7 @@ fn accepts_valid_modes_and_models() {
         Some("default"),
         Some("plan"),
         Some("accept-edits"),
+        Some("auto"),
         Some("full-access"),
     ] {
         let config = StoredAgentConfig {
@@ -17,7 +18,7 @@ fn accepts_valid_modes_and_models() {
         };
         validate(&config).unwrap();
     }
-    assert_eq!(modes().len(), 4);
+    assert_eq!(modes().len(), 5);
 }
 
 #[test]

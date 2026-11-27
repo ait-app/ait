@@ -157,7 +157,7 @@ async fn controls_reject_wrong_resume_and_unacknowledged_configuration() {
 
 #[tokio::test]
 async fn modes_are_native_and_only_full_access_adds_the_skip_flag() {
-    for mode in ["default", "accept-edits", "plan", "full-access"] {
+    for mode in ["default", "accept-edits", "auto", "plan", "full-access"] {
         let (directory, client, mut spec) = fixture("");
         spec.config.mode_id = Some(mode.to_owned());
         let mut session = open(&client, &spec, None).await.unwrap();

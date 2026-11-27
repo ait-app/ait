@@ -7,17 +7,17 @@ use super::{PROVIDER, discovery::EFFORTS};
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
-    if config
-        .mode_id
+    if config.mode_id.as_deref().is_some_and(|mode| {
+        !matches!(
+            mode,
+            "default" | "accept-edits" | "auto" | "plan" | "full-access"
+        )
+    }) || config.model.as_ref().is_some_and(|model| {
+        model.is_empty() || model.len() > 512 || model.chars().any(char::is_control)
+    }) || config
+        .thinking_option_id
         .as_deref()
-        .is_some_and(|mode| !matches!(mode, "default" | "accept-edits" | "plan" | "full-access"))
-        || config.model.as_ref().is_some_and(|model| {
-            model.is_empty() || model.len() > 512 || model.chars().any(char::is_control)
-        })
-        || config
-            .thinking_option_id
-            .as_deref()
-            .is_some_and(|effort| !EFFORTS.contains(&effort))
+        .is_some_and(|effort| !EFFORTS.contains(&effort))
         || config.system_prompt.is_some()
         || config
             .tool_policy
@@ -70,6 +70,13 @@ pub(super) fn modes() -> Vec<Value> {
                 "Commands requiring approval are denied in headless mode; ",
                 "add a scoped AGY allow rule or select Full Access."),
             "icon":"ShieldPlus", "colorTier":"moderate",
+        }),
+        json!({
+            "id":"auto", "label":"Auto",
+            "description":concat!("Uses AGY's auto mode: edits and commands AGY judges safe run ",
+                "without asking; irreversible actions still need approval and are denied in ",
+                "headless mode."),
+            "icon":"ShieldCheck", "colorTier":"moderate",
         }),
         json!({
             "id":"plan", "label":"Plan",

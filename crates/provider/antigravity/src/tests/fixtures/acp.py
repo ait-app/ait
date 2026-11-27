@@ -28,7 +28,7 @@ options = [
     {'id': 'thought_level', 'category': 'thought_level', 'type': 'select', 'currentValue': 'high',
      'options': [{'value': value, 'name': value} for value in ['low', 'high', 'xhigh']]},
     {'id': 'mode', 'category': 'mode', 'type': 'select', 'currentValue': 'default',
-     'options': [{'value': value, 'name': value} for value in ['default', 'accept-edits', 'plan']]},
+     'options': [{'value': value, 'name': value} for value in ['default', 'accept-edits', 'auto', 'plan']]},
 ]
 if scenario == 'missing-option':
     options.pop()

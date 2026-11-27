@@ -96,7 +96,7 @@ async fn discovers_native_models_and_labels_without_a_prompt() {
         json!([{"id":"low","label":"Low"},{"id":"high","label":"High"},
             {"id":"xhigh","label":"XHigh"}])
     );
-    assert_eq!(details.modes.len(), 4);
+    assert_eq!(details.modes.len(), 5);
     assert_eq!(
         client.settings(&spec.config)["capabilities"]["supportsMcpServers"],
         false
