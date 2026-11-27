@@ -1,4 +1,5 @@
 import type {
+  AgentFeature,
   AgentMode,
   AgentModelDefinition,
   ProviderSnapshotEntry,
@@ -57,6 +58,18 @@ const THINKING_MODELS: AgentModelDefinition[] = [
 ];
 
 const ALL_MODELS = [...HOST_A_MODELS, ...HOST_B_MODELS];
+
+const PERMISSION_FEATURE: AgentFeature = {
+  type: "select",
+  id: "permissionMode",
+  label: "Permission",
+  value: "auto",
+  options: [
+    { id: "default", label: "Default" },
+    { id: "auto", label: "Auto" },
+    { id: "bypassPermissions", label: "Bypass permissions" },
+  ],
+};
 
 function target(input: {
   serverId: string;
@@ -387,6 +400,7 @@ describe("schedule form model", () => {
       showModelField: false,
       showThinkingField: false,
       showModeField: false,
+      showFeaturesField: false,
       showIsolationField: false,
       showArchiveOnFinishField: false,
     });
@@ -398,6 +412,7 @@ describe("schedule form model", () => {
       showModelField: true,
       showThinkingField: false,
       showModeField: false,
+      showFeaturesField: false,
       showIsolationField: true,
       showArchiveOnFinishField: true,
     });
@@ -410,6 +425,7 @@ describe("schedule form model", () => {
       showModelField: true,
       showThinkingField: true,
       showModeField: true,
+      showFeaturesField: false,
       showIsolationField: true,
       showArchiveOnFinishField: true,
     });
@@ -814,6 +830,106 @@ describe("schedule form model", () => {
     late.applyProviderSnapshot("host-a", providerSnapshot(ALL_MODELS));
     applyPreferences(late, { isolation: "sandboxed-worktree" });
     expect(late.getState().isolation).toBe("worktree");
+  });
+
+  it("lists provider features for a new agent and submits the chosen permission", () => {
+    const form = open({
+      mode: "create",
+      defaults: {
+        serverId: "host-a",
+        projectTargets: PROJECT_TARGETS,
+        preferences: {
+          providerPreferences: {
+            mock: { featureValues: { permissionMode: "default", retiredFeature: true } },
+          },
+        },
+      },
+    });
+    form.setProject(buildProjectOptionId("host-a", "project-a"), { label: "Project A" });
+    form.applyProviderSnapshot("host-a", providerSnapshot(HOST_A_MODELS));
+    form.setModel("mock", "model-a");
+
+    const { featureRequest, featureRequestKey } = form.getState();
+    expect(featureRequest).toEqual({
+      serverId: "host-a",
+      cwd: "/repo/a",
+      provider: "mock",
+      model: "model-a",
+      modeId: "load-test",
+    });
+    // Preferences may name features the provider no longer offers; until a listing
+    // answers, only values chosen in this form are submitted.
+    expect(form.getState()).toMatchObject({
+      features: [],
+      submitFeatureValues: {},
+      disclosure: { showFeaturesField: false },
+    });
+
+    form.applyFeatures("stale-key", [PERMISSION_FEATURE]);
+    expect(form.getState().features).toEqual([]);
+
+    form.applyFeatures(featureRequestKey!, [PERMISSION_FEATURE]);
+    expect(form.getState()).toMatchObject({
+      features: [{ id: "permissionMode", value: "default" }],
+      submitFeatureValues: { permissionMode: "default" },
+      disclosure: { showFeaturesField: true },
+    });
+
+    form.setFeatureValue("permissionMode", "bypassPermissions");
+    expect(form.getState()).toMatchObject({
+      featureValues: { permissionMode: "bypassPermissions" },
+      features: [{ id: "permissionMode", value: "bypassPermissions" }],
+      submitFeatureValues: { permissionMode: "bypassPermissions" },
+    });
+
+    form.setTargetKind("agent");
+    expect(form.getState()).toMatchObject({
+      featureRequest: null,
+      disclosure: { showFeaturesField: false },
+    });
+    form.close();
+  });
+
+  it("keeps an edited schedule's stored feature values until a listing prunes them", () => {
+    const schedule = scheduleOnHost({
+      serverId: "host-a",
+      serverName: "Host A",
+      cwd: "/repo/a",
+      model: "model-a",
+    });
+    if (schedule.target.type !== "new-agent") throw new Error("expected a new-agent schedule");
+    schedule.target.config.featureValues = { permissionMode: "default", retiredFeature: true };
+    const form = open({
+      mode: "edit",
+      schedule,
+      defaults: {
+        serverId: null,
+        projectTargets: PROJECT_TARGETS,
+        preferences: {
+          providerPreferences: { mock: { featureValues: { permissionMode: "auto" } } },
+        },
+      },
+    });
+    form.applyProviderSnapshot("host-a", providerSnapshot(HOST_A_MODELS));
+
+    expect(form.getState().submitFeatureValues).toEqual({
+      permissionMode: "default",
+      retiredFeature: true,
+    });
+
+    const requestKey = form.getState().featureRequestKey!;
+    form.applyFeaturesUnavailable(requestKey);
+    expect(form.getState().submitFeatureValues).toEqual({
+      permissionMode: "default",
+      retiredFeature: true,
+    });
+
+    form.applyFeatures(requestKey, [PERMISSION_FEATURE]);
+    expect(form.getState()).toMatchObject({
+      features: [{ id: "permissionMode", value: "default" }],
+      submitFeatureValues: { permissionMode: "default" },
+    });
+    form.close();
   });
 });
 

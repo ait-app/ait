@@ -15,11 +15,13 @@ import {
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Brain, Plus } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type { AgentProvider } from "@ait/protocol/agent-types";
+import type { AgentFeature, AgentProvider } from "@ait/protocol/agent-types";
 import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { ComboboxItem } from "@/components/ui/combobox";
+import { Switch } from "@/components/ui/switch";
+import { formatAgentFeatureLabel } from "@/agent-controls/labels";
 import { Button } from "@/components/ui/button";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -49,6 +51,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { buildScheduleProjectTargets } from "@/schedules/schedule-project-targets";
 import { useScheduleFormModel } from "@/schedules/use-schedule-form-model";
 import { useScheduleFormProviderSnapshot } from "@/schedules/use-schedule-form-provider-snapshot";
+import { useScheduleFormFeatures } from "@/schedules/use-schedule-form-features";
 import type {
   ScheduleFormHost,
   ScheduleFormModel,
@@ -193,6 +196,7 @@ function updateSelectionPreferences(input: {
   model: string;
   mode: string;
   thinkingOptionId: string;
+  featureValues: Record<string, unknown>;
 }): FormPreferences {
   const model = input.model.trim();
   const mode = input.mode.trim();
@@ -205,6 +209,9 @@ function updateSelectionPreferences(input: {
       model: model || undefined,
       mode: mode || undefined,
       ...(model && thinkingOptionId ? { thinkingByModel: { [model]: thinkingOptionId } } : {}),
+      ...(Object.keys(input.featureValues).length > 0
+        ? { featureValues: input.featureValues }
+        : {}),
     },
   });
 }
@@ -523,6 +530,7 @@ function ScheduleFormContent({
   const model = useScheduleFormModel(snapshot);
   const state = useSyncExternalStore(model.subscribe, model.getState, model.getState);
   const providerSnapshot = useScheduleFormProviderSnapshot(model, state);
+  useScheduleFormFeatures(model, state);
   const mutationServerId = state.selectedServerId ?? serverId ?? "";
   const canManage = canManageBackgroundTasks(
     allHostProfiles.find((host) => host.serverId === mutationServerId) ?? mutationServerId,
@@ -591,9 +599,11 @@ function ScheduleFormContent({
         model: state.selectedModel,
         mode: state.selectedMode,
         thinkingOptionId: state.selectedThinkingOptionId,
+        featureValues: state.featureValues,
       }),
     );
   }, [
+    state.featureValues,
     state.selectedMode,
     state.selectedModel,
     state.selectedProvider,
@@ -622,6 +632,8 @@ function ScheduleFormContent({
         model: state.selectedModel || undefined,
         modeId: state.selectedMode || undefined,
         thinkingOptionId: state.selectedThinkingOptionId || undefined,
+        featureValues:
+          Object.keys(state.submitFeatureValues).length > 0 ? state.submitFeatureValues : undefined,
         archiveOnFinish: state.archiveOnFinish,
         title: state.name.trim() || undefined,
       };
@@ -1223,6 +1235,17 @@ function ScheduleNewAgentFields({
         />
       ) : null}
 
+      {state.disclosure.showFeaturesField
+        ? state.features.map((feature) => (
+            <ScheduleFeatureField
+              key={feature.id}
+              feature={feature}
+              model={model}
+              size={controlSize}
+            />
+          ))
+        : null}
+
       {state.disclosure.showArchiveOnFinishField ? (
         <SelectField
           label={t("schedules.form.afterRun")}
@@ -1248,6 +1271,75 @@ function ScheduleNewAgentFields({
         />
       ) : null}
     </>
+  );
+}
+
+function ScheduleFeatureField({
+  feature,
+  model,
+  size,
+}: {
+  feature: AgentFeature;
+  model: ScheduleFormModel;
+  size: FieldControlSize;
+}): ReactElement {
+  const { t } = useTranslation();
+  const label = formatAgentFeatureLabel(feature, t);
+  const handleToggle = useCallback(
+    (value: boolean) => model.setFeatureValue(feature.id, value),
+    [feature.id, model],
+  );
+  const handleSelect = useCallback(
+    (value: string) => model.setFeatureValue(feature.id, value),
+    [feature.id, model],
+  );
+  const selectOptions = useMemo<SelectFieldOption<string>[]>(
+    () =>
+      feature.type === "select"
+        ? feature.options.map((option) => ({
+            id: option.id,
+            value: option.id,
+            label: option.label,
+            ...(option.description ? { description: option.description } : {}),
+            testID: `schedule-feature-option-${feature.id}-${option.id}`,
+          }))
+        : [],
+    [feature],
+  );
+
+  if (feature.type === "select") {
+    const selected = feature.value
+      ? (feature.options.find((option) => option.id === feature.value) ?? null)
+      : null;
+    return (
+      <SelectField
+        label={label}
+        value={feature.value}
+        selectedDisplay={feature.value ? { label: selected?.label ?? feature.value } : null}
+        options={selectOptions}
+        onChange={handleSelect}
+        placeholder={label}
+        emptyText={label}
+        {...(feature.description ? { hint: feature.description } : {})}
+        searchable={selectOptions.length > 6}
+        title={label}
+        size={size}
+        triggerTestID={`schedule-feature-trigger-${feature.id}`}
+      />
+    );
+  }
+
+  return (
+    <Field label={label} {...(feature.description ? { hint: feature.description } : {})}>
+      <View style={styles.featureToggleRow}>
+        <Switch
+          value={feature.value === true}
+          onValueChange={handleToggle}
+          accessibilityLabel={label}
+          testID={`schedule-feature-switch-${feature.id}`}
+        />
+      </View>
+    </Field>
   );
 }
 
@@ -1335,6 +1427,10 @@ const styles = StyleSheet.create((theme) => {
       paddingVertical: theme.spacing[4],
       borderTopWidth: 1,
       borderTopColor: theme.colors.border,
+      alignItems: "center",
+    },
+    featureToggleRow: {
+      flexDirection: "row",
       alignItems: "center",
     },
     sectionTabs: {
