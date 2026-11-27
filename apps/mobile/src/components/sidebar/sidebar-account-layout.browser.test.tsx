@@ -16,7 +16,8 @@ vi.mock("@/runtime/host-runtime", () => ({
 }));
 vi.mock("@/stores/session-store", () => ({ useSessionStore: () => "0.2.25" }));
 vi.mock("@/runtime/account-state", () => ({
-  useAccountState: () => "owner",
+  useAccountState: (select: (state: { name: string; status: string }) => unknown) =>
+    select({ name: "oowl@example.com", status: "logged_in" }),
   accountCommand: vi.fn(),
 }));
 vi.mock("./account-expiry", () => ({ useAccountExpiry: () => ({ kind: "never" }) }));
@@ -80,6 +81,33 @@ it("keeps the open account menu in place through disconnects and host list refre
     await expect.poll(() => menu().getBoundingClientRect().top).toBeGreaterThan(0);
     expect(menu().querySelector('[data-testid="sidebar-help-host-version-second"]')).toBeNull();
     expect(element("sidebar-help-host-version-new").textContent).toContain("New host");
+  } finally {
+    flushSync(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("keeps the account name readable and the expiry beneath it in a narrow footer", async () => {
+  await i18n.changeLanguage("en");
+  const container = document.createElement("div");
+  container.style.cssText = "position:fixed;bottom:0;left:0;width:200px;display:flex";
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    flushSync(() =>
+      root.render(<SidebarAccountMenu onOpenSettings={vi.fn()} onImportSession={vi.fn()} />),
+    );
+    const trigger = element("sidebar-account").getBoundingClientRect();
+    const name = element("sidebar-account-name").getBoundingClientRect();
+    const expiry = element("sidebar-account-expiry").getBoundingClientRect();
+    expect(name.width).toBeGreaterThanOrEqual(40);
+    expect(expiry.top).toBeGreaterThanOrEqual(name.bottom - 1);
+    for (const box of [name, expiry]) {
+      expect(box.left).toBeGreaterThanOrEqual(trigger.left);
+      expect(box.right).toBeLessThanOrEqual(trigger.right);
+      expect(box.top).toBeGreaterThanOrEqual(trigger.top);
+      expect(box.bottom).toBeLessThanOrEqual(trigger.bottom);
+    }
   } finally {
     flushSync(() => root.unmount());
     container.remove();

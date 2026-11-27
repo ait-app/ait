@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import { ChevronsUpDown, CircleUserRound, Import, LogOut, Settings } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -34,7 +34,8 @@ export function useIsAccountSignedIn(): boolean {
 }
 
 /**
- * The signed-in footer button: who is signed in and how long the account has left, on one line.
+ * The signed-in footer button: who is signed in and how long the account has left,
+ * stacked so the name keeps the full width.
  * It opens the menu that holds what the three footer buttons it replaces used to do, and signs
  * the account out.
  */
@@ -67,14 +68,16 @@ export function SidebarAccountMenu({
         accessibilityLabel={expiryLabel ? `${name}, ${expiryLabel}` : name}
       >
         <ThemedCircleUserRound size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />
-        <Text style={styles.name} numberOfLines={1} testID="sidebar-account-name">
-          {name}
-        </Text>
-        {expiryLabel ? (
-          <Text style={expiryStyle(expiry)} numberOfLines={1} testID="sidebar-account-expiry">
-            {expiryLabel}
+        <View style={styles.text}>
+          <Text style={styles.name} numberOfLines={1} testID="sidebar-account-name">
+            {name}
           </Text>
-        ) : null}
+          {expiryLabel ? (
+            <Text style={expiryStyle(expiry)} numberOfLines={1} testID="sidebar-account-expiry">
+              {expiryLabel}
+            </Text>
+          ) : null}
+        </View>
         <ThemedChevronsUpDown size={ICON_SIZE.sm} uniProps={extraMutedIconColorMapping} />
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -176,26 +179,34 @@ const styles = StyleSheet.create((theme) => ({
   triggerActive: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
-  // The name gives way first, so the time left is always readable.
-  name: {
+  // Name over expiry, sharing the full width between the icon and the chevron.
+  text: {
     flex: 1,
     minWidth: 0,
+    justifyContent: "center",
+  },
+  name: {
+    minWidth: 0,
+    lineHeight: 18,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   expiry: {
-    flexShrink: 0,
+    minWidth: 0,
+    lineHeight: 15,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },
   expirySoon: {
-    flexShrink: 0,
+    minWidth: 0,
+    lineHeight: 15,
     color: theme.colors.statusWarning,
     fontSize: theme.fontSize.sm,
   },
   expiryExpired: {
-    flexShrink: 0,
+    minWidth: 0,
+    lineHeight: 15,
     color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
   },
