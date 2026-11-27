@@ -71,7 +71,7 @@ Agent 通知入队与发送前都检查当前记录，已经读过、归档、�
   ingress 溢出会记录错误并触发重建；尚未入盘的 terminal hook 事件在崩溃或溢出时无法恢复，
   Timeline 标记也需要客户端重新读取所属 Host 的持久历史。中心 journal 不是 Host 全量审计日志。
 
-2026-11-04 修订（[daemon 审查遗留事项](../../plans/daemon-review-2026-11-03.md)）：
+2026-11-04 修订（[daemon 审查遗留事项](../../archive/plans/daemon-review-2026-11-03.md)）：
 
 - `agent.timeline.update` 不再写入 journal。每条已提交 Timeline 都会产生一个标记，逐条入盘需要
   整体重写并同步 journal；标记改为按 Agent 保存在内存中，每个 Agent 最多一个待发 reset 和一个

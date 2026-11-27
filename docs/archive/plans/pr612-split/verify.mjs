@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const directory = dirname(fileURLToPath(import.meta.url));
-const repository = resolve(directory, "../../..");
+const repository = resolve(directory, "../../../..");
 const load = (name) => JSON.parse(readFileSync(resolve(directory, name), "utf8"));
 const git = (...args) =>
   execFileSync("git", args, { cwd: repository, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });

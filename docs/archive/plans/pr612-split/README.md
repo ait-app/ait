@@ -1,5 +1,12 @@
 # PR #612 split execution contract
 
+> 已归档（2026-11-27）。这份分拆契约已没有进行中的 PR：task00 清单 #647 实际已于 2026-11-12 合并；
+> 02、03、26、30 与 S1–S3 经 #659、#668、#656、#655、#652–#654 合并；01、04、07、17 的 Draft
+> （#651、#650、#657、#669）未合并即关闭；OMP 重写、BTW、模型预设与角色、子 Agent 引导与停止、
+> Goal、Vibe 之后在主线按各自的 ADR 交付，没有沿用这里的任务编号和验收记录。下文的状态、
+> 执行登记和 `tasks.json` 停在 2026-11-11 至 11-19，不代表当前进度；主线仍未提供的能力见
+> [未完成工作](../../../plans/README.md)。数据文件中的 `docs/plans/pr612-split` 路径保留原值。
+
 Status: **task00 inventory reviewed, validated and published in [Draft PR #647](https://github.com/ait-app/ait/pull/647) —
 历史 Draft / 记录索引，作者已关闭不合并**. The author closed #647 unmerged on 2026-11-11 with the explicit
 comment “仅作为记录 单独文档修改不计入合并” (record only; standalone documentation changes are not counted
@@ -29,7 +36,7 @@ metadata records its immutable hash without a self-referential commit hash.
   `checks`, `blockers`; `title` and `status` are additional navigation fields.
 - [Repository/access evidence](evidence.json): actual root, worktree, donor, fetched main, access and prior work.
 - [Inventory verifier](verify.mjs): dependency-free, read-only mechanical validation; run from repository root
-  with `node docs/plans/pr612-split/verify.mjs`.
+  with `node docs/archive/plans/pr612-split/verify.mjs`.
 
 The user-supplied constraints in this contract and the task records supersede conflicting donor design.
 `sources.json` remains an unmodified historical snapshot, including explicitly incomplete donor work.
@@ -358,7 +365,7 @@ all-completed claim; exclusions below are explicit user decisions, not deliverie
 ## Reproducible task00 checks
 
 ```sh
-node docs/plans/pr612-split/verify.mjs
+node docs/archive/plans/pr612-split/verify.mjs
 npm run check:docs
 git diff --check
 ```

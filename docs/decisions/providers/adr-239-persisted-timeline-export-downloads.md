@@ -31,7 +31,7 @@ paths:
 writer 或中断轮次。消息与持久结果卡应当可读，不能把每个正常条目都替换为 JSON dump。
 
 本提案属于 PR #612 拆分 task26，依赖 task04 的上下文详情入口；任务和实测证据见
-[task26 记录](../../plans/pr612-split/task26.json)，总契约见 [Draft #647](https://github.com/ait-app/ait/pull/647)。
+[task26 记录](../../archive/plans/pr612-split/task26.json)，总契约见 [Draft #647](https://github.com/ait-app/ait/pull/647)。
 提案状态不代表已经合并或全部验收通过。
 
 ## 接口变化与消费者迁移

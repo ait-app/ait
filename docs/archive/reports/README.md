@@ -204,6 +204,7 @@
 - [Ait 0.0.27 安装后诊断与修复](clients/release-0.0.27-installed-diagnostics-2026-10-11.md)
 - [Ait 0.0.28 客户端告警修复与诊断验证](clients/release-0.0.28-warning-fixes-2026-10-11.md)
 - [定时任务列表 Host 展示去重：验证](clients/schedule-host-filter-2026-10-12.md)
+- [任务看板参考实现视觉验收（2026-11-10）](clients/task-board-design-qa-2026-11-10.md)
 - [Web tooltip DOM-trigger validation](clients/web-tooltip-dom-triggers-2026-10-21.md)
 - [Workspace 定时任务列表与统一创建流程：验证](clients/workspace-schedule-timeline-2026-10-12.md)
 

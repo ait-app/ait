@@ -5,8 +5,8 @@
 基线 `58cae1677b3c02e1e278ef84b0cd44b580e0cb96` 加本次工作区修改，macOS arm64，
 Rust 1.98.1、Node 26.12.0。核对 `docs/plans` 的 34 个未勾选条目，完成两份审查清单中的
 21 项代码修复，保留 13 项协议、语义或真实环境待办。逐项触发条件、修复与回归名称见
-[仓库审查清单](../../../plans/repository-review-2026-11-02.md)与
-[daemon 审查清单](../../../plans/daemon-review-2026-11-03.md)。
+[仓库审查清单](../../plans/repository-review-2026-11-02.md)与
+[daemon 审查清单](../../plans/daemon-review-2026-11-03.md)。
 
 主要行为变化：
 

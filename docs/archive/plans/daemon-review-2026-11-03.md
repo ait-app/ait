@@ -1,5 +1,7 @@
 # 2026-11-03 daemon 审查遗留事项
 
+> 已归档（2026-11-27）：未勾选的条目已移入[审查遗留事项](../../plans/review-followups.md)，以那里为准；本页保留已修复条目的修复说明与回归测试。
+
 来源：2026-11-03 对 `bins/daemon/src`（源码提交 `850e0075`）的审查，必要时追踪到 `host-link`、
 `persistence` 与 `provider` 的调用路径。每项写明触发条件、影响和建议做法，完成后勾选，并附上
 修复与回归测试。
@@ -8,7 +10,7 @@
 协议错误终止发布、MCP socket 权限窗口等问题以那份清单为准。
 
 2026-11-04：分支 `fix/daemon-review-2026-11-03` 修复了下列已勾选条目；Hub 发布的行为变化记录在
-[ADR-181 修订](../decisions/daemon/adr-181-hub-host-publication.md)。剩余条目见文末「仍未完成」。
+[ADR-181 修订](../../decisions/daemon/adr-181-hub-host-publication.md)。剩余条目见文末「仍未完成」。
 
 ## 优先处理
 
@@ -32,7 +34,7 @@
       `oversized_directories_keep_the_most_recently_updated_items`。
 - [x] **无关的 `GOOGLE_APPLICATION_CREDENTIALS` 会让 daemon 无法启动。**
       修复：显式 `AIT_FCM_SERVICE_ACCOUNT_FILE` 无效仍导致启动失败；回退变量不可读或不是服务账户
-      时只记录告警并禁用 FCM，[移动端通知](../operations/mobile-notifications.md)已同步。回归：
+      时只记录告警并禁用 FCM，[移动端通知](../../operations/mobile-notifications.md)已同步。回归：
       `unusable_ambient_google_credentials_disable_fcm_without_failing_startup`。
 - [x] **定时任务启动恢复可能让 daemon 永久无法启动。**
       修复：`recover_interrupted` 把 `AgentNotFound` 视为已恢复，其他归档失败记录告警后继续启动，
@@ -64,7 +66,7 @@
       管理器超时难以稳定构造，未新增专门测试，由现有生命周期测试覆盖正常路径。
 - [x] **`daemon status` 在崩溃后显示过期状态。**
       修复：新增 `runtime_process_alive`（基于 `kill(pid, 0)`，PID 可能被复用），
-      [无人值守 daemon](../operations/headless-daemon.md)已同步；启动时清理残留的
+      [无人值守 daemon](../../operations/headless-daemon.md)已同步；启动时清理残留的
       `status-*.tmp`。回归：`status_probe_distinguishes_live_and_exited_processes`、
       `stale_status_snapshots_are_removed_without_touching_other_files`。
 - [x] **启动失败不会被诊断采集保存。**
@@ -97,7 +99,7 @@
       提前到 `main` 并调整「端口失败不产生状态」的约束。
       修复：先验证配置、预绑定端口，再获取进程级实例锁，之后才初始化令牌和诊断；运行时重启
       复用锁与监听端口并生成新的实例 ID，仍保留端口失败不产生状态的约束。已修订
-      [ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)。回归：
+      [ADR-201](../../decisions/daemon/adr-201-daemon-owned-publication.md)。回归：
       `startup_guard_runs_before_local_credentials_are_created`、
       `restarting_runtime_keeps_the_directory_locked_until_all_generations_drop` 及宿主生命周期测试。
 - [x] **`StatusRelay::report` 在异步运行时上做同步文件 I/O。**

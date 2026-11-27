@@ -69,5 +69,5 @@ loading 不追加、失败保留/重试、连接/epoch/cwd 迟到回复隔离与
 | Provider/API/SDK | 已有 snapshot GET/refresh → 同一公开接口                                                      | 无 Rust、RPC、SDK、配置 schema、原生 adapter 或二进制调用链变化；不恢复 mock Provider 或动态通用 ACP 注册。       |
 
 浏览器验收使用当前主线已有 Codex 原生 fixture 与 `speed-models.json`，不依赖旧 mock/gemini
-配置模型。实际记录及历史失败原因见 [task02](../../plans/pr612-split/task02.json)，契约与 donor
+配置模型。实际记录及历史失败原因见 [task02](../../archive/plans/pr612-split/task02.json)，契约与 donor
 来源见 [Draft #647](https://github.com/ait-app/ait/pull/647)；本 ADR 保持 proposed 等待评审。
