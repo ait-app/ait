@@ -259,6 +259,8 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
         allowedSenders: z.array(z.string()),
       }),
     ),
+    // Language of the review status comment; absent means English.
+    statusLanguage: z.enum(["en", "zh-cn"]).optional(),
   }),
 ]);
 export const BotChannelSchema = z.object({

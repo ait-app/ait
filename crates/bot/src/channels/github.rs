@@ -1,11 +1,14 @@
 //! GitHub App webhook admission and pull-request review delivery.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use domain::ChannelId;
+use domain::bot::review_status::{ReviewStatusKey, StatusEvent};
 use domain::bot::{
     Channel, ChannelConfig, GithubRepositoryBinding, GithubReviewContext, GithubReviewTrigger,
-    TurnContext,
+    StatusLanguage, TurnContext,
 };
 use hmac::{Hmac, Mac};
 use model::ErrorCode;
@@ -21,9 +24,10 @@ use crate::ports::stored_credential_reference;
 use crate::protocol::ChannelCreate;
 use crate::service::Bots;
 use crate::state::StoredChannel;
-use client::{Failure, GithubClient};
+use client::{Board, Failure, GithubClient};
 
 mod client;
+mod status;
 
 const MAX_MANDATE_BYTES: usize = 4096;
 const CREATE_METHOD: &str = "hub.automation.github.create";
@@ -61,6 +65,7 @@ pub(crate) async fn create(bots: &Bots, request: ChannelCreate) -> Result<Value,
         installation_id,
         mention,
         repositories,
+        status_language,
         ..
     } = request.config
     else {
@@ -73,6 +78,7 @@ pub(crate) async fn create(bots: &Bots, request: ChannelCreate) -> Result<Value,
         installation_id,
         mention,
         repositories,
+        status_language,
     };
     let created = bots
         .create_stored_channel(
@@ -102,7 +108,19 @@ pub(crate) async fn release(bots: Bots, channel: ChannelId) {
     super::webhook::release_at(bots, channel, DELETE_METHOD).await;
 }
 
-pub(super) async fn webhook(
+/// An authenticated GitHub delivery with work for the review channel.
+pub(crate) enum WebhookEvent {
+    /// A request for a review.
+    Review(Box<Incoming>),
+    /// A push to the PR head.
+    HeadChanged {
+        key: ReviewStatusKey,
+        before: String,
+        after: String,
+    },
+}
+
+pub(crate) async fn webhook(
     channel: &Channel,
     credentials: &Arc<dyn Credentials>,
     client: &reqwest::Client,
@@ -110,7 +128,7 @@ pub(super) async fn webhook(
     delivery_id: &str,
     signature: &str,
     body: &[u8],
-) -> Result<Option<Incoming>, ErrorCode> {
+) -> Result<Option<WebhookEvent>, ErrorCode> {
     let ChannelConfig::Github {
         app_id,
         private_key_ref,
@@ -118,6 +136,7 @@ pub(super) async fn webhook(
         installation_id,
         mention,
         repositories,
+        ..
     } = &channel.config
     else {
         return Err(ErrorCode::InvalidMessage);
@@ -148,6 +167,9 @@ pub(super) async fn webhook(
     else {
         return Ok(None);
     };
+    if event == "pull_request" && payload["action"] == "synchronize" {
+        return head_changed(channel.id, repository, &payload).map(Some);
+    }
     let sender = required_text(&payload["sender"], "login", 100)?;
     if sender.eq_ignore_ascii_case(mention)
         || sender.eq_ignore_ascii_case(&format!("{mention}[bot]"))
@@ -186,7 +208,32 @@ pub(super) async fn webhook(
     let repository_id = payload["repository"]["id"]
         .as_u64()
         .ok_or(ErrorCode::InvalidMessage)?;
-    Ok(Some(incoming(channel.id, repository_id, context, &mandate)))
+    Ok(Some(WebhookEvent::Review(Box::new(incoming(
+        channel.id,
+        repository_id,
+        context,
+        &mandate,
+    )))))
+}
+
+fn head_changed(
+    channel_id: ChannelId,
+    repository: &str,
+    payload: &Value,
+) -> Result<WebhookEvent, ErrorCode> {
+    let pull_number = payload["number"]
+        .as_u64()
+        .filter(|number| *number > 0)
+        .ok_or(ErrorCode::InvalidMessage)?;
+    Ok(WebhookEvent::HeadChanged {
+        key: ReviewStatusKey {
+            channel_id,
+            repository: repository.to_ascii_lowercase(),
+            pull_number,
+        },
+        before: object_name(required_text(payload, "before", 64)?)?,
+        after: object_name(required_text(payload, "after", 64)?)?,
+    })
 }
 
 pub(super) async fn run(
@@ -200,6 +247,8 @@ pub(super) async fn run(
         app_id,
         private_key_ref,
         installation_id,
+        mention,
+        status_language,
         ..
     } = &channel.config
     else {
@@ -209,28 +258,125 @@ pub(super) async fn run(
         .await?;
     bots.channel_status(channel.id, json!({"state":"connected"}))
         .await;
-    let private_key = credentials.resolve_key(private_key_ref)?;
-    let app_id = app_id.clone();
-    let installation_id = installation_id.clone();
+    let app = App {
+        id: app_id.clone(),
+        installation: installation_id.clone(),
+        key: credentials.resolve_key(private_key_ref)?,
+    };
     let github = GithubClient::new(client);
-    deliver(&bots, channel.id, cancel, |turn, _conversation| {
-        let github = github.clone();
-        let private_key = private_key.clone();
-        let bots = bots.clone();
-        let app_id = app_id.clone();
-        let installation_id = installation_id.clone();
-        async move {
-            let workspace = review_workspace(&turn)?;
-            let (github, turn) = (&github, &turn);
-            let (app_id, installation_id, key) = (&app_id, &installation_id, &private_key);
-            GithubClient::retrying(|| github.submit(app_id, installation_id, key, turn))
-                .await
-                .map_err(Failure::code)?;
-            let _ = bots.archive_review(workspace).await;
-            Ok(())
-        }
-    })
+    let publishing = deliver(&bots, channel.id, cancel, |turn, _conversation| {
+        let (github, app, bots) = (github.clone(), app.clone(), bots.clone());
+        async move { publish(&bots, &github, &app, &turn).await }
+    });
+    let showing = show_status(
+        &bots,
+        &github,
+        &app,
+        &channel,
+        (mention, *status_language),
+        cancel,
+    );
+    // The status loop only ends with the channel; a delivery error restarts both.
+    tokio::select! {
+        result = publishing => result,
+        () = showing => Ok(()),
+    }
+}
+
+/// The App identity a channel acts as.
+#[derive(Clone)]
+struct App {
+    id: String,
+    installation: String,
+    key: SecretString,
+}
+
+/// Publish one finished review turn and note the result on its status board.
+async fn publish(
+    bots: &Bots,
+    github: &GithubClient,
+    app: &App,
+    turn: &domain::bot::Turn,
+) -> Result<(), ErrorCode> {
+    let workspace = review_workspace(turn)?;
+    let published = GithubClient::retrying(
+        || github.submit(&app.id, &app.installation, &app.key, turn),
+        |wait| {
+            let event = StatusEvent::RateLimited {
+                wait_seconds: wait.as_secs(),
+            };
+            async move {
+                let _ = bots.review_status_event(turn.id, event).await;
+            }
+        },
+    )
     .await
+    .map_err(Failure::code)?;
+    if let Some(published) = published {
+        let event = StatusEvent::Published {
+            high: published.high,
+            medium: published.medium,
+            low: published.low,
+            url: published.url,
+        };
+        let _ = bots.review_status_event(turn.id, event).await;
+    }
+    let _ = bots.archive_review(workspace).await;
+    Ok(())
+}
+
+/// How often the status boards are checked; changes in between are merged into one write.
+const STATUS_INTERVAL: Duration = Duration::from_secs(3);
+/// Wait before retrying a board GitHub refused for good, such as a missing permission.
+const STATUS_BACKOFF: Duration = Duration::from_secs(300);
+
+/// Keep each pull request's status comment in step with its board until `cancel`.
+async fn show_status(
+    bots: &Bots,
+    github: &GithubClient,
+    app: &App,
+    channel: &Channel,
+    (mention, language): (&str, StatusLanguage),
+    cancel: &CancellationToken,
+) {
+    let mut resting: BTreeMap<ReviewStatusKey, tokio::time::Instant> = BTreeMap::new();
+    loop {
+        tokio::select! {
+            () = cancel.cancelled() => return,
+            () = tokio::time::sleep(STATUS_INTERVAL) => {}
+        }
+        let Ok(boards) = bots.review_status_pending(channel.id).await else {
+            continue;
+        };
+        let now = tokio::time::Instant::now();
+        resting.retain(|_, until| *until > now);
+        let due: Vec<_> = boards
+            .iter()
+            .filter(|status| !resting.contains_key(&status.key))
+            .collect();
+        for status in due {
+            let board = Board {
+                status,
+                mention,
+                language,
+            };
+            match github
+                .sync_status(&app.id, &app.installation, &app.key, &board)
+                .await
+            {
+                Ok(written) => {
+                    let _ = bots.review_status_written(written).await;
+                }
+                Err(Failure::Later(wait)) => {
+                    resting.insert(status.key.clone(), now + wait.max(STATUS_INTERVAL));
+                }
+                Err(Failure::Final) => {
+                    tracing::warn!(channel = %channel.id, "GitHub review status could not be shown");
+                    resting.insert(status.key.clone(), now + STATUS_BACKOFF);
+                }
+            }
+        }
+    }
 }
 
 fn trigger(

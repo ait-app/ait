@@ -110,6 +110,11 @@ export const bots = {
     addRepository: "Add repository",
     removeRepository: "Remove",
     triggers: "Review triggers",
+    statusLanguage: "Status comment language",
+    statusLanguageHint:
+      "The bot keeps one status comment on each pull request and appends each step of the review to it.",
+    statusLanguageEnglish: "English",
+    statusLanguageChinese: "Simplified Chinese",
     triggerMention: "@bot review in a pull request comment",
     triggerAssignee: "Bot assigned to the pull request",
     summary: "@{{mention}} · {{count}} repository binding(s)",

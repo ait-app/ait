@@ -33,6 +33,14 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   旧 `<data>/bots/` 不迁移，daemon 启动时关闭其中记录的隐藏会话后删除该目录
   （[ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)）。
 
+## GitHub PR 审阅状态
+
+- 每个 GitHub Channel 按仓库与 PR 持久保存审阅状态。轮次和 GitHub 投递的变化追加为状态行，
+  GitHub Channel worker 在一个状态评论中同步，达到评论长度时接续到新评论。
+- PR head 更新会标记旧审阅过期，已接纳的审阅继续按原先冻结的比较执行。状态评论的写入与
+  review 发布分别重试，状态记录和评论 ID 在重启后继续使用。
+  详见 [ADR-321](../decisions/bot/adr-321-github-app-review-channel.md)。
+
 ## 对话与执行
 
 - Bot 以单一原生上下文接收所有入口的输入，按持久化 Bot 顺序串行执行。Conversation 保留 Channel、peer、sender、thread，作为来源、历史与回执路由，不再各自拥有独立模型上下文。子 Agent 仍可并发。

@@ -9,16 +9,24 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-use domain::bot::{GithubReviewContext, TurnContext, TurnStatus};
+use domain::bot::review_status::{ReviewStatus, ReviewStatusPage};
+use domain::bot::{GithubReviewContext, StatusLanguage, TurnContext, TurnStatus};
 use model::ErrorCode;
 use reqwest::{Response, StatusCode};
 use ring::rand::SystemRandom;
 use ring::signature::{RSA_PKCS1_SHA256, RsaKeyPair};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
+use super::status::{marker, pages, render};
 use super::{fallback_body, report, review_comment, short_sha};
 use crate::channels::json_response;
+use crate::state::StatusWritten;
+
+fn comment_id(pages: &[Option<ReviewStatusPage>], index: usize) -> Option<u64> {
+    pages.get(index)?.as_ref().map(|page| page.comment_id)
+}
 
 const API: &str = "https://api.github.com";
 const API_VERSION: &str = "2022-11-28";
@@ -59,6 +67,29 @@ impl Failure {
     }
 }
 
+/// What a published review reported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Published {
+    /// Findings by severity.
+    pub(super) high: u64,
+    /// Findings by severity.
+    pub(super) medium: u64,
+    /// Findings by severity.
+    pub(super) low: u64,
+    /// Link to the review, or to the comment it fell back to.
+    pub(super) url: Option<String>,
+}
+
+/// Where a status board is shown on GitHub.
+pub(super) struct Board<'a> {
+    /// The board.
+    pub(super) status: &'a ReviewStatus,
+    /// App slug.
+    pub(super) mention: &'a str,
+    /// Language of the comment.
+    pub(super) language: StatusLanguage,
+}
+
 /// An installation token and when it was issued.
 type CachedToken = (String, SecretString, Instant);
 
@@ -82,19 +113,27 @@ impl GithubClient {
         }
     }
 
-    /// Run `call` again while GitHub refuses it before acting, up to [`ATTEMPTS`] times.
+    /// Run `call` again while GitHub refuses it before acting, up to [`ATTEMPTS`] times,
+    /// telling `waiting` how long each wait is before it starts.
     /// # Errors
     /// The last failure once it is final or the attempts are used up.
-    pub(super) async fn retrying<T, F, Fut>(mut call: F) -> Result<T, Failure>
+    pub(super) async fn retrying<T, F, Fut, W, WaitFut>(
+        mut call: F,
+        mut waiting: W,
+    ) -> Result<T, Failure>
     where
         F: FnMut() -> Fut,
         Fut: Future<Output = Result<T, Failure>>,
+        W: FnMut(Duration) -> WaitFut,
+        WaitFut: Future<Output = ()>,
     {
         let mut attempt = 1;
         loop {
             match call().await {
                 Err(Failure::Later(wait)) if attempt < ATTEMPTS => {
-                    tokio::time::sleep(wait.min(MAX_WAIT)).await;
+                    let wait = wait.min(MAX_WAIT);
+                    waiting(wait).await;
+                    tokio::time::sleep(wait).await;
                     attempt += 1;
                 }
                 result => return result,
@@ -126,7 +165,8 @@ impl GithubClient {
         Err(self.refused(&response))
     }
 
-    /// Publish the outcome of a review `turn` on its pull request.
+    /// Publish a completed review `turn` on its pull request; any other outcome is shown on
+    /// the status comment only, so nothing is posted for it.
     /// # Errors
     /// [`Failure::Later`] when nothing was posted and the delivery may be repeated.
     pub(super) async fn submit(
@@ -135,17 +175,30 @@ impl GithubClient {
         installation_id: &str,
         private_key: &SecretString,
         turn: &domain::bot::Turn,
-    ) -> Result<(), Failure> {
+    ) -> Result<Option<Published>, Failure> {
         let Some(TurnContext::GithubReview(context)) = turn.context.as_ref() else {
             return Err(Failure::Final);
         };
+        if turn.status != TurnStatus::Completed {
+            return Ok(None);
+        }
         let token = self
             .installation_token(app_id, installation_id, private_key)
             .await?;
-        if let Some(body) = outcome_note(turn, context) {
-            return self.post_comment(&token, context, &body).await;
-        }
         let report = report(turn)?;
+        let count = |severity: &str| {
+            report
+                .findings
+                .iter()
+                .filter(|finding| finding.severity == severity)
+                .count() as u64
+        };
+        let mut published = Published {
+            high: count("high"),
+            medium: count("medium"),
+            low: count("low"),
+            url: None,
+        };
         let comments = report
             .findings
             .iter()
@@ -160,23 +213,26 @@ impl GithubClient {
         // 422 means GitHub refused the review as given; usually an inline position it no
         // longer accepts. The findings then move into the body, and last into a comment.
         let fallback = fallback_body(&report, context);
-        if self.post_review(&token, context, &body, &comments).await? {
-            return Ok(());
+        let mut posted = self.post_review(&token, context, &body, &comments).await?;
+        if posted.is_none() && !comments.is_empty() {
+            posted = self.post_review(&token, context, &fallback, &[]).await?;
         }
-        if !comments.is_empty() && self.post_review(&token, context, &fallback, &[]).await? {
-            return Ok(());
-        }
-        self.post_comment(&token, context, &fallback).await
+        let posted = match posted {
+            Some(posted) => posted,
+            None => self.post_comment(&token, context, &fallback).await?,
+        };
+        published.url = posted["html_url"].as_str().map(str::to_owned);
+        Ok(Some(published))
     }
 
-    /// Post a `COMMENT` review; `Ok(false)` when GitHub refused it as invalid (422).
+    /// Post a `COMMENT` review; `Ok(None)` when GitHub refused it as invalid (422).
     async fn post_review(
         &self,
         token: &SecretString,
         context: &GithubReviewContext,
         body: &str,
         comments: &[Value],
-    ) -> Result<bool, Failure> {
+    ) -> Result<Option<Value>, Failure> {
         let url = format!(
             "{}/repos/{}/pulls/{}/reviews",
             self.api, context.repository, context.pull_number
@@ -196,11 +252,10 @@ impl GithubClient {
             )
             .await?;
         if response.status().is_success() {
-            let _ = json_response(response).await?;
-            return Ok(true);
+            return Ok(Some(json_response(response).await.unwrap_or(Value::Null)));
         }
         if response.status() == StatusCode::UNPROCESSABLE_ENTITY {
-            return Ok(false);
+            return Ok(None);
         }
         Err(self.refused(&response))
     }
@@ -210,11 +265,19 @@ impl GithubClient {
         token: &SecretString,
         context: &GithubReviewContext,
         body: &str,
-    ) -> Result<(), Failure> {
-        let url = format!(
-            "{}/repos/{}/issues/{}/comments",
-            self.api, context.repository, context.pull_number
-        );
+    ) -> Result<Value, Failure> {
+        self.create_comment(token, &context.repository, context.pull_number, body)
+            .await
+    }
+
+    async fn create_comment(
+        &self,
+        token: &SecretString,
+        repository: &str,
+        number: u64,
+        body: &str,
+    ) -> Result<Value, Failure> {
+        let url = format!("{}/repos/{repository}/issues/{number}/comments", self.api);
         let response = self
             .send(
                 self.client
@@ -224,7 +287,206 @@ impl GithubClient {
             )
             .await?;
         if response.status().is_success() {
-            let _ = json_response(response).await?;
+            return Ok(json_response(response).await?);
+        }
+        Err(self.refused(&response))
+    }
+
+    /// Show `board` on its pull request: react to waiting trigger comments, then create or
+    /// update the status comment, moving on to a new comment when it would be too long.
+    /// # Errors
+    /// [`Failure::Later`] when GitHub refused before acting.
+    pub(super) async fn sync_status(
+        &self,
+        app_id: &str,
+        installation_id: &str,
+        private_key: &SecretString,
+        board: &Board<'_>,
+    ) -> Result<StatusWritten, Failure> {
+        let status = board.status;
+        let token = self
+            .installation_token(app_id, installation_id, private_key)
+            .await?;
+        let repository = &status.key.repository;
+        let mut reacted = Vec::new();
+        for comment in &status.pending_reactions {
+            match self.react(&token, repository, *comment).await {
+                Ok(()) | Err(Failure::Final) => reacted.push(*comment),
+                Err(later) => return Err(later),
+            }
+        }
+        let mut written = StatusWritten {
+            key: status.key.clone(),
+            revision: status.revision,
+            pages: status.pages.clone(),
+            reacted,
+        };
+        if status.revision <= status.published_revision {
+            return Ok(written);
+        }
+
+        let pages = pages(status);
+        let mut comments: Vec<_> = status.pages.iter().cloned().map(Some).collect();
+        comments.resize(pages.len(), None);
+        for _ in 0..3 {
+            let mut ids_changed = false;
+            for (index, page) in pages.iter().enumerate() {
+                let previous = index
+                    .checked_sub(1)
+                    .and_then(|index| comment_id(&comments, index));
+                let next = comment_id(&comments, index + 1);
+                let body = render(
+                    status,
+                    (page, index),
+                    (board.mention, board.language),
+                    (previous, next),
+                );
+                let existing = comments[index].as_ref();
+                let sha = format!("{:x}", Sha256::digest(body.as_bytes()));
+                if existing.is_some_and(|page| page.body_hash == sha) {
+                    continue;
+                }
+                let id = self
+                    .write_status_page(
+                        &token,
+                        board,
+                        index,
+                        existing.map(|page| page.comment_id),
+                        &body,
+                    )
+                    .await?;
+                ids_changed |= existing.map(|page| page.comment_id) != Some(id);
+                comments[index] = Some(ReviewStatusPage {
+                    comment_id: id,
+                    body_hash: sha,
+                });
+            }
+            // A new or recreated comment gives its predecessor a new link.
+            if !ids_changed {
+                written.pages = comments.into_iter().flatten().collect();
+                return Ok(written);
+            }
+        }
+        // The comment IDs kept changing during synchronization. Retry from their markers.
+        Err(Failure::Later(Duration::ZERO))
+    }
+
+    async fn write_status_page(
+        &self,
+        token: &SecretString,
+        board: &Board<'_>,
+        number: usize,
+        existing: Option<u64>,
+        body: &str,
+    ) -> Result<u64, Failure> {
+        let status = board.status;
+        let repository = &status.key.repository;
+        if let Some(id) = existing
+            && self.update_comment(token, repository, id, body).await?
+        {
+            return Ok(id);
+        }
+        if let Some(id) = self
+            .find_status_comment(token, status, board.mention, number)
+            .await?
+            && Some(id) != existing
+            && self.update_comment(token, repository, id, body).await?
+        {
+            return Ok(id);
+        }
+        self.create_comment(token, repository, status.key.pull_number, body)
+            .await?["id"]
+            .as_u64()
+            .ok_or(Failure::Final)
+    }
+
+    /// The bot's existing status comment for `status`, found by its hidden marker.
+    async fn find_status_comment(
+        &self,
+        token: &SecretString,
+        status: &ReviewStatus,
+        mention: &str,
+        number: usize,
+    ) -> Result<Option<u64>, Failure> {
+        let marker = marker(status, number);
+        let author = format!("{mention}[bot]");
+        for page in 1.. {
+            let url = format!(
+                "{}/repos/{}/issues/{}/comments?per_page=10&page={page}",
+                self.api, status.key.repository, status.key.pull_number
+            );
+            let response = self
+                .send(self.client.get(url).bearer_auth(token.expose_secret()))
+                .await?;
+            if !response.status().is_success() {
+                return Err(self.refused(&response));
+            }
+            let comments = json_response(response).await?;
+            let comments = comments.as_array().map(Vec::as_slice).unwrap_or_default();
+            let found = comments.iter().rev().find(|comment| {
+                comment["user"]["login"]
+                    .as_str()
+                    .is_some_and(|login| login.eq_ignore_ascii_case(&author))
+                    && comment["body"]
+                        .as_str()
+                        .is_some_and(|body| body.starts_with(&marker))
+            });
+            if let Some(found) = found {
+                return Ok(found["id"].as_u64());
+            }
+            if comments.len() < 10 {
+                break;
+            }
+        }
+        Ok(None)
+    }
+
+    /// Replace comment `comment`'s body; `Ok(false)` when the comment no longer exists.
+    async fn update_comment(
+        &self,
+        token: &SecretString,
+        repository: &str,
+        comment: u64,
+        body: &str,
+    ) -> Result<bool, Failure> {
+        let url = format!("{}/repos/{repository}/issues/comments/{comment}", self.api);
+        let response = self
+            .send(
+                self.client
+                    .patch(url)
+                    .bearer_auth(token.expose_secret())
+                    .json(&json!({"body":body})),
+            )
+            .await?;
+        if response.status().is_success() {
+            return Ok(true);
+        }
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(false);
+        }
+        Err(self.refused(&response))
+    }
+
+    /// Add an eyes reaction to trigger comment `comment`.
+    async fn react(
+        &self,
+        token: &SecretString,
+        repository: &str,
+        comment: u64,
+    ) -> Result<(), Failure> {
+        let url = format!(
+            "{}/repos/{repository}/issues/comments/{comment}/reactions",
+            self.api
+        );
+        let response = self
+            .send(
+                self.client
+                    .post(url)
+                    .bearer_auth(token.expose_secret())
+                    .json(&json!({"content":"eyes"})),
+            )
+            .await?;
+        if response.status().is_success() {
             return Ok(());
         }
         Err(self.refused(&response))
@@ -300,30 +562,6 @@ impl GithubClient {
                     Failure::Final
                 }
             })
-    }
-}
-
-/// The comment for a review that produced no report, or `None` when it completed.
-fn outcome_note(turn: &domain::bot::Turn, context: &GithubReviewContext) -> Option<String> {
-    let at = format!(
-        "`{}` at `{}`",
-        context.repository,
-        short_sha(&context.head_sha)
-    );
-    match turn.status {
-        TurnStatus::Failed => {
-            let reason = turn
-                .error
-                .as_deref()
-                .unwrap_or("The review could not be completed");
-            Some(format!("GitHub review could not run for {at}: {reason}"))
-        }
-        // The same head is reviewed once, so only a new commit asks again.
-        TurnStatus::Uncertain => Some(format!(
-            "GitHub review for {at} did not finish: its outcome could not be confirmed. \
-             Push a new commit to request another review."
-        )),
-        _ => None,
     }
 }
 

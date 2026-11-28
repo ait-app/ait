@@ -164,6 +164,9 @@ impl State {
             {
                 return Err(ErrorCode::IdempotencyConflict);
             }
+            if same_review && another_request(turn.context.as_ref(), incoming.context.as_ref()) {
+                self.review_requested_again(&turn, incoming.context.as_ref());
+            }
             return Ok(json!({"turn":turn,"accepted":true,"duplicate":true}));
         }
         let conversation = self.route(&incoming)?;
@@ -408,6 +411,31 @@ impl State {
             self.save_catalog(catalog)?;
         }
         Ok(())
+    }
+}
+
+/// Whether `incoming` asks for the same review differently from `existing`: another trigger,
+/// user or comment. A redelivery of the same event asks nothing new.
+fn another_request(
+    existing: Option<&domain::bot::TurnContext>,
+    incoming: Option<&domain::bot::TurnContext>,
+) -> bool {
+    match (existing, incoming) {
+        (
+            Some(domain::bot::TurnContext::GithubReview(existing)),
+            Some(domain::bot::TurnContext::GithubReview(incoming)),
+        ) => {
+            (
+                existing.trigger,
+                &existing.trigger_user,
+                &existing.trigger_comment_id,
+            ) != (
+                incoming.trigger,
+                &incoming.trigger_user,
+                &incoming.trigger_comment_id,
+            )
+        }
+        _ => false,
     }
 }
 

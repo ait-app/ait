@@ -139,27 +139,6 @@ pub(crate) struct Incoming {
     pub(crate) context: Option<TurnContext>,
 }
 
-pub(crate) async fn github_webhook(
-    channel: &Channel,
-    credentials: &Arc<dyn Credentials>,
-    client: &reqwest::Client,
-    event: &str,
-    delivery_id: &str,
-    signature: &str,
-    body: &[u8],
-) -> Result<Option<Incoming>, ErrorCode> {
-    github::webhook(
-        channel,
-        credentials,
-        client,
-        event,
-        delivery_id,
-        signature,
-        body,
-    )
-    .await
-}
-
 /// Return each user-visible assistant message for external delivery.
 ///
 /// New turns carry distinct messages; the legacy reply projection remains a fallback for records

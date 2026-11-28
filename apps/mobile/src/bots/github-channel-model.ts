@@ -15,8 +15,11 @@ export interface GithubChannelDraft {
   privateKeyRef: string;
   webhookSecretRef: string;
   enabled: boolean;
+  statusLanguage: GithubStatusLanguage;
   repositories: GithubRepositoryDraft[];
 }
+
+export type GithubStatusLanguage = "en" | "zh-cn";
 
 export type GithubChannelConfig = Extract<BotChannelConfig, { kind: "github" }>;
 
@@ -64,6 +67,7 @@ export function createGithubChannelDraft(input: {
       config?.webhookSecretRef ??
       `env:AIT_SERVER_CREDENTIAL_STORED_${input.channelId.replaceAll("-", "").toUpperCase()}`,
     enabled: input.channel?.enabled ?? true,
+    statusLanguage: config?.statusLanguage ?? "en",
     repositories: config
       ? config.repositories.map((repository, index) => ({
           key: `${input.repositoryKey}-${index}`,
@@ -130,6 +134,8 @@ export function buildGithubChannelConfig(draft: GithubChannelDraft): GithubDraft
       installationId,
       mention,
       repositories,
+      // English is the default, so older daemons keep receiving the shape they know.
+      ...(draft.statusLanguage === "zh-cn" ? { statusLanguage: "zh-cn" as const } : {}),
     },
   };
 }

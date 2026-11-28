@@ -1,3 +1,4 @@
+use domain::bot::review_status::ReviewStatusPage;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
@@ -13,12 +14,15 @@ use domain::{BotTurnId, ConversationId};
 use secrecy::SecretString;
 use serde_json::{Value, json};
 
-use super::{Failure, GithubClient};
+use super::{Board, Failure, GithubClient, Published};
+use crate::state::StatusWritten;
+use domain::bot::StatusLanguage;
+use domain::bot::review_status::{ReviewStatus, ReviewStatusKey, StatusEvent};
 
 const INSTALLATION: &str = "9";
 
-/// A scripted answer: its status and extra headers.
-type Reply = (u16, Vec<(&'static str, String)>);
+/// A scripted answer: its status, extra headers and body.
+type Reply = (u16, Vec<(&'static str, String)>, Option<Value>);
 
 /// A GitHub API that answers each request with the next scripted reply (200 when none is
 /// left) and records what it was asked.
@@ -33,16 +37,31 @@ impl FakeGithub {
         self.replies
             .lock()
             .unwrap()
-            .push_back((status, headers.to_vec()));
+            .push_back((status, headers.to_vec(), None));
         self
     }
 
-    fn paths(&self) -> Vec<String> {
+    fn reply_with(&self, status: u16, body: Value) -> &Self {
+        self.replies
+            .lock()
+            .unwrap()
+            .push_back((status, Vec::new(), Some(body)));
+        self
+    }
+
+    fn requests(&self) -> Vec<String> {
         self.seen
             .lock()
             .unwrap()
             .iter()
             .map(|(path, _)| path.clone())
+            .collect()
+    }
+
+    fn paths(&self) -> Vec<String> {
+        self.requests()
+            .into_iter()
+            .map(|request| request.split_once(' ').unwrap().1.to_owned())
             .collect()
     }
 
@@ -66,19 +85,25 @@ impl FakeGithub {
     }
 }
 
-async fn answer(State(github): State<FakeGithub>, uri: Uri, body: Bytes) -> Response {
+async fn answer(
+    State(github): State<FakeGithub>,
+    method: axum::http::Method,
+    uri: Uri,
+    body: Bytes,
+) -> Response {
     let body = serde_json::from_slice(&body).unwrap_or(Value::Null);
     github
         .seen
         .lock()
         .unwrap()
-        .push((uri.path().to_owned(), body));
-    let (status, headers) = github
-        .replies
-        .lock()
-        .unwrap()
-        .pop_front()
-        .unwrap_or((200, Vec::new()));
+        .push((format!("{method} {}", uri.path()), body));
+    let (status, headers, reply) =
+        github
+            .replies
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or((200, Vec::new(), None));
     let mut map = HeaderMap::new();
     for (name, value) in headers {
         map.insert(
@@ -86,10 +111,13 @@ async fn answer(State(github): State<FakeGithub>, uri: Uri, body: Bytes) -> Resp
             HeaderValue::from_str(&value).unwrap(),
         );
     }
+    let reply = reply.unwrap_or_else(
+        || json!({"id":1,"html_url":"https://github.com/owner/repository/pull/7#review-1"}),
+    );
     (
         StatusCode::from_u16(status).unwrap(),
         map,
-        axum::Json(json!({"id":1})),
+        axum::Json(reply),
     )
         .into_response()
 }
@@ -136,11 +164,13 @@ fn review_turn(status: TurnStatus) -> Turn {
     }
 }
 
-async fn submit(client: &GithubClient, turn: &Turn) -> Result<(), Failure> {
+async fn submit(client: &GithubClient, turn: &Turn) -> Result<Option<Published>, Failure> {
     client
         .submit("1", INSTALLATION, &SecretString::from("not a key"), turn)
         .await
 }
+
+async fn no_wait(_: std::time::Duration) {}
 
 const REVIEWS: &str = "/repos/owner/repository/pulls/7/reviews";
 const COMMENTS: &str = "/repos/owner/repository/issues/7/comments";
@@ -153,9 +183,19 @@ async fn a_rate_limited_review_is_posted_once_after_github_lets_it_through() {
         .reply(403, &[("retry-after", "0".to_owned())]);
     let client = github.start().await;
     let turn = review_turn(TurnStatus::Completed);
-    GithubClient::retrying(|| submit(&client, &turn))
+    let published = GithubClient::retrying(|| submit(&client, &turn), no_wait)
         .await
+        .unwrap()
         .unwrap();
+    assert_eq!(
+        published,
+        Published {
+            high: 1,
+            medium: 0,
+            low: 0,
+            url: Some("https://github.com/owner/repository/pull/7#review-1".to_owned()),
+        }
+    );
     // The cached token served every attempt; only the third review was accepted.
     assert_eq!(github.paths(), [REVIEWS, REVIEWS, REVIEWS]);
     assert_eq!(github.body(2)["comments"][0]["path"], "src/lib.rs");
@@ -178,30 +218,18 @@ async fn an_invalid_review_moves_its_findings_into_the_body_then_into_a_comment(
 }
 
 #[tokio::test]
-async fn a_failed_review_leaves_a_comment_on_the_pull_request() {
+async fn a_review_that_did_not_complete_posts_nothing_of_its_own() {
     let github = FakeGithub::default();
     let client = github.start().await;
-    submit(&client, &review_turn(TurnStatus::Failed))
-        .await
-        .unwrap();
-    assert_eq!(github.paths(), [COMMENTS]);
-    let body = github.body(0)["body"].as_str().unwrap().to_owned();
-    assert!(body.contains("checkout failed"), "{body}");
-}
-
-#[tokio::test]
-async fn an_unconfirmed_review_says_so_and_asks_for_a_new_commit() {
-    let github = FakeGithub::default();
-    let client = github.start().await;
-    submit(&client, &review_turn(TurnStatus::Uncertain))
-        .await
-        .unwrap();
-    assert_eq!(github.paths(), [COMMENTS]);
-    let body = github.body(0)["body"].as_str().unwrap().to_owned();
-    assert!(
-        body.contains("could not be confirmed") && body.contains("new commit"),
-        "{body}"
-    );
+    for status in [
+        TurnStatus::Failed,
+        TurnStatus::Uncertain,
+        TurnStatus::Cancelled,
+    ] {
+        assert_eq!(submit(&client, &review_turn(status)).await, Ok(None));
+    }
+    // The outcome is shown on the status comment instead.
+    assert!(github.paths().is_empty());
 }
 
 #[tokio::test]
@@ -211,7 +239,7 @@ async fn errors_whose_effect_is_unknown_are_not_repeated() {
     let client = github.start().await;
     let turn = review_turn(TurnStatus::Completed);
     assert_eq!(
-        GithubClient::retrying(|| submit(&client, &turn)).await,
+        GithubClient::retrying(|| submit(&client, &turn), no_wait).await,
         Err(Failure::Final)
     );
     // A plain 403 is a missing permission, not a rate limit.
@@ -273,4 +301,165 @@ async fn a_token_is_reused_only_for_its_installation() {
         .await
         .unwrap();
     assert_eq!(github.paths(), ["/repos/owner/repository/pulls/7"]);
+}
+
+fn status_board(comment: Option<u64>) -> ReviewStatus {
+    let mut status = ReviewStatus::new(ReviewStatusKey {
+        channel_id: "d4119547-46ff-4a0c-82e1-5b921ca2d25e".parse().unwrap(),
+        repository: "owner/repository".to_owned(),
+        pull_number: 7,
+    });
+    status.append(
+        &"2".repeat(40),
+        StatusEvent::Preparing,
+        "2026-11-28T08:45:00Z",
+    );
+    if let Some(comment_id) = comment {
+        status.pages.push(ReviewStatusPage {
+            comment_id,
+            body_hash: String::new(),
+        });
+    }
+    status
+}
+
+async fn sync(client: &GithubClient, status: &ReviewStatus) -> Result<StatusWritten, Failure> {
+    let board = Board {
+        status,
+        mention: "ait-bot",
+        language: StatusLanguage::En,
+    };
+    client
+        .sync_status("1", INSTALLATION, &SecretString::from("not a key"), &board)
+        .await
+}
+
+const ISSUE_COMMENTS: &str = "/repos/owner/repository/issues/7/comments";
+
+#[tokio::test]
+async fn the_first_status_reacts_then_creates_its_comment_with_the_marker() {
+    let github = FakeGithub::default();
+    github
+        .reply(201, &[])
+        .reply_with(200, json!([]))
+        .reply_with(201, json!({"id": 77}));
+    let client = github.start().await;
+    let mut status = status_board(None);
+    status.react(10);
+    let written = sync(&client, &status).await.unwrap();
+    assert_eq!(
+        github.requests(),
+        [
+            "POST /repos/owner/repository/issues/comments/10/reactions",
+            &format!("GET {ISSUE_COMMENTS}"),
+            &format!("POST {ISSUE_COMMENTS}"),
+        ]
+    );
+    assert_eq!(github.body(0)["content"], "eyes");
+    let body = github.body(2)["body"].as_str().unwrap().to_owned();
+    assert!(
+        body.starts_with("<!-- ait-review-status:v1 channel=d4119547"),
+        "{body}"
+    );
+    assert_eq!(
+        (
+            written.pages[0].comment_id,
+            written.revision,
+            written.reacted
+        ),
+        (77, 1, vec![10])
+    );
+}
+
+#[tokio::test]
+async fn an_existing_status_comment_is_found_by_its_marker_and_edited() {
+    let github = FakeGithub::default();
+    let marker =
+        "<!-- ait-review-status:v1 channel=d4119547-46ff-4a0c-82e1-5b921ca2d25e page=0 -->\nold";
+    github.reply_with(
+        200,
+        json!([
+            {"id": 5, "user": {"login": "someone"}, "body": marker},
+            {"id": 6, "user": {"login": "ait-bot[bot]"}, "body": marker},
+        ]),
+    );
+    let client = github.start().await;
+    let written = sync(&client, &status_board(None)).await.unwrap();
+    assert_eq!(
+        github.requests(),
+        [
+            format!("GET {ISSUE_COMMENTS}"),
+            "PATCH /repos/owner/repository/issues/comments/6".to_owned(),
+        ]
+    );
+    assert_eq!(written.pages[0].comment_id, 6);
+}
+
+#[tokio::test]
+async fn a_deleted_status_comment_is_created_again() {
+    let github = FakeGithub::default();
+    github
+        .reply(404, &[])
+        .reply_with(200, json!([]))
+        .reply_with(201, json!({"id": 8}));
+    let client = github.start().await;
+    let written = sync(&client, &status_board(Some(6))).await.unwrap();
+    assert_eq!(
+        github.requests(),
+        [
+            "PATCH /repos/owner/repository/issues/comments/6".to_owned(),
+            format!("GET {ISSUE_COMMENTS}"),
+            format!("POST {ISSUE_COMMENTS}"),
+        ]
+    );
+    assert_eq!(written.pages[0].comment_id, 8);
+}
+
+#[tokio::test]
+async fn a_board_github_already_shows_only_sends_its_reactions() {
+    let github = FakeGithub::default();
+    let client = github.start().await;
+    let mut status = status_board(Some(6));
+    status.published_revision = status.revision;
+    assert_eq!(sync(&client, &status).await.unwrap().pages[0].comment_id, 6);
+    assert!(github.requests().is_empty());
+}
+
+#[tokio::test]
+async fn an_overflow_comment_preserves_old_lines_and_links_both_ways() {
+    let github = FakeGithub::default();
+    github
+        .reply(200, &[])
+        .reply_with(200, json!([]))
+        .reply_with(201, json!({"id": 8}))
+        .reply(200, &[]);
+    let client = github.start().await;
+    let mut status = status_board(Some(6));
+    for index in 0..110 {
+        status.append(
+            &"2".repeat(40),
+            StatusEvent::Failed {
+                reason: format!("line-{index:03} {}", "x".repeat(501)),
+            },
+            "2026-11-28T08:46:00Z",
+        );
+    }
+    let written = sync(&client, &status).await.unwrap();
+    assert_eq!(
+        written
+            .pages
+            .iter()
+            .map(|page| page.comment_id)
+            .collect::<Vec<_>>(),
+        [6, 8]
+    );
+    let old = github.body(3)["body"].as_str().unwrap().to_owned();
+    let new = github.body(2)["body"].as_str().unwrap().to_owned();
+    assert!(old.contains("line-000") && !new.contains("line-000"));
+    assert!(new.contains("line-109") && !old.contains("line-109"));
+    assert!(old.contains("#issuecomment-8") && new.contains("#issuecomment-6"));
+    assert_eq!(
+        old.matches("line-").count() + new.matches("line-").count(),
+        110
+    );
 }

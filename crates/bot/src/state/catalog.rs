@@ -192,6 +192,7 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
             installation_id,
             mention,
             repositories,
+            ..
         } => {
             validate_github(
                 app_id,
@@ -623,6 +624,7 @@ impl State {
         }
         if github {
             self.released_github.push(request.channel_id);
+            self.review_status_released(request.channel_id);
         }
         Ok(json!({"deleted":true,"channelId":request.channel_id}))
     }

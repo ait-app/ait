@@ -12,6 +12,7 @@ use crate::{BotId, BotTurnId, ChannelId, ConversationId};
 pub mod follow;
 pub mod notification;
 pub mod permissions;
+pub mod review_status;
 pub mod ticket;
 
 /// Reserved label carrying the Bot scope of an Agent or schedule.
@@ -222,7 +223,29 @@ pub enum ChannelConfig {
         mention: String,
         /// Explicit repository-to-project bindings admitted by this Channel.
         repositories: Vec<GithubRepositoryBinding>,
+        /// Language of the review status comment.
+        #[serde(default, skip_serializing_if = "StatusLanguage::is_english")]
+        status_language: StatusLanguage,
     },
+}
+
+/// Language of a GitHub review channel's status comment.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StatusLanguage {
+    /// English, the default.
+    #[default]
+    En,
+    /// Simplified Chinese.
+    ZhCn,
+}
+
+impl StatusLanguage {
+    /// Whether this is the default language, which stored configurations leave out.
+    #[must_use]
+    pub const fn is_english(&self) -> bool {
+        matches!(self, Self::En)
+    }
 }
 
 /// One repository admitted by a GitHub review Channel.

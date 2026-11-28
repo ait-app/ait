@@ -293,6 +293,7 @@ impl State {
                 continue;
             }
             self.preparing.insert(id);
+            self.review_event_by_id(id, domain::bot::review_status::StatusEvent::Preparing);
             preparations.push(ReviewPreparation {
                 turn_id: id,
                 context,
@@ -499,7 +500,9 @@ impl State {
     ) -> Result<(), ErrorCode> {
         let mut turn = self.turn(id)?;
         turn.delivery = status;
-        self.commit_turn(&turn)
+        self.commit_turn(&turn)?;
+        self.review_delivery_uncertain(&turn);
+        Ok(())
     }
 }
 

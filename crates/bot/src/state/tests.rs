@@ -337,6 +337,188 @@ fn an_unconfirmed_github_review_still_reaches_its_pull_request() {
     );
 }
 
+fn review_comment_input(channel: ChannelId, message: &str, comment: &str) -> Incoming {
+    let mut incoming = review_input(
+        channel,
+        message,
+        GithubReviewTrigger::Mention,
+        OTHER_WORKSPACE,
+    );
+    if let Some(TurnContext::GithubReview(context)) = incoming.context.as_mut() {
+        context.trigger_comment_id = Some(comment.to_owned());
+    }
+    incoming
+}
+
+#[test]
+fn review_status_boards_follow_a_review_and_survive_a_restart() {
+    use domain::bot::review_status::{ReviewStatusPage, StatusEvent};
+
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = github_channel(&mut state);
+    let first = review_comment_input(channel, "review", "501");
+    let review = state.accept(first.clone()).unwrap();
+    let review: BotTurnId = serde_json::from_value(review["turn"]["id"].clone()).unwrap();
+    // A redelivery adds nothing; another trigger on the same head adds one line.
+    state.accept(first).unwrap();
+    state
+        .accept(review_input(
+            channel,
+            "again",
+            GithubReviewTrigger::AssigneeAssignment,
+            OTHER_WORKSPACE,
+        ))
+        .unwrap();
+    let second_comment = review_comment_input(channel, "yet again", "502");
+    state.accept(second_comment.clone()).unwrap();
+    state.accept(second_comment).unwrap();
+    assert_eq!(state.review_preparations().len(), 1);
+    state
+        .review_prepared(review, Ok(OTHER_WORKSPACE.to_owned()))
+        .unwrap();
+    assert_eq!(state.ready().unwrap()[0].turn.id, review);
+    state
+        .progress(review, TurnStatus::Completed, Some("{}".to_owned()), None)
+        .unwrap();
+    state
+        .review_status_event(
+            review,
+            StatusEvent::Published {
+                high: 0,
+                medium: 2,
+                low: 0,
+                url: None,
+            },
+        )
+        .unwrap();
+    let boards = state.review_status_pending(channel);
+    assert_eq!(boards.len(), 1);
+    let kinds: Vec<_> = boards[0].heads[0]
+        .lines
+        .iter()
+        .map(|line| serde_json::to_value(&line.event).unwrap()["kind"].clone())
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            "requested",
+            "queued",
+            "requested_again",
+            "requested_again",
+            "preparing",
+            "reviewing",
+            "published"
+        ]
+    );
+    assert_eq!(boards[0].pending_reactions, [501, 502]);
+    state.review_status_written(&crate::state::StatusWritten {
+        key: boards[0].key.clone(),
+        revision: boards[0].revision,
+        pages: vec![ReviewStatusPage {
+            comment_id: 9,
+            body_hash: String::new(),
+        }],
+        reacted: vec![501, 502],
+    });
+    assert!(state.review_status_pending(channel).is_empty());
+    // The board, its comment and what GitHub saw survive a restart.
+    let restarted = fixture.state();
+    assert!(restarted.review_status_pending(channel).is_empty());
+    assert_eq!(restarted.review_status.len(), 1);
+    assert_eq!(
+        restarted.review_status.values().next().unwrap().pages[0].comment_id,
+        9
+    );
+    // Deleting the channel drops its boards.
+    let mut restarted = restarted;
+    restarted
+        .execute(
+            "bot.channel.delete.request",
+            json!({"workspaceId":WORKSPACE,"channelId":channel}),
+        )
+        .unwrap();
+    assert!(restarted.review_status.is_empty());
+    assert!(fixture.state().review_status.is_empty());
+}
+
+#[test]
+fn a_push_outdates_a_running_review_and_a_restart_records_the_uncertain_outcome() {
+    use domain::bot::review_status::StatusEvent;
+
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = github_channel(&mut state);
+    let result = state
+        .accept(review_input(
+            channel,
+            "review",
+            GithubReviewTrigger::Mention,
+            OTHER_WORKSPACE,
+        ))
+        .unwrap();
+    let turn = serde_json::from_value(result["turn"]["id"].clone()).unwrap();
+    state
+        .review_prepared(turn, Ok(OTHER_WORKSPACE.to_owned()))
+        .unwrap();
+    assert_eq!(state.ready().unwrap()[0].turn.id, turn);
+    let board = state.review_status_pending(channel).remove(0);
+    let previous = &board.heads[0].head_sha;
+    let new = "f".repeat(40);
+    state.review_head_changed(&board.key, &"e".repeat(40), &new);
+    assert_eq!(
+        state.review_status_pending(channel)[0].revision,
+        board.revision
+    );
+    state.review_head_changed(&board.key, previous, &new);
+    state.review_head_changed(&board.key, previous, &new);
+    assert_eq!(
+        state.review_status_pending(channel)[0].revision,
+        board.revision + 1
+    );
+    let restarted = fixture.state();
+    let boards = restarted.review_status_pending(channel);
+    let lines = &boards[0].heads[0].lines;
+    assert!(matches!(lines[lines.len() - 2].event, StatusEvent::Unknown));
+    assert_eq!(
+        lines.last().unwrap().event,
+        StatusEvent::Outdated { head_sha: new }
+    );
+}
+
+#[test]
+fn a_failed_or_unconfirmed_review_is_shown_on_its_board() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = github_channel(&mut state);
+    let review = state
+        .accept(review_input(
+            channel,
+            "review",
+            GithubReviewTrigger::Mention,
+            OTHER_WORKSPACE,
+        ))
+        .unwrap();
+    let review: BotTurnId = serde_json::from_value(review["turn"]["id"].clone()).unwrap();
+    state.review_preparations();
+    state.review_prepared(review, Err(())).unwrap();
+    let board = &state.review_status_pending(channel)[0];
+    let last = &board.heads[0].lines.last().unwrap().event;
+    assert_eq!(
+        serde_json::to_value(last).unwrap(),
+        json!({"kind":"failed","reason":"The frozen pull-request checkout could not be prepared"})
+    );
+}
+
 #[test]
 fn catalog_crud_requires_exclusive_ownership_and_retains_deleted_history() {
     let fixture = Fixture::new();

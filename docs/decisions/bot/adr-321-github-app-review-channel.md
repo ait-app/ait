@@ -78,6 +78,10 @@ JSON prompt 并在无法解析时降级为 summary。Bot 使用 GitHub pull-requ
   不使用 installation token，因此 Host 账号需能读取绑定仓库。
 - review 会话不是 Bot 的管理会话：它使用独立的 reviewer 指令（只保留 Workspace memory），自己读取
   冻结检出，不获得 Ait MCP 凭据；被拒绝 MCP 的会话连同 `ait` 的工具预授权一起移除。
+- 每个 PR 维护一份持久状态记录（`ReviewStatus`，按 channel + 仓库 + PR），新状态追加到记录中，
+  渲染时为过期状态加删除线。Channel worker 按隐藏标记查找或创建评论并整体 PATCH，接近长度上限时续写
+  新评论。GitHub 的 `pull_request.synchronize` 只更新已有状态。旧 head 的审阅仍能完成。
+  失败与结果无法确认也追加到同一份记录。
 - 冻结的是 head：base 分支在接纳后前进时，只要求接纳时的 base 仍是该分支的祖先，比较基准不变。
 - 发布区分「GitHub 未处理」（限流、401、连接失败，可安全重试）与结果不明的失败（不重试、投递记为
   uncertain）；结果无法确认的 review 也在 PR 留言。

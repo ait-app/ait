@@ -6,11 +6,13 @@ mod follow;
 mod notifications;
 mod recall;
 mod recovery;
+mod review_status;
 mod shared;
 mod tickets;
 mod webhook;
 
 pub(crate) use execution::ReviewPreparation;
+pub(crate) use review_status::StatusWritten;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -59,6 +61,11 @@ pub(crate) struct State {
     pending: BTreeMap<(ConversationId, u64), BotTurnId>,
     uncertain: BTreeSet<(ConversationId, u64)>,
     preparing: BTreeSet<BotTurnId>,
+    /// GitHub review status boards by pull request.
+    review_status: BTreeMap<
+        domain::bot::review_status::ReviewStatusKey,
+        domain::bot::review_status::ReviewStatus,
+    >,
     outbox: BTreeMap<ChannelId, BTreeMap<(ConversationId, u64), BotTurnId>>,
     pub(crate) running: BTreeMap<ConversationId, CancellationToken>,
     pub(crate) channel_status: BTreeMap<ChannelId, Value>,
@@ -117,7 +124,7 @@ impl State {
         }
         scopes.publish(&catalog);
         // Retried on every start so a crash after a deletion cannot strand its secret.
-        let released_credentials = catalog
+        let released_credentials: Vec<ChannelId> = catalog
             .channels
             .iter()
             .filter(|channel| channel.deleted)
@@ -126,6 +133,7 @@ impl State {
         let now = Utc::now();
         let notifications = notifications::load(store.as_ref(), &catalog)?;
         let loaded = tickets::load(store.as_ref(), &catalog, now)?;
+        let review_status = review_status::load(store.as_ref(), &released_credentials);
         let mut state = Self {
             store,
             workspaces,
@@ -139,6 +147,7 @@ impl State {
             pending: BTreeMap::new(),
             uncertain: BTreeSet::new(),
             preparing: BTreeSet::new(),
+            review_status,
             outbox: BTreeMap::new(),
             running: BTreeMap::new(),
             channel_status: BTreeMap::new(),
@@ -253,6 +262,10 @@ impl State {
         // nothing left to requeue, so the retry is neither lost nor repeated.
         self.reconcile_wakes(stored_wakes)?;
         for turn in &rewritten {
+            if turn.status == TurnStatus::Uncertain {
+                self.review_transition(Some(TurnStatus::Running), turn);
+            }
+            self.review_delivery_uncertain(turn);
             self.store.save_turn(turn).map_err(|_| ErrorCode::BotIo)?;
         }
         Ok(())
@@ -422,7 +435,10 @@ impl State {
             self.frozen = true;
             return Err(ErrorCode::BotIo);
         }
-        self.index_turn(turn)
+        let previous = self.receipts.get(&turn.id).map(|receipt| receipt.status);
+        self.index_turn(turn)?;
+        self.review_transition(previous, turn);
+        Ok(())
     }
     fn ensure_writable(&self) -> Result<(), ErrorCode> {
         if self.frozen {

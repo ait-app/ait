@@ -111,15 +111,28 @@ review 会话只读取冻结检出，不提供 Ait MCP 工具，使用独立的 
 
 Bot 固定事件中的 base/head SHA，创建临时 worktree，返回 summary 与 inline findings，成功投递
 后归档 worktree。同一 `repository + PR + head SHA` 在同一 Channel 只执行一次；push 新提交后
-head SHA 改变，可再次触发。base 分支在接纳后继续前进不影响 review：只要冻结的 base 仍在 base 分支历史中，就按接纳时的
-`base...head` 审阅；head 必须与接纳时完全一致。
+head SHA 改变，可再次触发。base 分支在接纳后继续前进时，只要冻结的 base 仍在 base 分支历史中，
+就按接纳时的 `base...head` 审阅。head 必须与接纳时完全一致。
 
-无法创建冻结 checkout 或 Provider 执行失败时，Bot 会在 PR 留下安全的失败说明；执行结果无法确认
-（`uncertain`）时也会留言说明，因同一 head 只审阅一次，需推送新提交后再次触发。Bot 不会 merge、
-approve、request changes 或 push。
+Bot 以带 inline finding 的 PR review 发布结果。执行或投递结果无法确认时，可推送新提交后再触发。
+Bot 不会 merge、approve、request changes 或 push。
 
 发布时遇到 GitHub 限流（429，或带 `Retry-After` / `x-ratelimit-remaining: 0` 的 403）、installation
 token 被拒（401）或连接失败，Bot 按 GitHub 给出的等待时间重试，单次最多 5 次、每次最多等待 60 秒；
 这些情况下 GitHub 尚未处理请求，不会重复发布。5xx 等结果不明的失败不重试。review 被 422 拒绝时
 （常见于 inline 位置失效），先把 findings 并入正文重发 review，仍被拒绝才改为普通 PR 评论。
 installation token 缓存 55 分钟。
+
+## 状态评论
+
+Bot 在 PR 上创建一条状态评论。每个提交有一段，每次变化追加一行，包含 emoji 和 UTC 时间。
+已有状态行全部保留，失效时加删除线。推送新提交时，旧提交追加 ⏭️ 已过期，正在运行的审阅仍可
+完成，并将结果发布到原提交。
+
+状态包括 📥 已请求、⏳ 已排队、📦 准备检出、🔍 审阅中、⏸️ 限流重试、✅ 已发布、❌ 失败、
+⚠️ 结果无法确认和 🚫 已取消。发布时显示各级别的问题数量，以及 GitHub 返回的 review 链接。
+失败原因和无法确认的提示也追加到状态评论。通过评论触发时，Bot 会给触发评论加 👀。
+
+状态评论语言在创建 Channel 时选择，默认英文，也可选简体中文。daemon 重启后按隐藏标记或已保存的
+评论 ID 继续同步。评论达到 48 KiB 时折叠较早的提交，接近 60 KiB 时另起评论续写并互相链接。
+更新最多每 3 秒合并一次。状态同步失败时，review 仍可发布。

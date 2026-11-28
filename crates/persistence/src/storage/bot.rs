@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use domain::bot::notification::NotificationLog;
+use domain::bot::review_status::ReviewStatus;
 use domain::bot::ticket::Ticket;
 use domain::bot::{Catalog, Conversation, Turn};
 use domain::{BotId, BotTurnId, ChannelId, ConversationId, TicketId};
@@ -222,9 +223,50 @@ impl Store for FileStore {
             Err(_) => Err(StorageError),
         }
     }
+    fn review_statuses(&self) -> Result<Vec<ReviewStatus>, StorageError> {
+        let mut statuses = Vec::new();
+        let channels = match fs::read_dir(self.root.join("review-status")) {
+            Ok(channels) => channels,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(statuses),
+            Err(_) => return Err(StorageError),
+        };
+        for channel in channels {
+            let channel = channel.map_err(|_| StorageError)?;
+            if channel.file_type().map_err(|_| StorageError)?.is_dir() {
+                visit_records(&channel.path(), &mut |status| {
+                    statuses.push(status);
+                    Ok(())
+                })?;
+            }
+        }
+        Ok(statuses)
+    }
+    fn save_review_status(&self, status: &ReviewStatus) -> Result<(), StorageError> {
+        let name = format!(
+            "{:x}.json",
+            Sha256::digest(format!(
+                "{}#{}",
+                status.key.repository, status.key.pull_number
+            ))
+        );
+        write(
+            &self.review_status_path(status.key.channel_id).join(name),
+            status,
+        )
+    }
+    fn delete_review_statuses(&self, channel: ChannelId) -> Result<(), StorageError> {
+        match fs::remove_dir_all(self.review_status_path(channel)) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(StorageError),
+        }
+    }
 }
 
 impl FileStore {
+    fn review_status_path(&self, channel: ChannelId) -> PathBuf {
+        self.root.join("review-status").join(channel.to_string())
+    }
     fn tickets_path(&self, bot: BotId) -> PathBuf {
         self.root.join("tickets").join(bot.to_string())
     }

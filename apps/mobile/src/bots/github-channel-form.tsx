@@ -16,6 +16,7 @@ import {
   type GithubChannelDraft,
   type GithubDraftError,
   type GithubRepositoryDraft,
+  type GithubStatusLanguage,
 } from "./github-channel-model";
 import { botStyles as styles } from "./styles";
 
@@ -203,6 +204,10 @@ export function GithubChannelForm({
     },
   });
   const disabled = save.isPending || !interactive || !active;
+  const languageLabel = (language: GithubStatusLanguage) =>
+    language === "zh-cn"
+      ? t("bots.githubChannel.statusLanguageChinese")
+      : t("bots.githubChannel.statusLanguageEnglish");
   const updateRepository = (key: string, repository: GithubRepositoryDraft) =>
     setDraft((current) => ({
       ...current,
@@ -259,6 +264,22 @@ export function GithubChannelForm({
           testID="github-mention"
         />
       </Field>
+      <SelectField<GithubStatusLanguage>
+        label={t("bots.githubChannel.statusLanguage")}
+        hint={t("bots.githubChannel.statusLanguageHint")}
+        value={draft.statusLanguage}
+        selectedDisplay={{ label: languageLabel(draft.statusLanguage) }}
+        options={(["en", "zh-cn"] as const).map((language) => ({
+          id: language,
+          value: language,
+          label: languageLabel(language),
+        }))}
+        onChange={(statusLanguage) => setDraft((current) => ({ ...current, statusLanguage }))}
+        placeholder={t("bots.githubChannel.statusLanguage")}
+        emptyText={t("bots.githubChannel.statusLanguage")}
+        disabled={disabled}
+        testID="github-status-language"
+      />
       <Field
         label={t("bots.githubChannel.privateKeyRef")}
         hint={t("bots.githubChannel.privateKeyHint")}

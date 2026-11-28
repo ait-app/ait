@@ -5,9 +5,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use domain::bot::notification::NotificationLog;
+use domain::bot::review_status::ReviewStatus;
 use domain::bot::ticket::Ticket;
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotId, BotTurnId, ConversationId, TicketId};
+use domain::{BotId, BotTurnId, ChannelId, ConversationId, TicketId};
 use model::bot::{StorageError, Store};
 use persistence::storage::bot::FileStore;
 
@@ -122,6 +123,17 @@ impl Store for Crash {
     fn delete_tickets(&self, bot: BotId) -> Result<(), StorageError> {
         self.write()?;
         self.inner.delete_tickets(bot)
+    }
+    fn review_statuses(&self) -> Result<Vec<ReviewStatus>, StorageError> {
+        self.inner.review_statuses()
+    }
+    fn save_review_status(&self, status: &ReviewStatus) -> Result<(), StorageError> {
+        self.write()?;
+        self.inner.save_review_status(status)
+    }
+    fn delete_review_statuses(&self, channel: ChannelId) -> Result<(), StorageError> {
+        self.write()?;
+        self.inner.delete_review_statuses(channel)
     }
 }
 

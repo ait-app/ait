@@ -1,7 +1,13 @@
+use std::sync::Arc;
+
 use domain::ChannelId;
-use domain::bot::{GithubRepositoryBinding, GithubReviewTrigger, TurnContext};
+use domain::bot::{Channel, GithubRepositoryBinding, GithubReviewTrigger, TurnContext};
+use hmac::{Hmac, Mac};
 use secrecy::SecretString;
 use serde_json::json;
+use sha2::Sha256;
+
+use crate::ports::Credentials;
 
 use super::client::pem;
 use super::{incoming, parse_report, review_command, review_context, trigger, verify_signature};
@@ -95,6 +101,77 @@ fn pull_request_assigned_event_targets_the_configured_app() {
     // A plain issue's assignment is not a review request.
     let issue = json!({"action":"assigned","issue":{},"assignee":{"login":"review-bot[bot]"}});
     assert!(trigger("issues", &issue, "review-bot").unwrap().is_none());
+}
+
+#[derive(Debug)]
+struct TestSecret;
+
+impl Credentials for TestSecret {
+    fn resolve(&self, _: &str) -> Result<SecretString, model::ErrorCode> {
+        Ok(SecretString::from("webhook secret"))
+    }
+}
+
+#[tokio::test]
+async fn a_signed_push_observes_the_head_without_admitting_a_review() {
+    let channel: Channel = serde_json::from_value(json!({
+        "id": ChannelId::generate(),
+        "botId": domain::BotId::generate(),
+        "enabled": true,
+        "config": {
+            "kind":"github",
+            "appId":"9",
+            "installationId":"5",
+            "mention":"review-bot",
+            "privateKeyRef":"env:AIT_SERVER_CREDENTIAL_GITHUB",
+            "webhookSecretRef":"env:AIT_SERVER_CREDENTIAL_WEBHOOK",
+            "repositories":[{
+                "fullName":"owner/repository",
+                "projectId":"project-1",
+                "allowedSenders":["maintainer"]
+            }]
+        }
+    }))
+    .unwrap();
+    let before = "1".repeat(40);
+    let after = "2".repeat(40);
+    let payload = serde_json::to_vec(&json!({
+        "action":"synchronize",
+        "number":7,
+        "before":before,
+        "after":after,
+        "installation":{"id":5},
+        "repository":{"full_name":"Owner/Repository"},
+        "sender":{"login":"contributor"}
+    }))
+    .unwrap();
+    let mut mac = Hmac::<Sha256>::new_from_slice(b"webhook secret").unwrap();
+    mac.update(&payload);
+    let signature = format!("sha256={:x}", mac.finalize().into_bytes());
+    let event = super::webhook(
+        &channel,
+        &(Arc::new(TestSecret) as Arc<dyn Credentials>),
+        &reqwest::Client::new(),
+        "pull_request",
+        "delivery-1",
+        &signature,
+        &payload,
+    )
+    .await
+    .unwrap();
+    let Some(super::WebhookEvent::HeadChanged {
+        key,
+        before: old,
+        after: new,
+    }) = event
+    else {
+        panic!("a head update");
+    };
+    assert_eq!(
+        (key.channel_id, key.repository.as_str(), key.pull_number),
+        (channel.id, "owner/repository", 7)
+    );
+    assert_eq!((old, new), (before, after));
 }
 
 #[test]

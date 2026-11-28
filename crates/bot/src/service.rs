@@ -172,7 +172,7 @@ enum Operation {
     Read(Box<Read>),
     Sight(String, Origin),
     Follow(Box<FollowOperation>),
-    GithubChannel(String, ChannelId),
+    Github(Box<GithubOperation>),
     ReviewPrepared(BotTurnId, Result<String, ()>),
 }
 
@@ -376,6 +376,8 @@ impl Bots {
     ) -> Result<Value, ErrorCode> {
         use base64::Engine as _;
 
+        use crate::channels::github::{self, WebhookEvent};
+
         let body = base64::engine::general_purpose::STANDARD
             .decode(&request.body_base64)
             .map_err(|_| ErrorCode::InvalidMessage)?;
@@ -383,10 +385,10 @@ impl Bots {
             return Err(ErrorCode::InvalidMessage);
         }
         let channel: Channel = decode(
-            self.call(Operation::GithubChannel(
+            self.call(Operation::Github(Box::new(GithubOperation::Channel(
                 request.workspace_id,
                 request.channel_id,
-            ))
+            ))))
             .await?,
         )?;
         let client = reqwest::Client::builder()
@@ -395,7 +397,7 @@ impl Bots {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|_| ErrorCode::BotIo)?;
-        let incoming = crate::channels::github_webhook(
+        let event = github::webhook(
             &channel,
             &self.0.credentials,
             &client,
@@ -406,10 +408,19 @@ impl Bots {
         )
         .await?;
         self.webhook_observed(channel.id, &request.event).await;
-        let Some(incoming) = incoming else {
-            return Ok(json!({"accepted":true,"ignored":true}));
+        let admission = match event {
+            Some(WebhookEvent::Review(incoming)) => self.accept(*incoming).await?,
+            Some(WebhookEvent::HeadChanged { key, before, after }) => {
+                self.call(Operation::Github(Box::new(GithubOperation::HeadChanged {
+                    key,
+                    before,
+                    after,
+                })))
+                .await?;
+                return Ok(json!({"accepted":true}));
+            }
+            None => return Ok(json!({"accepted":true,"ignored":true})),
         };
-        let admission = self.accept(incoming).await?;
         Ok(json!({
             "accepted": matches!(admission, Admission::Accepted),
             "backlogged": matches!(admission, Admission::Backlogged)
@@ -1025,6 +1036,37 @@ impl Bots {
             .await
             .map(|_| ())
     }
+    /// Append `event` to the review status board of turn `turn`.
+    pub(crate) async fn review_status_event(
+        &self,
+        turn: BotTurnId,
+        event: domain::bot::review_status::StatusEvent,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::Github(Box::new(GithubOperation::Event(
+            turn, event,
+        ))))
+        .await
+        .map(|_| ())
+    }
+    /// The review status boards of `channel` that GitHub has yet to see.
+    pub(crate) async fn review_status_pending(
+        &self,
+        channel: ChannelId,
+    ) -> Result<Vec<domain::bot::review_status::ReviewStatus>, ErrorCode> {
+        let operation = GithubOperation::Pending(channel);
+        decode(self.call(Operation::Github(Box::new(operation))).await?)
+    }
+    /// Record what the channel wrote for one review status board.
+    pub(crate) async fn review_status_written(
+        &self,
+        written: crate::state::StatusWritten,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::Github(Box::new(GithubOperation::Written(
+            written,
+        ))))
+        .await
+        .map(|_| ())
+    }
     pub(crate) async fn delivery_next(
         &self,
         channel: ChannelId,
@@ -1277,6 +1319,7 @@ fn apply(
         Operation::ChatAdmission(channel, peer, group, mentioned) => {
             state.admit_chat(channel, peer, group, mentioned)
         }
+        Operation::Github(operation) => apply_github(state, *operation),
         Operation::DeliveryNext(channel) => {
             let pending = state.pending_delivery(channel)?;
             if let Some((turn, _)) = &pending {
@@ -1312,10 +1355,6 @@ fn apply(
         Operation::Read(read) => state.read(&read),
         Operation::Sight(root, origin) => {
             serde_json::to_value(state.sight(&root, origin)?).map_err(|_| ErrorCode::BotIo)
-        }
-        Operation::GithubChannel(workspace, channel_id) => {
-            let channel = state.github_channel(&workspace, channel_id)?;
-            serde_json::to_value(channel).map_err(|_| ErrorCode::BotIo)
         }
         Operation::ReviewPrepared(turn_id, workspace_id) => state
             .review_prepared(turn_id, workspace_id)
@@ -1372,6 +1411,42 @@ fn review_workspace_error() -> domain::workspace::worktrees::WorktreeCreationErr
     domain::workspace::worktrees::WorktreeCreationError {
         code: "review_workspace",
         message: "Review Workspace is unavailable".to_owned(),
+    }
+}
+
+/// A GitHub review channel operation (ADR-321).
+enum GithubOperation {
+    Channel(String, ChannelId),
+    Event(BotTurnId, domain::bot::review_status::StatusEvent),
+    Pending(ChannelId),
+    Written(crate::state::StatusWritten),
+    HeadChanged {
+        key: domain::bot::review_status::ReviewStatusKey,
+        before: String,
+        after: String,
+    },
+}
+
+fn apply_github(state: &mut State, operation: GithubOperation) -> Result<Value, ErrorCode> {
+    match operation {
+        GithubOperation::Channel(workspace, channel) => {
+            serde_json::to_value(state.github_channel(&workspace, channel)?)
+                .map_err(|_| ErrorCode::BotIo)
+        }
+        GithubOperation::Event(turn, event) => {
+            state.review_status_event(turn, event).map(|()| Value::Null)
+        }
+        GithubOperation::Pending(channel) => {
+            serde_json::to_value(state.review_status_pending(channel)).map_err(|_| ErrorCode::BotIo)
+        }
+        GithubOperation::Written(written) => {
+            state.review_status_written(&written);
+            Ok(Value::Null)
+        }
+        GithubOperation::HeadChanged { key, before, after } => {
+            state.review_head_changed(&key, &before, &after);
+            Ok(Value::Null)
+        }
     }
 }
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildGithubChannelConfig, type GithubChannelDraft } from "./github-channel-model";
+import {
+  buildGithubChannelConfig,
+  createGithubChannelDraft,
+  type GithubChannelDraft,
+} from "./github-channel-model";
 
 function draft(overrides: Partial<GithubChannelDraft> = {}): GithubChannelDraft {
   return {
@@ -10,6 +14,7 @@ function draft(overrides: Partial<GithubChannelDraft> = {}): GithubChannelDraft 
     privateKeyRef: "env:AIT_SERVER_CREDENTIAL_GITHUB_APP_PRIVATE_KEY",
     webhookSecretRef: "env:AIT_SERVER_CREDENTIAL_GITHUB_WEBHOOK_SECRET",
     enabled: true,
+    statusLanguage: "en",
     repositories: [
       {
         key: "one",
@@ -57,5 +62,24 @@ describe("GitHub Channel form model", () => {
   it("accepts only private-key credential references, never key values", () => {
     const result = buildGithubChannelConfig(draft({ privateKeyRef: "actual-secret" }));
     expect(result).toEqual({ config: null, error: "privateKeyRef" });
+  });
+
+  it("sends the status comment language only when it is not the default", () => {
+    const english = buildGithubChannelConfig(draft());
+    expect(english.config).not.toHaveProperty("statusLanguage");
+    const chinese = buildGithubChannelConfig(draft({ statusLanguage: "zh-cn" }));
+    expect(chinese.config).toMatchObject({ statusLanguage: "zh-cn" });
+    const reopened = createGithubChannelDraft({
+      channelId: "11111111-1111-4111-8111-111111111111",
+      repositoryKey: "key",
+      channel: {
+        id: "11111111-1111-4111-8111-111111111111",
+        enabled: true,
+        cursor: null,
+        deleted: false,
+        config: chinese.config!,
+      },
+    });
+    expect(reopened.statusLanguage).toBe("zh-cn");
   });
 });
