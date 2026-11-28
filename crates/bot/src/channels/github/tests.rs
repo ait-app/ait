@@ -76,6 +76,29 @@ fn pull_request_assignee_assignment_targets_the_configured_app() {
 }
 
 #[test]
+fn pull_request_assigned_event_targets_the_configured_app() {
+    let assigned = |login: &str| {
+        json!({
+            "action":"assigned",
+            "pull_request":{"number":7},
+            "assignee":{"login":login}
+        })
+    };
+    let selected = trigger("pull_request", &assigned("review-bot[bot]"), "review-bot")
+        .unwrap()
+        .unwrap();
+    assert_eq!(selected.0, GithubReviewTrigger::AssigneeAssignment);
+    assert!(
+        trigger("pull_request", &assigned("someone"), "review-bot")
+            .unwrap()
+            .is_none()
+    );
+    // A plain issue's assignment is not a review request.
+    let issue = json!({"action":"assigned","issue":{},"assignee":{"login":"review-bot[bot]"}});
+    assert!(trigger("issues", &issue, "review-bot").unwrap().is_none());
+}
+
+#[test]
 fn same_pull_revision_has_one_stable_admission_identity() {
     let binding = GithubRepositoryBinding {
         full_name: "owner/repository".to_owned(),

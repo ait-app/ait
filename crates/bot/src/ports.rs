@@ -20,6 +20,14 @@ pub trait Credentials: std::fmt::Debug + Send + Sync {
     /// Returns a safe unavailable-credential error.
     fn resolve(&self, reference: &str) -> Result<SecretString, ErrorCode>;
 
+    /// Resolve a multi-line key, such as a PEM private key, which unlike [`Self::resolve`] may
+    /// contain line breaks. Callers must never place it in a header.
+    /// # Errors
+    /// Returns a safe unavailable-credential error.
+    fn resolve_key(&self, reference: &str) -> Result<SecretString, ErrorCode> {
+        self.resolve(reference)
+    }
+
     /// Privately persist `secret` for `channel`, replacing any earlier value.
     /// # Errors
     /// Returns a safe error; hosts without writable secret storage always fail.

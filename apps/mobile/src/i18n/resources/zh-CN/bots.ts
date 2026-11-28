@@ -85,9 +85,12 @@ export const bots = {
     mentionHint: "用户可以在 PR 评论中输入 @bot review 请求审查。",
     privateKeyRef: "App 私钥引用",
     webhookSecretRef: "Webhook Secret",
-    secretHint: "由 center 签发，并在 Channel 保存后仅显示一次。",
     webhookUrl: "Webhook URL",
     webhookHint: "保存 Channel 后，center 会签发真实 URL 和 Secret。",
+    privateKeyHint: "填写本 Host 上保存 App 私钥的环境变量引用；这里不会保存私钥本身。",
+    webhookCopyHint:
+      "请现在把 URL 和 Secret 填入 GitHub App 的 Webhook 设置；Secret 不会再次显示。",
+    webhookIssuedHint: "URL 和 Secret 已在创建此 Channel 时由 center 签发，编辑不会改变它们。",
     repositories: "仓库",
     repositoryBinding: "仓库绑定",
     repository: "GitHub 仓库",

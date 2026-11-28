@@ -50,11 +50,11 @@ secret；Host 成功持久化 Channel 与 secret 后才完成创建，失败则�
 时 Host 同步回收 endpoint。center 以 GitHub delivery ID 做持久化去重和重试，daemon 继续以
 `channel + repository + pull number + head SHA` 避免同一代码版本重复执行 review。
 
-Channel 接纳两种事件：
+Channel 接纳三种触发：
 
 - `issue_comment.created`，且 PR 评论包含 `@<app> review`；其后文本作为附加 review mandate。
 - `pull_request.review_requested`，且 `requested_reviewer` 是当前 App bot。
-- `issues.assigned`，该 Issue 是 PR 且 `assignee` 是当前 App bot。
+- `pull_request.assigned`，且 `assignee` 是当前 App bot；为兼容也接受指向 PR 的 `issues.assigned`。
 
 接纳时固定 PR 的 base/head SHA。幂等键为 `channel + repository + pull number + head SHA`；同一
 head 先到的评论召唤或 reviewer 指派拥有该轮次，后续触发复用已有回执。新 head 会产生新的
@@ -72,8 +72,11 @@ JSON prompt 并在无法解析时降级为 summary。Bot 使用 GitHub pull-requ
 
 ## 结果
 
-- GitHub App 权限至少需要读取 metadata/content/pull requests，以及写 pull requests/issues；
-  订阅 Issue comments 与 Pull request 事件。
+- GitHub App 权限至少需要读取 metadata/pull requests，以及写 pull requests/issues；订阅 Issue
+  comments 与 Pull request 事件。PR 代码由 Host 已登录的 GitHub CLI 和 Project remote 拉取，
+  不使用 installation token，因此 Host 账号需能读取绑定仓库。
+- App private key 是多行 PEM：Host 只对该引用接受换行（`Credentials::resolve_key`），其他凭据
+  仍拒绝控制字符，避免进入 HTTP 头。
 - GitHub App installation 是 Channel 的账号身份；同一 daemon 不允许两个启用 Channel 同时
   占用同一个 installation。
 - daemon 不暴露无需 token 的 GitHub HTTP 入口；center 是唯一公网入口，并以平台签名认证、持久化

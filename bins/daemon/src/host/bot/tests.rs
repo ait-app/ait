@@ -105,6 +105,53 @@ fn environment_credentials_validate_references_and_bound_secret_values() {
     }
 }
 
+#[test]
+fn environment_keys_keep_their_line_breaks_but_not_other_controls() {
+    const KEY: &str =
+        "-----BEGIN RSA PRIVATE KEY-----\r\nMIIB\nOgIB\n-----END RSA PRIVATE KEY-----\n";
+    if let Ok(case) = std::env::var(CHILD_CASE) {
+        let reference = format!("env:{CREDENTIAL_VARIABLE}");
+        let key = environment().resolve_key(&reference);
+        if case == "pem" {
+            assert_eq!(key.unwrap().expose_secret(), KEY);
+            // Ordinary credentials still refuse line breaks.
+            assert_eq!(
+                environment().resolve(&reference).unwrap_err(),
+                ErrorCode::BotIo
+            );
+        } else {
+            assert_eq!(key.unwrap_err(), ErrorCode::BotIo);
+        }
+        return;
+    }
+    assert_eq!(
+        environment().resolve_key("env:bad-name").unwrap_err(),
+        ErrorCode::InvalidMessage
+    );
+    for (case, value) in [
+        ("pem", KEY.to_owned()),
+        ("blank", "\n\n".to_owned()),
+        ("tab", "key\twith tab".to_owned()),
+        ("oversized", "x".repeat(16 * 1024 + 1)),
+    ] {
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "host::bot::tests::environment_keys_keep_their_line_breaks_but_not_other_controls",
+            ])
+            .env(CHILD_CASE, case)
+            .env(CREDENTIAL_VARIABLE, value)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "case {case}: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 #[tokio::test]
 async fn startup_ignores_and_discards_malformed_legacy_store_root() {
     let root = tempfile::tempdir().unwrap();

@@ -91,9 +91,14 @@ export const bots = {
     mentionHint: "Users can request a review with @bot review.",
     privateKeyRef: "App private key reference",
     webhookSecretRef: "Webhook secret",
-    secretHint: "The center issues this secret and shows it once after the channel is saved.",
     webhookUrl: "Webhook URL",
     webhookHint: "The center issues the URL and secret after you save this channel.",
+    privateKeyHint:
+      "An environment variable on this Host holding the App private key; the key itself is never saved here.",
+    webhookCopyHint:
+      "Enter this URL and secret in the GitHub App's webhook settings now; the secret is not shown again.",
+    webhookIssuedHint:
+      "The center issued this channel's URL and secret when it was created; they are unchanged by edits.",
     repositories: "Repositories",
     repositoryBinding: "Repository binding",
     repository: "GitHub repository",

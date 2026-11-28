@@ -219,7 +219,7 @@ export function GithubChannelForm({
         <Text style={styles.codeText} selectable>
           {issued.secret}
         </Text>
-        <Text style={styles.hint}>{t("bots.githubChannel.webhookHint")}</Text>
+        <Text style={styles.hint}>{t("bots.githubChannel.webhookCopyHint")}</Text>
         <Button onPress={onDone}>{t("common.actions.close")}</Button>
       </View>
     );
@@ -261,7 +261,7 @@ export function GithubChannelForm({
       </Field>
       <Field
         label={t("bots.githubChannel.privateKeyRef")}
-        hint={t("bots.githubChannel.secretHint")}
+        hint={t("bots.githubChannel.privateKeyHint")}
       >
         <FormTextInput
           initialValue={draft.privateKeyRef}
@@ -274,7 +274,11 @@ export function GithubChannelForm({
       </Field>
       <View style={styles.subcard}>
         <Text style={styles.subtitle}>{t("bots.githubChannel.webhookUrl")}</Text>
-        <Text style={styles.hint}>{t("bots.githubChannel.webhookHint")}</Text>
+        <Text style={styles.hint}>
+          {channel
+            ? t("bots.githubChannel.webhookIssuedHint")
+            : t("bots.githubChannel.webhookHint")}
+        </Text>
       </View>
       <View style={styles.sectionHeader}>
         <Text style={styles.subtitle}>{t("bots.githubChannel.repositories")}</Text>

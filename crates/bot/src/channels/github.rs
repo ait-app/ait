@@ -171,7 +171,7 @@ pub(super) async fn webhook(
     let pull = if event == "pull_request" {
         payload["pull_request"].clone()
     } else {
-        let key = credentials.resolve(private_key_ref)?;
+        let key = credentials.resolve_key(private_key_ref)?;
         GithubClient::new(client.clone())
             .pull(app_id, installation_id, &key, repository, pull_number)
             .await?
@@ -211,7 +211,7 @@ pub(super) async fn run(
         .await?;
     bots.channel_status(channel.id, json!({"state":"connected"}))
         .await;
-    let private_key = credentials.resolve(private_key_ref)?;
+    let private_key = credentials.resolve_key(private_key_ref)?;
     let app_id = app_id.clone();
     let installation_id = installation_id.clone();
     let github = GithubClient::new(client);
@@ -265,8 +265,11 @@ fn trigger(
                 None,
             )))
         }
-        "issues"
-            if payload["action"] == "assigned" && payload["issue"]["pull_request"].is_object() =>
+        // GitHub reports a pull request's assignment as `pull_request.assigned`; the
+        // `issues.assigned` form is kept for pull requests reported as issues.
+        "pull_request" | "issues"
+            if payload["action"] == "assigned"
+                && (event == "pull_request" || payload["issue"]["pull_request"].is_object()) =>
         {
             let Some(assignee) = payload["assignee"]["login"].as_str() else {
                 return Ok(None);
