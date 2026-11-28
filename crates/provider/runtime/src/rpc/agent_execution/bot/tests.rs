@@ -27,7 +27,7 @@ fn capable_profile_patches_only_the_differences_until_converged() {
         ..StoredAgentConfig::default()
     };
 
-    let patch = Profile::new(&CAPABLE, "rules".into())
+    let patch = Profile::new(&CAPABLE, "rules".into(), false)
         .patch(&current)
         .unwrap();
 
@@ -41,11 +41,11 @@ fn capable_profile_patches_only_the_differences_until_converged() {
     assert!(!tools.contains(&json!({"kind":"mcp","server":"ait","tool":"workspace_list"})));
     let converged = patch.apply(&current);
     assert_eq!(
-        Profile::new(&CAPABLE, "rules".into()).patch(&converged),
+        Profile::new(&CAPABLE, "rules".into(), false).patch(&converged),
         Some(ConfigPatch::default())
     );
     assert_eq!(
-        Profile::new(&CAPABLE, "changed".into())
+        Profile::new(&CAPABLE, "changed".into(), false)
             .patch(&converged)
             .unwrap()
             .system_prompt,
@@ -55,7 +55,7 @@ fn capable_profile_patches_only_the_differences_until_converged() {
 
 #[test]
 fn degraded_profile_never_patches_the_prompt_and_cannot_clear_a_mode() {
-    let profile = Profile::new(&DEGRADED, "rules".into());
+    let profile = Profile::new(&DEGRADED, "rules".into(), false);
     let prompted = StoredAgentConfig {
         system_prompt: Some("old".into()),
         ..StoredAgentConfig::default()

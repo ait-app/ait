@@ -40,6 +40,7 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
             mode_id: None,
             thinking: None,
         },
+        execution_workspace_id: None,
         next_sequence: 2,
         instructions_digest: None,
     };
@@ -52,6 +53,7 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
         generation: 0,
         text: "hello".into(),
         reply_to: None,
+        context: None,
         reply: Some("world".into()),
         messages: Vec::new(),
         pending_permissions: Vec::new(),
@@ -252,4 +254,45 @@ fn tickets_are_stored_one_file_per_ticket_under_their_bot_and_removable() {
     store.delete_tickets(second_bot).unwrap();
     assert!(!tickets.join(second_bot.to_string()).exists());
     assert!(store.ticket(second_bot, third.id).is_err());
+}
+
+#[test]
+fn review_status_boards_round_trip_per_pull_request_and_go_with_their_channel() {
+    use domain::bot::review_status::{
+        ReviewStatus, ReviewStatusKey, ReviewStatusPage, StatusEvent,
+    };
+
+    let root = tempfile::tempdir().unwrap();
+    let store = FileStore::new(root.path().to_path_buf());
+    assert!(store.review_statuses().unwrap().is_empty());
+    let channel = ChannelId::generate();
+    let other = ChannelId::generate();
+    let board = |channel, pull_number| {
+        let mut status = ReviewStatus::new(ReviewStatusKey {
+            channel_id: channel,
+            repository: "owner/repository".to_owned(),
+            pull_number,
+        });
+        status.append("aaa", StatusEvent::Preparing, "2026-11-28T08:45:00Z");
+        status
+    };
+    let mut first = board(channel, 7);
+    store.save_review_status(&first).unwrap();
+    store.save_review_status(&board(channel, 8)).unwrap();
+    store.save_review_status(&board(other, 7)).unwrap();
+    // Saving the same pull request again replaces its board.
+    first.pages.push(ReviewStatusPage {
+        comment_id: 42,
+        body_hash: "abc".to_owned(),
+    });
+    store.save_review_status(&first).unwrap();
+    let mut loaded = store.review_statuses().unwrap();
+    loaded.sort_by(|a, b| a.key.cmp(&b.key));
+    assert_eq!(loaded.len(), 3);
+    assert!(loaded.contains(&first));
+    store.delete_review_statuses(channel).unwrap();
+    store.delete_review_statuses(channel).unwrap();
+    let left = store.review_statuses().unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].key.channel_id, other);
 }

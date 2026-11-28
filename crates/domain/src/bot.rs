@@ -12,6 +12,7 @@ use crate::{BotId, BotTurnId, ChannelId, ConversationId};
 pub mod follow;
 pub mod notification;
 pub mod permissions;
+pub mod review_status;
 pub mod ticket;
 
 /// Reserved label carrying the Bot scope of an Agent or schedule.
@@ -208,6 +209,55 @@ pub enum ChannelConfig {
         #[serde(default)]
         allowed_senders: Vec<String>,
     },
+    /// GitHub App installation receiving review requests for explicitly bound repositories.
+    Github {
+        /// Numeric GitHub App identity used as the JWT issuer.
+        app_id: String,
+        /// Runtime environment reference to the App's RSA private key.
+        private_key_ref: String,
+        /// Runtime environment reference to the webhook HMAC secret.
+        webhook_secret_ref: String,
+        /// Numeric GitHub App installation identity.
+        installation_id: String,
+        /// GitHub App slug used by `@mention review` commands.
+        mention: String,
+        /// Explicit repository-to-project bindings admitted by this Channel.
+        repositories: Vec<GithubRepositoryBinding>,
+        /// Language of the review status comment.
+        #[serde(default, skip_serializing_if = "StatusLanguage::is_english")]
+        status_language: StatusLanguage,
+    },
+}
+
+/// Language of a GitHub review channel's status comment.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StatusLanguage {
+    /// English, the default.
+    #[default]
+    En,
+    /// Simplified Chinese.
+    ZhCn,
+}
+
+impl StatusLanguage {
+    /// Whether this is the default language, which stored configurations leave out.
+    #[must_use]
+    pub const fn is_english(&self) -> bool {
+        matches!(self, Self::En)
+    }
+}
+
+/// One repository admitted by a GitHub review Channel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GithubRepositoryBinding {
+    /// Canonical case-insensitive `owner/name` identity.
+    pub full_name: String,
+    /// Ait project providing the source checkout for temporary PR worktrees.
+    pub project_id: String,
+    /// GitHub logins allowed to request reviews; stored names are compared case-insensitively.
+    pub allowed_senders: Vec<String>,
 }
 
 /// An account instance owned exclusively by one Bot.
@@ -267,6 +317,9 @@ pub struct Conversation {
     pub generation: u64,
     /// Native configuration fixed for this generation.
     pub execution: ExecutionConfig,
+    /// Per-conversation execution placement; absent conversations execute in the Bot Workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_workspace_id: Option<String>,
     /// Next ordered input sequence; gaps after failed persistence are permitted.
     pub next_sequence: u64,
     /// Unused: earlier builds recorded the digest of the instructions last prefixed to an input.
@@ -274,6 +327,58 @@ pub struct Conversation {
     /// writes this; it remains so conversations stored by those builds still load.
     #[serde(default)]
     pub instructions_digest: Option<String>,
+}
+
+/// Durable source metadata needed to prepare and deliver a platform-specific turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum TurnContext {
+    /// A frozen GitHub pull-request review invocation.
+    GithubReview(Box<GithubReviewContext>),
+}
+
+/// How a GitHub review was requested.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GithubReviewTrigger {
+    /// A permitted user wrote `@app review` in the PR conversation.
+    Mention,
+    /// The App's bot account was requested as a PR reviewer.
+    ReviewerAssignment,
+    /// The App's bot account was assigned to the pull request issue.
+    AssigneeAssignment,
+}
+
+/// Frozen GitHub pull-request facts and temporary Workspace identity for one review run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GithubReviewContext {
+    /// Canonical `owner/name` repository identity.
+    pub repository: String,
+    /// Bound Ait project supplying the source checkout.
+    pub project_id: String,
+    /// Positive pull-request number.
+    pub pull_number: u64,
+    /// Pull-request title observed at admission.
+    pub title: String,
+    /// Canonical public pull-request URL.
+    pub url: String,
+    /// Frozen base branch name.
+    pub base_ref: String,
+    /// Frozen head branch name.
+    pub head_ref: String,
+    /// Frozen base commit object name.
+    pub base_sha: String,
+    /// Frozen head commit object name.
+    pub head_sha: String,
+    /// Invocation source.
+    pub trigger: GithubReviewTrigger,
+    /// Authorized GitHub login responsible for the request.
+    pub trigger_user: String,
+    /// Triggering issue-comment identity, when invoked by mention.
+    pub trigger_comment_id: Option<String>,
+    /// Preallocated temporary Workspace identity, making preparation restart-idempotent.
+    pub workspace_id: String,
 }
 
 /// Durable execution state; uncertain work is never replayed automatically.
@@ -361,6 +466,9 @@ pub struct Turn {
     pub passive: bool,
     /// Original platform message identity used as the reply target.
     pub reply_to: Option<String>,
+    /// Platform-specific durable routing and execution context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TurnContext>,
     /// Committed final assistant answer.
     ///
     /// This legacy projection contains the latest assistant message. New clients should use

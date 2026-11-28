@@ -35,6 +35,7 @@ impl State {
             reply_to: None,
             sender_type: None,
             passive: false,
+            context: None,
         };
         let conversation = self.route(&incoming)?;
         Ok(json!({"conversation":self.project_conversation(&conversation)}))
@@ -72,6 +73,7 @@ impl State {
             session_id: uuid::Uuid::new_v4().to_string(),
             generation: 0,
             execution: bot.execution.clone(),
+            execution_workspace_id: None,
             next_sequence: 1,
             instructions_digest: None,
         };
@@ -97,6 +99,7 @@ impl State {
             reply_to: None,
             sender_type: None,
             passive: false,
+            context: None,
         })
     }
     /// Whether queued and running turns across all Bots reached the global admission limit.
@@ -149,14 +152,20 @@ impl State {
                 .conversations
                 .get(&turn.conversation_id)
                 .ok_or(ErrorCode::BotIo)?;
+            let same_review = same_github_review(turn.context.as_ref(), incoming.context.as_ref());
             if conversation.peer != incoming.peer
                 || conversation.sender != incoming.sender
                 || conversation.thread != incoming.thread
-                || turn.text != incoming.text
-                || turn.passive != incoming.passive
-                || turn.reply_to != incoming.reply_to
+                || (!same_review
+                    && (turn.text != incoming.text
+                        || turn.passive != incoming.passive
+                        || turn.reply_to != incoming.reply_to
+                        || turn.context != incoming.context))
             {
                 return Err(ErrorCode::IdempotencyConflict);
+            }
+            if same_review && another_request(turn.context.as_ref(), incoming.context.as_ref()) {
+                self.review_requested_again(&turn, incoming.context.as_ref());
             }
             return Ok(json!({"turn":turn,"accepted":true,"duplicate":true}));
         }
@@ -180,6 +189,7 @@ impl State {
         turn.reply_to = incoming.reply_to;
         turn.passive = incoming.passive;
         turn.sender_type = incoming.sender_type;
+        turn.context = incoming.context;
         self.enqueue(conversation, &turn)?;
         Ok(json!({"turn":turn,"accepted":true,"duplicate":false}))
     }
@@ -401,5 +411,47 @@ impl State {
             self.save_catalog(catalog)?;
         }
         Ok(())
+    }
+}
+
+/// Whether `incoming` asks for the same review differently from `existing`: another trigger,
+/// user or comment. A redelivery of the same event asks nothing new.
+fn another_request(
+    existing: Option<&domain::bot::TurnContext>,
+    incoming: Option<&domain::bot::TurnContext>,
+) -> bool {
+    match (existing, incoming) {
+        (
+            Some(domain::bot::TurnContext::GithubReview(existing)),
+            Some(domain::bot::TurnContext::GithubReview(incoming)),
+        ) => {
+            (
+                existing.trigger,
+                &existing.trigger_user,
+                &existing.trigger_comment_id,
+            ) != (
+                incoming.trigger,
+                &incoming.trigger_user,
+                &incoming.trigger_comment_id,
+            )
+        }
+        _ => false,
+    }
+}
+
+fn same_github_review(
+    existing: Option<&domain::bot::TurnContext>,
+    incoming: Option<&domain::bot::TurnContext>,
+) -> bool {
+    match (existing, incoming) {
+        (
+            Some(domain::bot::TurnContext::GithubReview(existing)),
+            Some(domain::bot::TurnContext::GithubReview(incoming)),
+        ) => {
+            existing.repository == incoming.repository
+                && existing.pull_number == incoming.pull_number
+                && existing.head_sha == incoming.head_sha
+        }
+        _ => false,
     }
 }

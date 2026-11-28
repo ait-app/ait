@@ -401,6 +401,7 @@ dependencies = [
  "domain",
  "flate2",
  "futures-util",
+ "hmac",
  "model",
  "persistence",
  "prost",

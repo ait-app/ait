@@ -588,7 +588,8 @@ describe("Rust v1 connection", () => {
           !method.includes(".weixin.") &&
           !method.includes(".qq.") &&
           !method.includes(".imessage.") &&
-          !method.includes(".webhook."),
+          !method.includes(".webhook.") &&
+          !method.includes(".channel.github."),
       );
     const old = harness(core);
     old.ready(undefined, ["workspace-bots-v2"]);
@@ -609,6 +610,7 @@ describe("Rust v1 connection", () => {
       workspaceBotQqSetup: false,
       workspaceBotImessageSetup: false,
       workspaceBotWebhookSetup: false,
+      workspaceBotGithubSetup: false,
     });
     const current = harness();
     current.ready(undefined, ["workspace-bots-v2"]);
@@ -629,6 +631,7 @@ describe("Rust v1 connection", () => {
       workspaceBotQqSetup: true,
       workspaceBotImessageSetup: true,
       workspaceBotWebhookSetup: true,
+      workspaceBotGithubSetup: true,
     });
   });
   it("requires both chat reception methods and routes new configuration off the full background connection", () => {

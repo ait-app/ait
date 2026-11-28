@@ -23,6 +23,9 @@ pub enum Action {
         config: ExecutionConfig,
         /// Bot instructions and workspace memory context.
         instructions: String,
+        /// Freeze review inputs to the local checkout by excluding inherited tools.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        isolated_review: bool,
     },
     /// Admit a durable input using Provider's existing idempotency receipts.
     Send {
@@ -32,6 +35,9 @@ pub enum Action {
         message_id: String,
         /// Bounded input text.
         text: String,
+        /// Optional provider-independent structured-output JSON Schema.
+        #[serde(default)]
+        output_schema: Option<Value>,
     },
     /// Read the committed Bot status and visible assistant messages without waiting for idle.
     Poll {

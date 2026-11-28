@@ -8,6 +8,7 @@ use bot::service::{Bots, Dependencies};
 use domain::ChannelId;
 use model::ErrorCode;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::worktrees::WorktreeProvisioning;
 use persistence::storage::bot::{FileStore, SecretFiles};
 use provider::service::agent_execution::AgentExecution;
 use secrecy::{ExposeSecret, SecretString};
@@ -28,6 +29,33 @@ fn checked_credential(value: String) -> Result<SecretString, ErrorCode> {
     Ok(SecretString::from(value))
 }
 
+/// Longest multi-line key accepted from the environment; a 4096-bit PEM key is about 3.3 KiB.
+const KEY_LIMIT: usize = 16 * 1024;
+
+/// A multi-line key such as a PEM private key: line breaks are its format, other control
+/// characters are still refused.
+fn checked_key(value: String) -> Result<SecretString, ErrorCode> {
+    let line_break = |c: char| c == '\n' || c == '\r';
+    if value.trim().is_empty()
+        || value.len() > KEY_LIMIT
+        || value.chars().any(|c| c.is_control() && !line_break(c))
+    {
+        return Err(ErrorCode::BotIo);
+    }
+    Ok(SecretString::from(value))
+}
+
+/// The value of the environment variable an `env:AIT_SERVER_CREDENTIAL_*` reference names.
+fn environment_value(reference: &str) -> Result<String, ErrorCode> {
+    if !bot::ports::valid_credential_reference(reference) {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    let name = reference
+        .strip_prefix("env:")
+        .ok_or(ErrorCode::InvalidMessage)?;
+    std::env::var(name).map_err(|_| ErrorCode::BotIo)
+}
+
 impl Credentials for HostCredentials {
     fn store(&self, channel: ChannelId, secret: &SecretString) -> Result<(), ErrorCode> {
         self.secrets
@@ -44,13 +72,14 @@ impl Credentials for HostCredentials {
             let value = self.secrets.load(channel).map_err(|_| ErrorCode::BotIo)?;
             return checked_credential(value);
         }
-        if !bot::ports::valid_credential_reference(reference) {
-            return Err(ErrorCode::InvalidMessage);
+        checked_credential(environment_value(reference)?)
+    }
+
+    fn resolve_key(&self, reference: &str) -> Result<SecretString, ErrorCode> {
+        if bot::ports::stored_credential_channel(reference).is_some() {
+            return self.resolve(reference);
         }
-        let name = reference
-            .strip_prefix("env:")
-            .ok_or(ErrorCode::InvalidMessage)?;
-        checked_credential(std::env::var(name).map_err(|_| ErrorCode::BotIo)?)
+        checked_key(environment_value(reference)?)
     }
 }
 
@@ -63,6 +92,7 @@ pub(super) fn compose<
     projects: &P,
     execution: AgentExecution,
     scopes: Arc<Scopes>,
+    worktrees: Arc<dyn WorktreeProvisioning>,
 ) -> anyhow::Result<Bots> {
     let root = data.join("workspace-bots");
     let bots = Bots::spawn(Dependencies {
@@ -75,6 +105,7 @@ pub(super) fn compose<
         }),
         scopes,
         image_directory: Some(data.join("agents/provider-images")),
+        worktrees,
     })
     .context("start Bot service")?;
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {

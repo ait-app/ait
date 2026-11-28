@@ -1,9 +1,10 @@
 //! Blocking storage and runtime-secret ports for the Bot application.
 
 use domain::bot::notification::NotificationLog;
+use domain::bot::review_status::ReviewStatus;
 use domain::bot::ticket::Ticket;
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotId, BotTurnId, ConversationId, TicketId};
+use domain::{BotId, BotTurnId, ChannelId, ConversationId, TicketId};
 
 /// A safe Bot persistence failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -100,4 +101,16 @@ pub trait Store: std::fmt::Debug + Send + Sync {
     /// # Errors
     /// Returns inaccessible storage errors.
     fn delete_tickets(&self, bot: BotId) -> Result<(), StorageError>;
+    /// Load every GitHub review status board.
+    /// # Errors
+    /// Returns malformed or inaccessible storage errors.
+    fn review_statuses(&self) -> Result<Vec<ReviewStatus>, StorageError>;
+    /// Atomically replace one pull request's review status board.
+    /// # Errors
+    /// Returns oversized records or write failures.
+    fn save_review_status(&self, status: &ReviewStatus) -> Result<(), StorageError>;
+    /// Remove every review status board of `channel`; absent boards are not an error.
+    /// # Errors
+    /// Returns inaccessible storage errors.
+    fn delete_review_statuses(&self, channel: ChannelId) -> Result<(), StorageError>;
 }

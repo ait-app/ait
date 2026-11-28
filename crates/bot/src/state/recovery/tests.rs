@@ -35,6 +35,7 @@ fn input(channel: ChannelId, peer: &str, message: &str) -> Incoming {
         reply_to: Some(message.into()),
         passive: false,
         sender_type: Some("bot".into()),
+        context: None,
     }
 }
 

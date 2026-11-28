@@ -3,8 +3,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use domain::bot::{
-    Bot, BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnMessage, TurnMessageStatus,
-    TurnStatus,
+    Bot, BotState, ChannelConfig, Conversation, DeliveryStatus, GithubReviewContext, PauseReason,
+    Turn, TurnContext, TurnMessage, TurnMessageStatus, TurnStatus,
 };
 use domain::{BotId, BotTurnId, ConversationId};
 use model::ErrorCode;
@@ -15,6 +15,11 @@ use tokio_util::sync::CancellationToken;
 use super::State;
 use crate::execution::Run;
 use crate::protocol::TurnRequest;
+
+pub(crate) struct ReviewPreparation {
+    pub(crate) turn_id: BotTurnId,
+    pub(crate) context: GithubReviewContext,
+}
 
 impl State {
     /// Cancel the Bot's running and queued turns and close or release its native sessions.
@@ -146,79 +151,199 @@ impl State {
                 .get(conversation)
                 .ok_or(ErrorCode::BotIo)?
                 .clone();
+            if receipt_context(&self.turn(*id)?).is_some()
+                && conversation.execution_workspace_id.is_none()
+            {
+                continue;
+            }
+            if let Some(workspace_id) = conversation.execution_workspace_id.as_deref()
+                && self.active_workspace(workspace_id).is_err()
+            {
+                failed.push(*id);
+                continue;
+            }
             let bot = self.bot(conversation.bot_id)?.clone();
-            if selected_bots.contains(&bot.id) || self.bot_blocked(bot.id) {
+            // A review runs in its own session, so it neither waits for nor holds the Bot's
+            // shared context.
+            let isolated = conversation.execution_workspace_id.is_some();
+            if !isolated && (selected_bots.contains(&bot.id) || self.bot_blocked(bot.id)) {
                 continue;
             }
             if missing.contains(&bot.id) {
                 continue;
             }
-            let Ok(cwd) = self.workspace(&bot) else {
+            let execution_workspace = conversation
+                .execution_workspace_id
+                .as_deref()
+                .unwrap_or(&bot.workspace_id);
+            let Ok(cwd) = self.active_workspace(execution_workspace) else {
                 continue;
             };
             if !Path::new(&cwd).is_dir() {
-                missing.insert(bot.id);
+                if conversation.execution_workspace_id.is_some() {
+                    failed.push(*id);
+                } else {
+                    missing.insert(bot.id);
+                }
                 continue;
             }
             let channel = self.channel(bot.id, conversation.channel_id)?;
             if !channel.enabled || channel.deleted {
                 continue;
             }
-            let Ok(instructions) = self.instructions(&bot) else {
+            let Ok(instructions) = self.instructions(&bot, isolated) else {
                 failed.push(*id);
                 continue;
             };
-            let context_id = *self.catalog.contexts.get(&bot.id).ok_or(ErrorCode::BotIo)?;
-            let context = self.conversation(bot.id, context_id)?;
-            let mut conversation = conversation;
-            conversation.session_id.clone_from(&context.session_id);
-            self.scopes.origin(&context.session_id, conversation.id);
-            selected_bots.insert(bot.id);
-            ready.push(Run {
-                turn: pending_turn.clone(),
-                owner: self.owner(context)?,
-                config: context.execution.clone(),
-                conversation,
-                instructions,
-                cancel: CancellationToken::new(),
-                output_cursor: None,
-            });
+            if !isolated {
+                selected_bots.insert(bot.id);
+            }
+            ready.push(self.run(pending_turn.clone(), conversation, instructions)?);
         }
+        self.admit(&mut ready, failed, missing)?;
+        Ok(ready)
+    }
+    /// Fail the `failed` turns, pause the Bots whose directory is `missing`, and mark every run
+    /// in `ready` as sending.
+    fn admit(
+        &mut self,
+        ready: &mut [Run],
+        failed: Vec<BotTurnId>,
+        missing: BTreeSet<BotId>,
+    ) -> Result<(), ErrorCode> {
         for id in failed {
             self.progress(id, TurnStatus::Failed, None, Some("Workspace memory could not be read; repair the memory file before sending again".into()))?;
         }
         for bot in missing {
             self.pause_bot(bot, PauseReason::DirectoryMissing)?;
         }
-        for run in &mut ready {
+        for run in ready.iter_mut() {
             run.turn.status = TurnStatus::Sending;
             run.turn.notification_cursor = self.notification_head(run.conversation.bot_id);
             self.commit_turn(&run.turn)?;
         }
         let started = Instant::now();
-        for run in &ready {
+        for run in ready.iter() {
             self.running.insert(run.conversation.id, run.cancel.clone());
             self.start_observing(run.conversation.id, started);
         }
-        Ok(ready)
+        Ok(())
     }
+    /// The run of `turn`. A conversation with its own execution Workspace (a GitHub review) keeps
+    /// its own session there; every other conversation runs in the Bot's shared context (ADR-306).
+    fn run(
+        &self,
+        turn: Turn,
+        mut conversation: Conversation,
+        instructions: String,
+    ) -> Result<Run, ErrorCode> {
+        let (owner, config) = if conversation.execution_workspace_id.is_some() {
+            self.scopes
+                .origin(&conversation.session_id, conversation.id);
+            (self.owner(&conversation)?, conversation.execution.clone())
+        } else {
+            let bot = conversation.bot_id;
+            let context_id = *self.catalog.contexts.get(&bot).ok_or(ErrorCode::BotIo)?;
+            let context = self.conversation(bot, context_id)?;
+            conversation.session_id.clone_from(&context.session_id);
+            self.scopes.origin(&context.session_id, conversation.id);
+            (self.owner(context)?, context.execution.clone())
+        };
+        Ok(Run {
+            turn,
+            owner,
+            config,
+            conversation,
+            instructions,
+            cancel: CancellationToken::new(),
+            output_cursor: None,
+        })
+    }
+    /// Whether a turn of `bot` is running or uncertain in its shared context.
     fn bot_blocked(&self, bot: BotId) -> bool {
-        self.running
-            .keys()
-            .any(|id| self.conversations.get(id).is_some_and(|c| c.bot_id == bot))
-            || self.uncertain.iter().any(|(id, generation)| {
-                self.conversations
-                    .get(id)
-                    .is_some_and(|c| c.bot_id == bot && c.generation == *generation)
-            })
+        let shared = |id: &ConversationId| {
+            self.conversations
+                .get(id)
+                .filter(|c| c.bot_id == bot && c.execution_workspace_id.is_none())
+        };
+        self.running.keys().any(|id| shared(id).is_some())
+            || self
+                .uncertain
+                .iter()
+                .any(|(id, generation)| shared(id).is_some_and(|c| c.generation == *generation))
     }
 
-    fn instructions(&self, bot: &Bot) -> Result<String, ErrorCode> {
+    pub(crate) fn review_preparations(&mut self) -> Vec<ReviewPreparation> {
+        let pending = self.pending.values().copied().collect::<Vec<_>>();
+        let available = 4_usize.saturating_sub(self.preparing.len());
+        let mut preparations = Vec::with_capacity(available);
+        for id in pending {
+            if preparations.len() == available {
+                break;
+            }
+            if self.preparing.contains(&id) {
+                continue;
+            }
+            let Ok(turn) = self.turn(id) else {
+                continue;
+            };
+            let Some(context) = receipt_context(&turn) else {
+                continue;
+            };
+            let Some(conversation) = self.conversations.get(&turn.conversation_id) else {
+                continue;
+            };
+            if conversation.execution_workspace_id.is_some() {
+                continue;
+            }
+            self.preparing.insert(id);
+            self.review_event_by_id(id, domain::bot::review_status::StatusEvent::Preparing);
+            preparations.push(ReviewPreparation {
+                turn_id: id,
+                context,
+            });
+        }
+        preparations
+    }
+
+    pub(crate) fn review_prepared(
+        &mut self,
+        turn_id: BotTurnId,
+        workspace_id: Result<String, ()>,
+    ) -> Result<(), ErrorCode> {
+        self.preparing.remove(&turn_id);
+        let turn = self.turn(turn_id)?;
+        let mut conversation = self
+            .conversations
+            .get(&turn.conversation_id)
+            .ok_or(ErrorCode::BotIo)?
+            .clone();
+        match workspace_id {
+            Ok(workspace_id) => {
+                self.active_workspace(&workspace_id)?;
+                conversation.execution_workspace_id = Some(workspace_id);
+                self.save_conversation(conversation)
+            }
+            Err(()) => self.progress(
+                turn_id,
+                TurnStatus::Failed,
+                None,
+                Some("The frozen pull-request checkout could not be prepared".to_owned()),
+            ),
+        }
+    }
+    /// The system instructions of a run: a review in its own checkout (`review`) reads the
+    /// change itself, every other run manages the workspace as the Bot.
+    fn instructions(&self, bot: &Bot, review: bool) -> Result<String, ErrorCode> {
         let memory = self
             .store
             .memory(&bot.workspace_id)
             .map_err(|_| ErrorCode::BotIo)?;
-        Ok(crate::instructions::compose(&memory, &bot.permissions))
+        Ok(if review {
+            crate::instructions::review(&memory)
+        } else {
+            crate::instructions::compose(&memory, &bot.permissions)
+        })
     }
     pub(crate) fn progress(
         &mut self,
@@ -351,7 +476,7 @@ impl State {
     pub(crate) fn pending_delivery(
         &self,
         channel: domain::ChannelId,
-    ) -> Result<Option<(Turn, domain::bot::Conversation)>, ErrorCode> {
+    ) -> Result<Option<(Turn, Conversation)>, ErrorCode> {
         self.ensure_writable()?;
         let configured = self
             .catalog
@@ -379,7 +504,9 @@ impl State {
     ) -> Result<(), ErrorCode> {
         let mut turn = self.turn(id)?;
         turn.delivery = status;
-        self.commit_turn(&turn)
+        self.commit_turn(&turn)?;
+        self.review_delivery_uncertain(&turn);
+        Ok(())
     }
 }
 
@@ -391,4 +518,8 @@ const fn is_final(status: TurnStatus) -> bool {
     )
 }
 
-use domain::bot::Turn;
+fn receipt_context(turn: &Turn) -> Option<GithubReviewContext> {
+    turn.context
+        .as_ref()
+        .map(|TurnContext::GithubReview(context)| (**context).clone())
+}

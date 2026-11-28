@@ -64,6 +64,7 @@ async fn create_permission_bot(
                     thinking: None,
                 },
                 instructions: "Bot test".into(),
+                isolated_review: false,
             },
         )
         .await
@@ -85,6 +86,7 @@ async fn assert_bot_reply(
                 agent_id: id.into(),
                 message_id: uuid::Uuid::new_v4().to_string(),
                 text: prompt.into(),
+                output_schema: None,
             },
         )
         .await
@@ -132,6 +134,7 @@ async fn bot_session_is_hidden_from_birth_owner_checked_and_idempotent() {
             thinking: None,
         },
         instructions: "Bot test".into(),
+        isolated_review: false,
     };
     execution.bot(&owner, create.clone()).await.unwrap();
     let record = registry.get(&id).unwrap().unwrap();
@@ -152,7 +155,8 @@ async fn bot_session_is_hidden_from_birth_owner_checked_and_idempotent() {
                 Action::Send {
                     agent_id: id.clone(),
                     message_id: "message-1".into(),
-                    text: "intrusion".into()
+                    text: "intrusion".into(),
+                    output_schema: None,
                 }
             )
             .await,
@@ -256,6 +260,7 @@ async fn assert_execution_and_close(
         agent_id: id.to_owned(),
         message_id: "message-1".into(),
         text: "hello".into(),
+        output_schema: None,
     };
     execution.bot(owner, send.clone()).await.unwrap();
     execution.bot(owner, send).await.unwrap();
@@ -354,6 +359,7 @@ async fn assert_release_and_resume(
                     thinking: None,
                 },
                 instructions: "Updated workspace memory".into(),
+                isolated_review: false,
             },
         )
         .await
@@ -387,6 +393,7 @@ async fn assert_release_and_resume(
                 agent_id: id.into(),
                 message_id: "message-2".into(),
                 text: "resumed".into(),
+                output_schema: None,
             },
         )
         .await

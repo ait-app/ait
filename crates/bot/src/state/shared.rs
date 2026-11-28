@@ -24,6 +24,7 @@ impl State {
             reply_to: None,
             sender_type: None,
             passive: false,
+            context: None,
         })?;
         // The former owner runtime has an isolated history. Start a new native generation;
         // legacy transcripts remain available through bot_read rather than replaying work.

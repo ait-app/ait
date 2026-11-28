@@ -13,7 +13,7 @@ async fn decide(fixture: &Workspaces, method: &str, params: Value) -> Result<(),
 }
 
 #[tokio::test]
-async fn only_webhook_and_turn_methods_pass() {
+async fn only_automation_and_turn_methods_pass() {
     let fixture = Workspaces::new(address());
     for method in WEBHOOK_METHODS {
         assert_eq!(
@@ -22,6 +22,11 @@ async fn only_webhook_and_turn_methods_pass() {
             "{method}"
         );
     }
+    assert_eq!(
+        decide(&fixture, GITHUB_METHOD, json!({})).await,
+        Ok(()),
+        "GitHub deliveries use the restricted automation session"
+    );
     for method in [
         "agent.create.request",
         "agent.message.send.request",

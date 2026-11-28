@@ -135,6 +135,27 @@ pub(crate) fn compose(memory: &str, permissions: &BotPermissions) -> String {
     )
 }
 
+/// Role of a GitHub pull-request review session (ADR-321): it reads its frozen checkout itself
+/// and has no Ait tools, unlike the Bot's manager role.
+const REVIEWER_ROLE: &str = "You review one GitHub pull request. The current directory is a \
+read-only checkout of the pull request's head commit, with its base commit available. Inspect \
+the change yourself with read-only commands, such as `git diff <base>...<head>`, `git log`, \
+`git show` and reading or searching files, and follow the changed code to its callers. This \
+session has no Ait tools and cannot start agents; do not look for them. Never modify files, \
+commit or push. Answer with the review result the request asks for.";
+
+/// Composes the instructions of a pull-request review session from the workspace memory, whose
+/// preferences (such as the review language or style) still apply.
+pub(crate) fn review(memory: &str) -> String {
+    if memory.trim().is_empty() {
+        return REVIEWER_ROLE.to_owned();
+    }
+    format!(
+        "{REVIEWER_ROLE}\n\n{PREFERENCES_HEADER}\n<workspace-memory>\n{}\n{FENCE_CLOSE}",
+        escape(memory)
+    )
+}
+
 /// Describes the enabled tool groups and the modes each provider may be started in.
 fn granted(permissions: &BotPermissions) -> String {
     let groups: Vec<_> = permissions

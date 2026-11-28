@@ -185,6 +185,7 @@ pub(crate) mod bots {
     use ::bot::service::{Bots, Dependencies};
     use domain::bot::SessionOwner;
     use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+    use model::workspace::worktrees::WorktreeProvisioning;
     use persistence::storage::bot::FileStore;
     use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
     use provider::service::bot_execution::Action;
@@ -216,6 +217,38 @@ pub(crate) mod bots {
             Err(model::ErrorCode::BotIo)
         }
     }
+    impl WorktreeProvisioning for Native {
+        fn prepare_directory(
+            &self,
+            _: &str,
+            _: &domain::workspace::worktrees::DirectoryGit,
+        ) -> Result<(), domain::workspace::worktrees::WorktreeCreationError> {
+            Err(worktree_unavailable())
+        }
+        fn archive(
+            &self,
+            _: &str,
+            _: &str,
+        ) -> Result<(), domain::workspace::worktrees::WorktreeCreationError> {
+            Err(worktree_unavailable())
+        }
+        fn create(
+            &self,
+            _: &domain::workspace::worktrees::WorktreeCreation,
+            _: &str,
+        ) -> Result<
+            domain::workspace::worktrees::CreatedWorktreeWorkspace,
+            domain::workspace::worktrees::WorktreeCreationError,
+        > {
+            Err(worktree_unavailable())
+        }
+    }
+    fn worktree_unavailable() -> domain::workspace::worktrees::WorktreeCreationError {
+        domain::workspace::worktrees::WorktreeCreationError {
+            code: "test_unavailable",
+            message: "Worktrees are unavailable in this fixture".to_owned(),
+        }
+    }
 
     pub(crate) fn service(root: &std::path::Path) -> Bots {
         let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
@@ -231,6 +264,7 @@ pub(crate) mod bots {
             credentials: Arc::new(Native),
             scopes: ::bot::mcp::Scopes::new(),
             image_directory: None,
+            worktrees: Arc::new(Native),
         })
         .unwrap()
     }

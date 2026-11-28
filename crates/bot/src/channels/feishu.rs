@@ -73,7 +73,8 @@ pub(super) async fn run(
         | ChannelConfig::Telegram { .. }
         | ChannelConfig::Weixin { .. }
         | ChannelConfig::Qq { .. }
-        | ChannelConfig::PhotonImessage { .. } => return Err(ErrorCode::InvalidMessage),
+        | ChannelConfig::PhotonImessage { .. }
+        | ChannelConfig::Github { .. } => return Err(ErrorCode::InvalidMessage),
     };
     run_at(
         bots,
@@ -105,7 +106,8 @@ where
         | ChannelConfig::Telegram { .. }
         | ChannelConfig::Weixin { .. }
         | ChannelConfig::Qq { .. }
-        | ChannelConfig::PhotonImessage { .. } => return Err(ErrorCode::InvalidMessage),
+        | ChannelConfig::PhotonImessage { .. }
+        | ChannelConfig::Github { .. } => return Err(ErrorCode::InvalidMessage),
     };
     let connection = Arc::new(Connection {
         channel,
@@ -319,6 +321,7 @@ fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Inc
         reply_to: message["message_id"].as_str().map(str::to_owned),
         passive: group && !mentioned,
         sender_type: sender["sender_type"].as_str().map(str::to_owned),
+        context: None,
     }))
 }
 

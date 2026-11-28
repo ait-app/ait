@@ -724,6 +724,7 @@ fn owner_input(bot: &Bot) -> Incoming {
         reply_to: None,
         sender_type: None,
         passive: false,
+        context: None,
     }
 }
 

@@ -1,3 +1,5 @@
+import { bots as enBots } from "../en/bots";
+
 export const bots = {
   modeCapWarning:
     "الأوضاع التي تتيح للوكلاء تشغيل الأوامر تتيح لهم أيضًا قراءة بيانات اعتماد Ait على هذا الكمبيوتر وتجاوز حدود Ait الخاصة بـ Bot. اسمح بها فقط للعمل الذي تقبل أن ينجزه وكيل دون إشراف.",
@@ -77,6 +79,7 @@ export const bots = {
   tooLong: "يجب ألا تتجاوز الرسائل 16 كيبي بايت.",
   memoryTooLong: "يجب ألا تتجاوز الذاكرة 32 كيبي بايت.",
   channels: "القنوات",
+  githubChannel: enBots.githubChannel,
   addChannel: "إضافة قناة",
   channelType: "نوع القناة",
   telegram: "Telegram",

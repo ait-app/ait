@@ -162,6 +162,9 @@ Telegram、飞书、Lark、微信、QQ 和 iMessage 均接纳任意发送者，�
 Telegram、飞书、Lark 与 QQ 的出站回复支持 Markdown 图片，图片由各平台原生接口发送；其他 Channel 当前保持文本投递（[ADR-292](../decisions/bot/adr-292-rich-media-channel-delivery.md)）。
 执行期间权限请求自动拒绝，重启后不重做结果不明的副作用输入，见[Bot 手册](../operations/bots.md)。
 中心托管的 Webhook Channel 使用现有 serve 链路和受限服务会话，daemon 只保存端点；见 [ADR-233](../decisions/bot/adr-233-webhook-channel-center-endpoints.md)。
+GitHub App Channel 按冻结提交执行 PR 审阅，并将各阶段追加到持久的 PR 状态评论。详见
+[Bot 规格](bot.md#github-pr-审阅状态)与 [ADR-321](../decisions/bot/adr-321-github-app-review-channel.md)。
+
 Workspace 通知经 `Bots::notify` 进入活跃 Bot 的持久日志与收件箱，合并后在来源对话中唤醒一轮；未配置或暂停的 Bot 不写盘、不调用模型。
 daemon 把 Agent／终端 attention（未经焦点过滤的提交后广播）与定时任务运行结果转成通知，来源对话由 `ait.bot.conversation` 标签与 `botConversation` 字段记录，
 见 [ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)。

@@ -86,6 +86,7 @@ fn create(id: &str, mode: &str, instructions: &str) -> Action {
             thinking: None,
         },
         instructions: instructions.into(),
+        isolated_review: false,
     }
 }
 
@@ -135,6 +136,46 @@ async fn bot_session_is_read_only_and_preapproves_grantable_ait_tools() {
         .find(|request| request["method"] == "thread/start")
         .unwrap();
     assert_eq!(start["params"]["sandbox"], "read-only");
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn an_isolated_review_opens_without_inherited_tools_and_rotates_an_old_profile() {
+    let fixture = Fixture::new();
+    let (execution, registry) = worker(&fixture);
+    let owner = owner();
+    let old_id = uuid::Uuid::new_v4().to_string();
+    let review_id = uuid::Uuid::new_v4().to_string();
+    execution
+        .bot(&owner, create(&old_id, "auto", "Bot instructions"))
+        .await
+        .unwrap();
+    let review = |id: &str| {
+        let mut action = create(id, "auto", "Review the frozen checkout");
+        if let Action::Create {
+            isolated_review, ..
+        } = &mut action
+        {
+            *isolated_review = true;
+        }
+        action
+    };
+    let needs_rotation = execution.bot(&owner, review(&old_id)).await.unwrap();
+    assert_eq!(needs_rotation["resetRequired"], true);
+    execution.bot(&owner, review(&review_id)).await.unwrap();
+
+    let policy = config(&registry, &review_id).tool_policy.unwrap();
+    assert_eq!(policy, json!({"preapproved":[],"mcp":{"inherited":"none"}}));
+    let starts: Vec<_> = fixture
+        .requests()
+        .into_iter()
+        .filter(|request| request["method"] == "thread/start")
+        .collect();
+    let native = &starts.last().unwrap()["params"];
+    assert_eq!(native["sandbox"], "read-only");
+    assert_eq!(native["config"]["features"]["apps"], false);
+    assert_eq!(native["config"]["features"]["plugins"], false);
+    assert!(native["config"]["mcp_servers"]["ait"].is_null());
     execution.shutdown().await.unwrap();
 }
 

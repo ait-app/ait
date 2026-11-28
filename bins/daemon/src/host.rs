@@ -581,6 +581,7 @@ fn compose_background(
         projects,
         execution.clone(),
         scopes.clone(),
+        Arc::new(WorkspaceWorktrees::new(worktrees.clone())),
     )?;
     let notifier = notifications::Notifier::current(bots.clone());
     if let Some(notifier) = &notifier {

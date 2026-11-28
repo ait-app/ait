@@ -16,6 +16,7 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { BotChatPolicyRow, useBotChats } from "./bot-chat-policies";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { FeishuManualGuide, FeishuScanSetup } from "./feishu-setup";
+import { GithubChannelForm } from "./github-channel-form";
 import { TextLink } from "./channel-setup";
 import { ChannelScanSetup, QqManualSetup } from "./scan-setup";
 import { ImessageGuidedSetup } from "./imessage-setup";
@@ -36,7 +37,8 @@ type ExternalKind =
   | "weixin"
   | "qq"
   | "photon_imessage"
-  | "webhook";
+  | "webhook"
+  | "github";
 function connectionSummary(connection: unknown, fallback: string): string {
   if (connection && typeof connection === "object") {
     const { error, state } = connection as { error?: unknown; state?: unknown };
@@ -56,6 +58,7 @@ function ChannelRow({
   active,
   onChanged,
   chatList,
+  onEdit,
 }: {
   serverId: string;
   workspaceId: string;
@@ -66,6 +69,7 @@ function ChannelRow({
   active: boolean;
   onChanged: () => void;
   chatList?: ReturnType<typeof useBotChats>;
+  onEdit?: () => void;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -174,6 +178,27 @@ function ChannelRow({
             />
           </View>
         ) : null}
+        {channel.config.kind === "github" ? (
+          <SettingsRow
+            label={t("bots.githubChannel.repositories")}
+            hint={t("bots.githubChannel.summary", {
+              mention: channel.config.mention,
+              count: channel.config.repositories.length,
+            })}
+          >
+            {!readOnly && onEdit ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!interactive || busy}
+                onPress={onEdit}
+                testID={`bot-github-manage-${channel.id}`}
+              >
+                {t("bots.githubChannel.manage")}
+              </Button>
+            ) : null}
+          </SettingsRow>
+        ) : null}
         {chatList?.isPending && interactive ? (
           <SettingsRow label={t("bots.chatReception")}>
             <BotLoadingSpinner />
@@ -259,7 +284,13 @@ function ChannelForm({
     mutationFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
       // These render their own setup and never reach this form's submit button.
-      if (kind === "weixin" || kind === "qq" || kind === "photon_imessage" || kind === "webhook")
+      if (
+        kind === "weixin" ||
+        kind === "qq" ||
+        kind === "photon_imessage" ||
+        kind === "webhook" ||
+        kind === "github"
+      )
         return;
       if (pastedSecret) {
         await client.botRequest(
@@ -343,6 +374,17 @@ function ChannelForm({
       <WebhookSetup
         serverId={serverId}
         workspaceId={workspaceId}
+        active={active}
+        onDone={onDone}
+      />,
+    );
+  }
+  if (kind === "github") {
+    return card(
+      <GithubChannelForm
+        serverId={serverId}
+        workspaceId={workspaceId}
+        interactive
         active={active}
         onDone={onDone}
       />,
@@ -490,11 +532,13 @@ export function BotChannels({
   const client = useHostRuntimeClient(serverId);
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editingGithub, setEditingGithub] = useState<BotChannel | null>(null);
   const weixinSupported = useHostFeature(serverId, "workspaceBotWeixinSetup");
   const larkSupported = useHostFeature(serverId, "workspaceBotLarkSetup");
   const qqSupported = useHostFeature(serverId, "workspaceBotQqSetup");
   const imessageSupported = useHostFeature(serverId, "workspaceBotImessageSetup");
   const webhookSupported = useHostFeature(serverId, "workspaceBotWebhookSetup");
+  const githubSupported = useHostFeature(serverId, "workspaceBotGithubSetup");
   const receptionSupported = useHostFeature(serverId, "workspaceBotChatReception");
   const enabled = interactive && Boolean(client);
   const list = useQuery({
@@ -540,6 +584,7 @@ export function BotChannels({
         ...(qqSupported ? (["qq"] as const) : []),
         ...(imessageSupported ? (["photon_imessage"] as const) : []),
         ...(webhookSupported ? (["webhook"] as const) : []),
+        ...(githubSupported ? (["github"] as const) : []),
       ]
     : [];
   return (
@@ -580,8 +625,23 @@ export function BotChannels({
               ? chats
               : undefined
           }
+          onEdit={channel.config.kind === "github" ? () => setEditingGithub(channel) : undefined}
         />
       ))}
+      {!readOnly && editingGithub ? (
+        <GithubChannelForm
+          key={editingGithub.id}
+          serverId={serverId}
+          workspaceId={workspaceId}
+          channel={editingGithub}
+          interactive={interactive}
+          active={active}
+          onDone={() => {
+            setEditingGithub(null);
+            void refresh();
+          }}
+        />
+      ) : null}
       {!readOnly && adding && kinds.length > 0 ? (
         <ChannelForm
           serverId={serverId}

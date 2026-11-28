@@ -1,0 +1,689 @@
+//! GitHub App webhook admission and pull-request review delivery.
+
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::Duration;
+
+use domain::ChannelId;
+use domain::bot::review_status::{ReviewStatusKey, StatusEvent};
+use domain::bot::{
+    Channel, ChannelConfig, GithubRepositoryBinding, GithubReviewContext, GithubReviewTrigger,
+    StatusLanguage, TurnContext,
+};
+use hmac::{Hmac, Mac};
+use model::ErrorCode;
+use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use tokio_util::sync::CancellationToken;
+
+use super::{Incoming, deliver};
+use crate::ports::Credentials;
+use crate::ports::stored_credential_reference;
+use crate::protocol::ChannelCreate;
+use crate::service::Bots;
+use crate::state::StoredChannel;
+use client::{Board, Failure, GithubClient};
+
+mod client;
+mod status;
+
+const MAX_MANDATE_BYTES: usize = 4096;
+const CREATE_METHOD: &str = "hub.automation.github.create";
+const DELETE_METHOD: &str = "hub.automation.github.delete";
+
+/// Create a GitHub Channel after the center has issued its public endpoint and secret.
+pub(crate) async fn create(bots: &Bots, request: ChannelCreate) -> Result<Value, ErrorCode> {
+    if !request.enabled || !matches!(&request.config, ChannelConfig::Github { .. }) {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    let _setup = bots.github_setup().await;
+    bots.check_github_channel_admission(request.workspace_id.clone(), request.channel_id)
+        .await?;
+    let Some(center) = bots.center() else {
+        return Ok(json!({"state":"failed","reason":"centerOffline"}));
+    };
+    let issued = match super::webhook::issue_at(
+        &center,
+        CREATE_METHOD,
+        &request.workspace_id,
+        request.channel_id,
+    )
+    .await
+    {
+        Ok(issued) => issued,
+        Err(reason) => {
+            if reason == super::webhook::FAILED_OFFLINE || reason == super::webhook::FAILED_ERROR {
+                release(bots.clone(), request.channel_id).await;
+            }
+            return Ok(json!({"state":"failed","reason":reason}));
+        }
+    };
+    let ChannelConfig::Github {
+        app_id,
+        private_key_ref,
+        installation_id,
+        mention,
+        repositories,
+        status_language,
+        ..
+    } = request.config
+    else {
+        return Err(ErrorCode::InvalidMessage);
+    };
+    let config = ChannelConfig::Github {
+        app_id,
+        private_key_ref,
+        webhook_secret_ref: stored_credential_reference(request.channel_id),
+        installation_id,
+        mention,
+        repositories,
+        status_language,
+    };
+    let created = bots
+        .create_stored_channel(
+            StoredChannel {
+                workspace_id: request.workspace_id,
+                channel_id: request.channel_id,
+                config,
+            },
+            issued.secret.clone().into(),
+        )
+        .await;
+    match created {
+        Ok(created) => Ok(json!({
+            "state":"created",
+            "channel":created["channel"],
+            "url":issued.url,
+            "secret":issued.secret,
+        })),
+        Err(error) => {
+            // A failed write may have committed the channel locally. Preserve its endpoint
+            // so a restart can recover it with the same secret.
+            if error != ErrorCode::BotIo {
+                release(bots.clone(), request.channel_id).await;
+            }
+            Err(error)
+        }
+    }
+}
+
+pub(crate) async fn release(bots: Bots, channel: ChannelId) {
+    super::webhook::release_at(bots, channel, DELETE_METHOD).await;
+}
+
+/// An authenticated GitHub delivery with work for the review channel.
+pub(crate) enum WebhookEvent {
+    /// A request for a review.
+    Review(Box<Incoming>),
+    /// A push to the PR head.
+    HeadChanged {
+        key: ReviewStatusKey,
+        before: String,
+        after: String,
+    },
+}
+
+pub(crate) async fn webhook(
+    channel: &Channel,
+    credentials: &Arc<dyn Credentials>,
+    client: &reqwest::Client,
+    event: &str,
+    delivery_id: &str,
+    signature: &str,
+    body: &[u8],
+) -> Result<Option<WebhookEvent>, ErrorCode> {
+    let ChannelConfig::Github {
+        app_id,
+        private_key_ref,
+        webhook_secret_ref,
+        installation_id,
+        mention,
+        repositories,
+        ..
+    } = &channel.config
+    else {
+        return Err(ErrorCode::InvalidMessage);
+    };
+    let webhook_secret = credentials.resolve(webhook_secret_ref)?;
+    verify_signature(&webhook_secret, body, signature)?;
+    if !model::valid_id(delivery_id) {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    let payload: Value = serde_json::from_slice(body).map_err(|_| ErrorCode::InvalidMessage)?;
+    if event == "ping" {
+        return Ok(None);
+    }
+    if !matches!(event, "issue_comment" | "issues" | "pull_request") {
+        return Ok(None);
+    }
+    if payload["installation"]["id"]
+        .as_u64()
+        .map(|id| id.to_string())
+        != Some(installation_id.clone())
+    {
+        return Ok(None);
+    }
+    let repository = required_text(&payload["repository"], "full_name", 201)?;
+    let Some(binding) = repositories
+        .iter()
+        .find(|binding| binding.full_name.eq_ignore_ascii_case(repository))
+    else {
+        return Ok(None);
+    };
+    if event == "pull_request" && payload["action"] == "synchronize" {
+        return head_changed(channel.id, repository, &payload).map(Some);
+    }
+    let sender = required_text(&payload["sender"], "login", 100)?;
+    if sender.eq_ignore_ascii_case(mention)
+        || sender.eq_ignore_ascii_case(&format!("{mention}[bot]"))
+        || !allowed(binding, sender)
+    {
+        return Ok(None);
+    }
+    let trigger = trigger(event, &payload, mention)?;
+    let Some((trigger, mandate, comment_id)) = trigger else {
+        return Ok(None);
+    };
+    let pull_number = payload["issue"]["number"]
+        .as_u64()
+        .or_else(|| payload["pull_request"]["number"].as_u64())
+        .filter(|number| *number > 0)
+        .ok_or(ErrorCode::InvalidMessage)?;
+    let pull = if event == "pull_request" {
+        payload["pull_request"].clone()
+    } else {
+        let key = credentials.resolve_key(private_key_ref)?;
+        // A rate limit answers `resource_exhausted`, which the center retries.
+        GithubClient::new(client.clone())
+            .pull(app_id, installation_id, &key, repository, pull_number)
+            .await
+            .map_err(Failure::code)?
+    };
+    let context = review_context(
+        binding,
+        repository,
+        pull_number,
+        trigger,
+        sender,
+        comment_id,
+        &pull,
+    )?;
+    let repository_id = payload["repository"]["id"]
+        .as_u64()
+        .ok_or(ErrorCode::InvalidMessage)?;
+    Ok(Some(WebhookEvent::Review(Box::new(incoming(
+        channel.id,
+        repository_id,
+        context,
+        &mandate,
+    )))))
+}
+
+fn head_changed(
+    channel_id: ChannelId,
+    repository: &str,
+    payload: &Value,
+) -> Result<WebhookEvent, ErrorCode> {
+    let pull_number = payload["number"]
+        .as_u64()
+        .filter(|number| *number > 0)
+        .ok_or(ErrorCode::InvalidMessage)?;
+    Ok(WebhookEvent::HeadChanged {
+        key: ReviewStatusKey {
+            channel_id,
+            repository: repository.to_ascii_lowercase(),
+            pull_number,
+        },
+        before: object_name(required_text(payload, "before", 64)?)?,
+        after: object_name(required_text(payload, "after", 64)?)?,
+    })
+}
+
+pub(super) async fn run(
+    bots: Bots,
+    channel: Channel,
+    credentials: Arc<dyn Credentials>,
+    client: reqwest::Client,
+    cancel: &CancellationToken,
+) -> Result<(), ErrorCode> {
+    let ChannelConfig::Github {
+        app_id,
+        private_key_ref,
+        installation_id,
+        mention,
+        status_language,
+        ..
+    } = &channel.config
+    else {
+        return Err(ErrorCode::InvalidMessage);
+    };
+    bots.account(channel.id, format!("github:{installation_id}"))
+        .await?;
+    bots.channel_status(channel.id, json!({"state":"connected"}))
+        .await;
+    let app = App {
+        id: app_id.clone(),
+        installation: installation_id.clone(),
+        key: credentials.resolve_key(private_key_ref)?,
+    };
+    let github = GithubClient::new(client);
+    let publishing = deliver(&bots, channel.id, cancel, |turn, _conversation| {
+        let (github, app, bots) = (github.clone(), app.clone(), bots.clone());
+        async move { publish(&bots, &github, &app, &turn).await }
+    });
+    let showing = show_status(
+        &bots,
+        &github,
+        &app,
+        &channel,
+        (mention, *status_language),
+        cancel,
+    );
+    // The status loop only ends with the channel; a delivery error restarts both.
+    tokio::select! {
+        result = publishing => result,
+        () = showing => Ok(()),
+    }
+}
+
+/// The App identity a channel acts as.
+#[derive(Clone)]
+struct App {
+    id: String,
+    installation: String,
+    key: SecretString,
+}
+
+/// Publish one finished review turn and note the result on its status board.
+async fn publish(
+    bots: &Bots,
+    github: &GithubClient,
+    app: &App,
+    turn: &domain::bot::Turn,
+) -> Result<(), ErrorCode> {
+    let workspace = review_workspace(turn)?;
+    let published = GithubClient::retrying(
+        || github.submit(&app.id, &app.installation, &app.key, turn),
+        |wait| {
+            let event = StatusEvent::RateLimited {
+                wait_seconds: wait.as_secs(),
+            };
+            async move {
+                let _ = bots.review_status_event(turn.id, event).await;
+            }
+        },
+    )
+    .await
+    .map_err(Failure::code)?;
+    if let Some(published) = published {
+        let event = StatusEvent::Published {
+            high: published.high,
+            medium: published.medium,
+            low: published.low,
+            url: published.url,
+        };
+        let _ = bots.review_status_event(turn.id, event).await;
+    }
+    let _ = bots.archive_review(workspace).await;
+    Ok(())
+}
+
+/// How often the status boards are checked; changes in between are merged into one write.
+const STATUS_INTERVAL: Duration = Duration::from_secs(3);
+/// Wait before retrying a board GitHub refused for good, such as a missing permission.
+const STATUS_BACKOFF: Duration = Duration::from_secs(300);
+
+/// Keep each pull request's status comment in step with its board until `cancel`.
+async fn show_status(
+    bots: &Bots,
+    github: &GithubClient,
+    app: &App,
+    channel: &Channel,
+    (mention, language): (&str, StatusLanguage),
+    cancel: &CancellationToken,
+) {
+    let mut resting: BTreeMap<ReviewStatusKey, tokio::time::Instant> = BTreeMap::new();
+    loop {
+        tokio::select! {
+            () = cancel.cancelled() => return,
+            () = tokio::time::sleep(STATUS_INTERVAL) => {}
+        }
+        let Ok(boards) = bots.review_status_pending(channel.id).await else {
+            continue;
+        };
+        let now = tokio::time::Instant::now();
+        resting.retain(|_, until| *until > now);
+        let due: Vec<_> = boards
+            .iter()
+            .filter(|status| !resting.contains_key(&status.key))
+            .collect();
+        for status in due {
+            let board = Board {
+                status,
+                mention,
+                language,
+            };
+            match github
+                .sync_status(&app.id, &app.installation, &app.key, &board)
+                .await
+            {
+                Ok(written) => {
+                    let _ = bots.review_status_written(written).await;
+                }
+                Err(Failure::Later(wait)) => {
+                    resting.insert(status.key.clone(), now + wait.max(STATUS_INTERVAL));
+                }
+                Err(Failure::Final) => {
+                    tracing::warn!(channel = %channel.id, "GitHub review status could not be shown");
+                    resting.insert(status.key.clone(), now + STATUS_BACKOFF);
+                }
+            }
+        }
+    }
+}
+
+fn trigger(
+    event: &str,
+    payload: &Value,
+    mention: &str,
+) -> Result<Option<(GithubReviewTrigger, String, Option<String>)>, ErrorCode> {
+    match event {
+        "issue_comment"
+            if payload["action"] == "created" && payload["issue"]["pull_request"].is_object() =>
+        {
+            let body = required_text(&payload["comment"], "body", 256 * 1024)?;
+            let Some(mandate) = review_command(body, mention) else {
+                return Ok(None);
+            };
+            let comment = payload["comment"]["id"]
+                .as_u64()
+                .ok_or(ErrorCode::InvalidMessage)?
+                .to_string();
+            Ok(Some((GithubReviewTrigger::Mention, mandate, Some(comment))))
+        }
+        "pull_request" if payload["action"] == "review_requested" => {
+            let Some(reviewer) = payload["requested_reviewer"]["login"].as_str() else {
+                return Ok(None);
+            };
+            if !bot_login(reviewer, mention) {
+                return Ok(None);
+            }
+            Ok(Some((
+                GithubReviewTrigger::ReviewerAssignment,
+                String::new(),
+                None,
+            )))
+        }
+        // GitHub reports a pull request's assignment as `pull_request.assigned`; the
+        // `issues.assigned` form is kept for pull requests reported as issues.
+        "pull_request" | "issues"
+            if payload["action"] == "assigned"
+                && (event == "pull_request" || payload["issue"]["pull_request"].is_object()) =>
+        {
+            let Some(assignee) = payload["assignee"]["login"].as_str() else {
+                return Ok(None);
+            };
+            if !bot_login(assignee, mention) {
+                return Ok(None);
+            }
+            Ok(Some((
+                GithubReviewTrigger::AssigneeAssignment,
+                String::new(),
+                None,
+            )))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn bot_login(login: &str, mention: &str) -> bool {
+    login.eq_ignore_ascii_case(mention) || login.eq_ignore_ascii_case(&format!("{mention}[bot]"))
+}
+
+fn review_command(body: &str, mention: &str) -> Option<String> {
+    let expected = format!("@{mention}");
+    let words = body.split_whitespace().collect::<Vec<_>>();
+    let index = words
+        .iter()
+        .position(|word| word.eq_ignore_ascii_case(&expected))?;
+    if !words
+        .get(index + 1)
+        .is_some_and(|word| word.eq_ignore_ascii_case("review"))
+    {
+        return None;
+    }
+    let mandate = words.get(index + 2..).unwrap_or_default().join(" ");
+    let end = mandate.floor_char_boundary(mandate.len().min(MAX_MANDATE_BYTES));
+    Some(mandate[..end].to_owned())
+}
+
+fn review_context(
+    binding: &GithubRepositoryBinding,
+    repository: &str,
+    pull_number: u64,
+    trigger: GithubReviewTrigger,
+    sender: &str,
+    comment_id: Option<String>,
+    pull: &Value,
+) -> Result<GithubReviewContext, ErrorCode> {
+    let head_sha = object_name(required_text(&pull["head"], "sha", 64)?)?;
+    let base_sha = object_name(required_text(&pull["base"], "sha", 64)?)?;
+    Ok(GithubReviewContext {
+        repository: repository.to_ascii_lowercase(),
+        project_id: binding.project_id.clone(),
+        pull_number,
+        title: required_text(pull, "title", 1024)?.to_owned(),
+        url: required_text(pull, "html_url", 2048)?.to_owned(),
+        base_ref: required_text(&pull["base"], "ref", 255)?.to_owned(),
+        head_ref: required_text(&pull["head"], "ref", 255)?.to_owned(),
+        base_sha,
+        head_sha,
+        trigger,
+        trigger_user: sender.to_owned(),
+        trigger_comment_id: comment_id,
+        workspace_id: domain::workspace::registry::generate_workspace_id()
+            .map_err(|_| ErrorCode::RegistryIo)?,
+    })
+}
+
+fn incoming(
+    channel_id: ChannelId,
+    repository_id: u64,
+    context: GithubReviewContext,
+    mandate: &str,
+) -> Incoming {
+    let identity = format!(
+        "{}:{}:{}",
+        context.repository, context.pull_number, context.head_sha
+    );
+    let message_id = format!("github-review:{:x}", Sha256::digest(identity.as_bytes()));
+    let mandate = if mandate.is_empty() {
+        "Apply the Bot's default review mandate.".to_owned()
+    } else {
+        format!("Additional review mandate from the authorized requester: {mandate}")
+    };
+    let text = format!(
+        "Review GitHub pull request #{number} in {repository}. The admitted comparison is exactly {base}...{head}. The current directory is a read-only checkout of {head}: run `git diff {base}...{head}` there to read the complete diff, then inspect its callers. Do not modify files, push, merge, approve, or request changes. Report only actionable defects introduced by this diff. If the exact diff cannot be read, set incomplete to true and return an empty findings array. Return JSON only as {{\"summary\":\"...\",\"incomplete\":false,\"findings\":[{{\"path\":\"...\",\"line\":1,\"side\":\"RIGHT\",\"severity\":\"high\",\"title\":\"...\",\"body\":\"...\"}}]}}. Severity must be high, medium, or low; use LEFT only for removed lines and RIGHT for added or context lines. {mandate}",
+        number = context.pull_number,
+        repository = context.repository,
+        base = context.base_sha,
+        head = context.head_sha,
+    );
+    Incoming {
+        channel_id,
+        peer: format!("repo:{repository_id}:pr:{}", context.pull_number),
+        sender: "github-review".to_owned(),
+        thread: Some(context.head_sha.clone()),
+        message_id,
+        text,
+        reply_to: context.trigger_comment_id.clone(),
+        context: Some(TurnContext::GithubReview(Box::new(context))),
+        sender_type: None,
+        passive: false,
+    }
+}
+
+fn allowed(binding: &GithubRepositoryBinding, sender: &str) -> bool {
+    binding
+        .allowed_senders
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(sender))
+}
+
+fn required_text<'a>(value: &'a Value, field: &str, limit: usize) -> Result<&'a str, ErrorCode> {
+    value[field]
+        .as_str()
+        .filter(|text| !text.is_empty() && text.len() <= limit && !text.contains('\0'))
+        .ok_or(ErrorCode::InvalidMessage)
+}
+
+fn object_name(value: &str) -> Result<String, ErrorCode> {
+    if matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        Ok(value.to_ascii_lowercase())
+    } else {
+        Err(ErrorCode::InvalidMessage)
+    }
+}
+
+fn verify_signature(secret: &SecretString, body: &[u8], signature: &str) -> Result<(), ErrorCode> {
+    let provided = signature
+        .strip_prefix("sha256=")
+        .and_then(decode_hex)
+        .ok_or(ErrorCode::InvalidMessage)?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes())
+        .map_err(|_| ErrorCode::BotIo)?;
+    mac.update(body);
+    mac.verify_slice(&provided)
+        .map_err(|_| ErrorCode::InvalidMessage)
+}
+
+fn decode_hex(value: &str) -> Option<Vec<u8>> {
+    if value.len() != 64 {
+        return None;
+    }
+    value
+        .as_bytes()
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| {
+            let high = hex_nibble(pair[0])?;
+            let low = hex_nibble(pair[1])?;
+            Some((high << 4) | low)
+        })
+        .collect()
+}
+
+fn hex_nibble(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReviewReport {
+    #[serde(default)]
+    incomplete: bool,
+    summary: String,
+    findings: Vec<ReviewFinding>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReviewFinding {
+    path: String,
+    line: u64,
+    side: String,
+    severity: String,
+    title: String,
+    body: String,
+}
+
+fn report(turn: &domain::bot::Turn) -> Result<ReviewReport, ErrorCode> {
+    let reply = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
+    let report = parse_report(reply).ok_or(ErrorCode::BotIo)?;
+    if report.incomplete
+        || report.summary.trim().is_empty()
+        || report.summary.len() > 60 * 1024
+        || report.findings.len() > 100
+    {
+        return Err(ErrorCode::BotIo);
+    }
+    Ok(report)
+}
+
+fn parse_report(reply: &str) -> Option<ReviewReport> {
+    serde_json::from_str(reply).ok().or_else(|| {
+        let fenced = reply
+            .trim()
+            .strip_prefix("```json")
+            .or_else(|| reply.trim().strip_prefix("```"))?
+            .strip_suffix("```")?
+            .trim();
+        serde_json::from_str(fenced).ok()
+    })
+}
+
+fn review_comment(finding: &ReviewFinding) -> Option<Value> {
+    if finding.path.is_empty()
+        || finding.path.len() > 500
+        || finding.path.starts_with('/')
+        || finding.path.split('/').any(|part| part == "..")
+        || finding.path.chars().any(char::is_control)
+        || finding.line == 0
+        || !matches!(finding.side.as_str(), "LEFT" | "RIGHT")
+        || !matches!(finding.severity.as_str(), "high" | "medium" | "low")
+        || finding.title.trim().is_empty()
+        || finding.title.len() > 500
+        || finding.body.trim().is_empty()
+        || finding.body.len() > 16 * 1024
+    {
+        return None;
+    }
+    Some(json!({
+        "path":finding.path,
+        "line":finding.line,
+        "side":finding.side,
+        "body":format!("**{}: {}**\n\n{}", finding.severity, finding.title, finding.body)
+    }))
+}
+
+fn fallback_body(report: &ReviewReport, context: &GithubReviewContext) -> String {
+    let mut body = format!(
+        "{}\n\nReviewed `{}` at `{}`.",
+        report.summary,
+        context.repository,
+        short_sha(&context.head_sha)
+    );
+    for finding in report.findings.iter().take(100) {
+        let entry = format!(
+            "\n\n- **{}: {}** — `{}` line {}: {}",
+            finding.severity, finding.title, finding.path, finding.line, finding.body
+        );
+        if body.len() + entry.len() > 60 * 1024 {
+            break;
+        }
+        body.push_str(&entry);
+    }
+    body
+}
+
+fn short_sha(sha: &str) -> &str {
+    sha.get(..12).unwrap_or(sha)
+}
+
+fn review_workspace(turn: &domain::bot::Turn) -> Result<String, ErrorCode> {
+    match turn.context.as_ref() {
+        Some(TurnContext::GithubReview(context)) => Ok(context.workspace_id.clone()),
+        None => Err(ErrorCode::BotIo),
+    }
+}
+
+#[cfg(test)]
+mod tests;

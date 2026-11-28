@@ -37,6 +37,10 @@ pub struct WorktreeChangeRequest {
     pub number: u64,
     /// Optional forge project identity retained from the request.
     pub project_path: Option<String>,
+    /// Expected head object name supplied by a trusted event, when the checkout must be frozen.
+    pub expected_head_sha: Option<String>,
+    /// Expected base object name supplied by a trusted event, when the comparison must be frozen.
+    pub expected_base_sha: Option<String>,
 }
 
 /// Creation intent, including the identity reserved by the creation coordinator.
@@ -139,6 +143,10 @@ pub struct ChangeRequestCheckout {
     pub head_ref: String,
     /// Base branch used for comparisons.
     pub base_ref: String,
+    /// Expected immutable head object name, when the caller froze the request revision.
+    pub head_sha: Option<String>,
+    /// Expected immutable comparison object name, when the caller froze the request revision.
+    pub base_sha: Option<String>,
     /// Local branch candidate; forks may prefix the head owner.
     pub local_branch: String,
     /// Fork identity requiring setup approval, absent for same-repository changes.

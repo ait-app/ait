@@ -13,8 +13,9 @@ use model::ErrorCode;
 use model::bot::Store;
 use model::hub::Center;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::worktrees::WorktreeProvisioning;
 use secrecy::SecretString;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -31,12 +32,12 @@ use crate::ports::{Credentials, Executor};
 use crate::protocol::TicketAnswer;
 use crate::protocol::{ChannelCreate, decode};
 use crate::recall::{Origin, Read, Sight};
-use crate::state::{State, StoredChannel};
+use crate::state::{ReviewPreparation, State, StoredChannel};
 use crate::tickets::{AssignTicket, OpenTicket, OpenedTicket, WorkerReport};
 use domain::bot::follow::Delivery;
 use domain::forge::PullSnapshot;
 
-/// One enabled Webhook channel whose endpoint is hosted by the center.
+/// One enabled automation channel whose public endpoint is hosted by the center.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebhookBot {
@@ -48,7 +49,7 @@ pub struct WebhookBot {
     pub title: String,
     /// `active` or `paused`.
     pub state: &'static str,
-    /// Always `webhook`.
+    /// `webhook` or `github`.
     pub kind: &'static str,
 }
 
@@ -80,6 +81,8 @@ pub struct Dependencies {
     pub scopes: Arc<Scopes>,
     /// Provider-owned directory containing rendered image artifacts that Bot may deliver.
     pub image_directory: Option<PathBuf>,
+    /// Temporary pull-request worktree provisioning and cleanup.
+    pub worktrees: Arc<dyn WorktreeProvisioning>,
 }
 
 /// Safe startup or worker-lifecycle failure.
@@ -104,6 +107,9 @@ struct Worker {
     offers: TaskTracker,
     closed: watch::Receiver<bool>,
     executor: Arc<dyn Executor>,
+    credentials: Arc<dyn Credentials>,
+    worktrees: Arc<dyn WorktreeProvisioning>,
+    workspaces: Arc<dyn WorkspaceRegistry>,
     scopes: Arc<Scopes>,
     feishu: FeishuOnboarding,
     telegram: TelegramOnboarding,
@@ -114,6 +120,8 @@ struct Worker {
     webhooks: watch::Sender<Vec<WebhookBot>>,
     /// This Host's serve link, through which webhook endpoints are requested.
     center: OnceLock<Arc<dyn Center>>,
+    /// Serializes admission and external provisioning of GitHub Channels.
+    github_setup: tokio::sync::Mutex<()>,
     /// Pull request reads and Agent delivery for tickets that follow pull requests.
     follow: OnceLock<Ports>,
     /// Tickets the follower serves; empty while none follows anything.
@@ -128,11 +136,12 @@ pub struct Bots(Arc<Worker>);
 
 enum Operation {
     Rpc(String, Value),
-    Accept(Incoming),
+    Accept(Box<Incoming>),
     Cursor(ChannelId, i64),
     ChannelCursor(ChannelId),
     PhotonProjectClaimed(String),
     ChannelStatus(ChannelId, Value),
+    WebhookObserved(ChannelId, String, String),
     Account(ChannelId, String),
     Progress(
         BotTurnId,
@@ -165,6 +174,8 @@ enum Operation {
     Read(Box<Read>),
     Sight(String, Origin),
     Follow(Box<FollowOperation>),
+    Github(Box<GithubOperation>),
+    ReviewPrepared(BotTurnId, Result<String, ()>),
 }
 
 /// A step of following pull requests (ADR-287).
@@ -210,6 +221,9 @@ impl Bots {
     /// # Errors
     /// Returns invalid storage or runtime-start failures; no external account is contacted here.
     pub fn spawn(dependencies: Dependencies) -> Result<Self, Error> {
+        let workspaces = dependencies.workspaces.clone();
+        let credentials = dependencies.credentials.clone();
+        let worktrees = dependencies.worktrees.clone();
         let state = State::load(
             dependencies.store,
             dependencies.workspaces,
@@ -233,6 +247,9 @@ impl Bots {
             offers: TaskTracker::new(),
             closed: observed,
             executor: dependencies.executor,
+            credentials: credentials.clone(),
+            worktrees,
+            workspaces,
             scopes: dependencies.scopes,
             feishu: FeishuOnboarding::default(),
             telegram: TelegramOnboarding::default(),
@@ -241,6 +258,7 @@ impl Bots {
             imessage: ImessageOnboarding::default(),
             webhooks: hub,
             center: OnceLock::new(),
+            github_setup: tokio::sync::Mutex::new(()),
             follow: OnceLock::new(),
             follows: watch::Sender::new(Vec::new()),
             image_directory,
@@ -249,7 +267,7 @@ impl Bots {
         std::thread::Builder::new()
             .name("ait-bot".into())
             .spawn(move || {
-                runtime.block_on(serve(worker, state, receiver, dependencies.credentials));
+                runtime.block_on(serve(worker, state, receiver, credentials));
                 let _ = closed.send(true);
             })
             .map_err(|_| Error::Worker)?;
@@ -341,8 +359,75 @@ impl Bots {
             "bot.channel.webhook.rotate.request" => {
                 crate::channels::webhook::rotate(self, decode(params)?).await
             }
+            "bot.channel.github.create.request" => {
+                crate::channels::github::create(self, decode(params)?).await
+            }
+            "bot.github.webhook.receive.request" => self.github_webhook(decode(params)?).await,
             _ => self.call(Operation::Rpc(method.to_owned(), params)).await,
         }
+    }
+
+    /// Verify and admit one GitHub App webhook delivery.
+    ///
+    /// Valid deliveries outside the configured repository, sender, or trigger scope are ignored.
+    /// # Errors
+    /// Returns malformed headers or payloads, invalid signatures, GitHub API failures, and durable
+    /// Bot admission failures.
+    pub(crate) async fn github_webhook(
+        &self,
+        request: crate::protocol::GithubWebhook,
+    ) -> Result<Value, ErrorCode> {
+        use base64::Engine as _;
+
+        use crate::channels::github::{self, WebhookEvent};
+
+        let body = base64::engine::general_purpose::STANDARD
+            .decode(&request.body_base64)
+            .map_err(|_| ErrorCode::InvalidMessage)?;
+        if body.len() > 700 * 1024 {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let channel: Channel = decode(
+            self.call(Operation::Github(Box::new(GithubOperation::Channel(
+                request.workspace_id,
+                request.channel_id,
+            ))))
+            .await?,
+        )?;
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(45))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|_| ErrorCode::BotIo)?;
+        let event = github::webhook(
+            &channel,
+            &self.0.credentials,
+            &client,
+            &request.event,
+            &request.delivery,
+            &request.signature,
+            &body,
+        )
+        .await?;
+        self.webhook_observed(channel.id, &request.event).await;
+        let admission = match event {
+            Some(WebhookEvent::Review(incoming)) => self.accept(*incoming).await?,
+            Some(WebhookEvent::HeadChanged { key, before, after }) => {
+                self.call(Operation::Github(Box::new(GithubOperation::HeadChanged {
+                    key,
+                    before,
+                    after,
+                })))
+                .await?;
+                return Ok(json!({"accepted":true}));
+            }
+            None => return Ok(json!({"accepted":true,"ignored":true})),
+        };
+        Ok(json!({
+            "accepted": matches!(admission, Admission::Accepted),
+            "backlogged": matches!(admission, Admission::Backlogged)
+        }))
     }
 
     /// Use this Host's serve link for webhook endpoints; later attachments are ignored.
@@ -819,13 +904,31 @@ impl Bots {
         if self.0.cancellation.is_cancelled() {
             return Err(ErrorCode::ServerDraining);
         }
-        let receipt = self.send(Operation::Accept(incoming)).await?;
+        let receipt = self.send(Operation::Accept(Box::new(incoming))).await?;
         Ok(if receipt["accepted"] == true {
             Admission::Accepted
         } else {
             Admission::Backlogged
         })
     }
+    /// Hold exclusive access to GitHub Channel provisioning.
+    pub(crate) async fn github_setup(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.0.github_setup.lock().await
+    }
+
+    /// Check that a GitHub Channel may be provisioned with this identity.
+    pub(crate) async fn check_github_channel_admission(
+        &self,
+        workspace: String,
+        channel: ChannelId,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::Github(Box::new(
+            GithubOperation::CheckAdmission(workspace, channel),
+        )))
+        .await
+        .map(|_| ())
+    }
+
     /// Whether the Workspace's Bot could keep one more channel right now.
     pub(crate) async fn check_channel_admission(&self, workspace: String) -> Result<(), ErrorCode> {
         self.call(Operation::ChannelAdmission(workspace))
@@ -894,6 +997,15 @@ impl Bots {
     pub(crate) async fn channel_status(&self, channel: ChannelId, status: Value) {
         let _ = self.call(Operation::ChannelStatus(channel, status)).await;
     }
+    async fn webhook_observed(&self, channel: ChannelId, event: &str) {
+        let _ = self
+            .call(Operation::WebhookObserved(
+                channel,
+                event.to_owned(),
+                chrono::Utc::now().to_rfc3339(),
+            ))
+            .await;
+    }
     pub(crate) async fn account(
         &self,
         channel: ChannelId,
@@ -945,6 +1057,37 @@ impl Bots {
             .await
             .map(|_| ())
     }
+    /// Append `event` to the review status board of turn `turn`.
+    pub(crate) async fn review_status_event(
+        &self,
+        turn: BotTurnId,
+        event: domain::bot::review_status::StatusEvent,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::Github(Box::new(GithubOperation::Event(
+            turn, event,
+        ))))
+        .await
+        .map(|_| ())
+    }
+    /// The review status boards of `channel` that GitHub has yet to see.
+    pub(crate) async fn review_status_pending(
+        &self,
+        channel: ChannelId,
+    ) -> Result<Vec<domain::bot::review_status::ReviewStatus>, ErrorCode> {
+        let operation = GithubOperation::Pending(channel);
+        decode(self.call(Operation::Github(Box::new(operation))).await?)
+    }
+    /// Record what the channel wrote for one review status board.
+    pub(crate) async fn review_status_written(
+        &self,
+        written: crate::state::StatusWritten,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::Github(Box::new(GithubOperation::Written(
+            written,
+        ))))
+        .await
+        .map(|_| ())
+    }
     pub(crate) async fn delivery_next(
         &self,
         channel: ChannelId,
@@ -964,6 +1107,16 @@ impl Bots {
         self.send(Operation::Delivery(turn, status))
             .await
             .map(|_| ())
+    }
+
+    pub(crate) async fn archive_review(&self, workspace_id: String) -> Result<(), ErrorCode> {
+        let worktrees = self.0.worktrees.clone();
+        tokio::task::spawn_blocking(move || {
+            worktrees.archive(&workspace_id, &chrono::Utc::now().to_rfc3339())
+        })
+        .await
+        .map_err(|_| ErrorCode::BotIo)?
+        .map_err(|_| ErrorCode::BotIo)
     }
 }
 
@@ -1025,6 +1178,11 @@ async fn serve(
             if !stopping {
                 state.wake(chrono::Utc::now());
             }
+            let preparations = if stopping {
+                Vec::new()
+            } else {
+                state.review_preparations()
+            };
             let ready = if stopping {
                 Vec::new()
             } else if let Ok(ready) = state.ready() {
@@ -1038,25 +1196,15 @@ async fn serve(
             } else {
                 state.channels()
             };
-            (state, accounts, ready, desired)
+            (state, accounts, preparations, ready, desired)
         })
         .await;
-        let Ok((next, next_accounts, ready, desired)) = processed else {
+        let Ok((next, next_accounts, preparations, ready, desired)) = processed else {
             break;
         };
         state = next;
         accounts = next_accounts;
-        for run in ready {
-            tasks.spawn(crate::execution::run(
-                bots.clone(),
-                bots.0.executor.clone(),
-                run,
-            ));
-        }
-        for channel in std::mem::take(&mut state.released_webhooks) {
-            tasks.spawn(crate::channels::webhook::release(bots.clone(), channel));
-        }
-        run_session_actions(&mut state, &bots.0.executor, &tasks);
+        spawn_work(&bots, &tasks, &mut state, preparations, ready);
         if !stopping {
             refresh_channels(&bots, desired, &credentials, &tasks, &mut channels);
         }
@@ -1079,6 +1227,57 @@ fn run_session_actions(state: &mut State, executor: &Arc<dyn Executor>, tasks: &
     }
 }
 
+/// Start what one round of the worker produced: review checkouts, runs, endpoint releases
+/// and session actions.
+fn spawn_work(
+    bots: &Bots,
+    tasks: &TaskTracker,
+    state: &mut State,
+    preparations: Vec<ReviewPreparation>,
+    ready: Vec<crate::execution::Run>,
+) {
+    spawn_review_preparations(bots, tasks, preparations);
+    for run in ready {
+        tasks.spawn(crate::execution::run(
+            bots.clone(),
+            bots.0.executor.clone(),
+            run,
+        ));
+    }
+    for channel in std::mem::take(&mut state.released_webhooks) {
+        tasks.spawn(crate::channels::webhook::release(bots.clone(), channel));
+    }
+    for channel in std::mem::take(&mut state.released_github) {
+        tasks.spawn(crate::channels::github::release(bots.clone(), channel));
+    }
+    run_session_actions(state, &bots.0.executor, tasks);
+}
+
+fn spawn_review_preparations(
+    bots: &Bots,
+    tasks: &TaskTracker,
+    preparations: Vec<ReviewPreparation>,
+) {
+    for preparation in preparations {
+        let worker = bots.clone();
+        let worktrees = bots.0.worktrees.clone();
+        let workspaces = bots.0.workspaces.clone();
+        tasks.spawn(async move {
+            let turn_id = preparation.turn_id;
+            let prepared = tokio::task::spawn_blocking(move || {
+                prepare_review(&*worktrees, &*workspaces, &preparation.context).map_err(|error| {
+                    tracing::warn!(%turn_id, code = %error.code, "GitHub review checkout could not be prepared");
+                })
+            })
+            .await
+            .unwrap_or(Err(()));
+            let _ = worker
+                .send(Operation::ReviewPrepared(turn_id, prepared))
+                .await;
+        });
+    }
+}
+
 fn apply(
     state: &mut State,
     accounts: &mut BTreeMap<String, ChannelId>,
@@ -1090,7 +1289,7 @@ fn apply(
             state.cancel(&decode(params)?)
         }
         Operation::Rpc(method, params) => state.execute(&method, params),
-        Operation::Accept(incoming) => state.accept_channel(incoming),
+        Operation::Accept(incoming) => state.accept_channel(*incoming),
         Operation::SyncToken(channel, token) => {
             state.advance_sync(channel, token).map(|()| Value::Null)
         }
@@ -1103,6 +1302,16 @@ fn apply(
         }
         Operation::ChannelStatus(channel, value) => {
             state.channel_status.insert(channel, value);
+            Ok(Value::Null)
+        }
+        Operation::WebhookObserved(channel, event, observed_at) => {
+            let status = state
+                .channel_status
+                .entry(channel)
+                .or_insert_with(|| json!({"state":"connected"}));
+            let status = status.as_object_mut().ok_or(ErrorCode::BotIo)?;
+            status.insert("lastWebhookAt".to_owned(), Value::String(observed_at));
+            status.insert("lastWebhookEvent".to_owned(), Value::String(event));
             Ok(Value::Null)
         }
         Operation::AccountAvailable(identity) => {
@@ -1131,6 +1340,7 @@ fn apply(
         Operation::ChatAdmission(channel, peer, group, mentioned) => {
             state.admit_chat(channel, peer, group, mentioned)
         }
+        Operation::Github(operation) => apply_github(state, *operation),
         Operation::DeliveryNext(channel) => {
             let pending = state.pending_delivery(channel)?;
             if let Some((turn, _)) = &pending {
@@ -1166,6 +1376,101 @@ fn apply(
         Operation::Read(read) => state.read(&read),
         Operation::Sight(root, origin) => {
             serde_json::to_value(state.sight(&root, origin)?).map_err(|_| ErrorCode::BotIo)
+        }
+        Operation::ReviewPrepared(turn_id, workspace_id) => state
+            .review_prepared(turn_id, workspace_id)
+            .map(|()| Value::Null),
+    }
+}
+
+fn prepare_review(
+    worktrees: &dyn WorktreeProvisioning,
+    workspaces: &dyn WorkspaceRegistry,
+    context: &domain::bot::GithubReviewContext,
+) -> Result<String, domain::workspace::worktrees::WorktreeCreationError> {
+    if let Some(existing) = workspaces
+        .get(&context.workspace_id)
+        .map_err(|_| review_workspace_error())?
+    {
+        if existing.archived_at.is_none() && existing.project_id == context.project_id {
+            return Ok(existing.workspace_id);
+        }
+        return Err(review_workspace_error());
+    }
+    let short = context.head_sha.get(..12).unwrap_or(&context.head_sha);
+    let created = worktrees.create(
+        &domain::workspace::worktrees::WorktreeCreation {
+            cwd: None,
+            project_id: Some(context.project_id.clone()),
+            workspace_id: Some(context.workspace_id.clone()),
+            title: Some(format!(
+                "Review {}#{} at {short}",
+                context.repository, context.pull_number
+            )),
+            worktree_slug: Some(format!("github-review-{}-{short}", context.pull_number)),
+            ref_name: Some(context.head_ref.clone()),
+            base_branch: None,
+            branch_name: None,
+            action: domain::workspace::worktrees::WorktreeAction::Checkout,
+            checkout_source: Some(domain::workspace::worktrees::WorktreeChangeRequest {
+                forge: Some("github".to_owned()),
+                number: context.pull_number,
+                project_path: Some(context.repository.clone()),
+                expected_head_sha: Some(context.head_sha.clone()),
+                expected_base_sha: Some(context.base_sha.clone()),
+            }),
+            first_agent_prompt: None,
+            expects_initial_agent: false,
+            sandbox: None,
+        },
+        &chrono::Utc::now().to_rfc3339(),
+    )?;
+    Ok(created.workspace.workspace_id)
+}
+
+fn review_workspace_error() -> domain::workspace::worktrees::WorktreeCreationError {
+    domain::workspace::worktrees::WorktreeCreationError {
+        code: "review_workspace",
+        message: "Review Workspace is unavailable".to_owned(),
+    }
+}
+
+/// A GitHub review channel operation (ADR-321).
+enum GithubOperation {
+    CheckAdmission(String, ChannelId),
+    Channel(String, ChannelId),
+    Event(BotTurnId, domain::bot::review_status::StatusEvent),
+    Pending(ChannelId),
+    Written(crate::state::StatusWritten),
+    HeadChanged {
+        key: domain::bot::review_status::ReviewStatusKey,
+        before: String,
+        after: String,
+    },
+}
+
+fn apply_github(state: &mut State, operation: GithubOperation) -> Result<Value, ErrorCode> {
+    match operation {
+        GithubOperation::CheckAdmission(workspace, channel) => state
+            .check_github_channel_admission(&workspace, channel)
+            .map(|()| Value::Null),
+        GithubOperation::Channel(workspace, channel) => {
+            serde_json::to_value(state.github_channel(&workspace, channel)?)
+                .map_err(|_| ErrorCode::BotIo)
+        }
+        GithubOperation::Event(turn, event) => {
+            state.review_status_event(turn, event).map(|()| Value::Null)
+        }
+        GithubOperation::Pending(channel) => {
+            serde_json::to_value(state.review_status_pending(channel)).map_err(|_| ErrorCode::BotIo)
+        }
+        GithubOperation::Written(written) => {
+            state.review_status_written(&written);
+            Ok(Value::Null)
+        }
+        GithubOperation::HeadChanged { key, before, after } => {
+            state.review_head_changed(&key, &before, &after);
+            Ok(Value::Null)
         }
     }
 }

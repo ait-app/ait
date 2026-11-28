@@ -176,6 +176,7 @@ fn incoming(channel: &Channel, event: &Value) -> Option<Incoming> {
         reply_to: None,
         sender_type: None,
         passive: false,
+        context: None,
     })
 }
 

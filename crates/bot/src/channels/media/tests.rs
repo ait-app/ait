@@ -27,6 +27,7 @@ fn turn(text: &str) -> Turn {
         bot_sequence: None,
         sender_type: None,
         passive: false,
+        context: None,
     }
 }
 

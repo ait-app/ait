@@ -1,3 +1,5 @@
+import { bots as enBots } from "../en/bots";
+
 export const bots = {
   modeCapWarning:
     "エージェントがコマンドを実行できるモードでは、このコンピューターの Ait 認証情報を読み取り、Bot の Ait 制限を回避することもできます。エージェントに無人で任せてよい作業にのみ許可してください。",
@@ -79,6 +81,7 @@ export const bots = {
   tooLong: "メッセージは 16 KiB 以内にしてください。",
   memoryTooLong: "メモリは 32 KiB 以内にしてください。",
   channels: "チャンネル",
+  githubChannel: enBots.githubChannel,
   addChannel: "チャンネルを追加",
   channelType: "チャンネルの種類",
   telegram: "Telegram",

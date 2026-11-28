@@ -6,7 +6,11 @@ use bot::service::Dependencies;
 use domain::ConversationId;
 use domain::bot::SessionOwner;
 use domain::workspace::registry::WorkspaceMutationContext;
+use domain::workspace::worktrees::{
+    CreatedWorktreeWorkspace, DirectoryGit, WorktreeCreation, WorktreeCreationError,
+};
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::worktrees::WorktreeProvisioning;
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use provider::service::bot_execution::Action;
@@ -292,6 +296,31 @@ impl Credentials for Quiet {
     }
 }
 
+impl WorktreeProvisioning for Quiet {
+    fn prepare_directory(&self, _: &str, _: &DirectoryGit) -> Result<(), WorktreeCreationError> {
+        Err(no_worktrees())
+    }
+
+    fn archive(&self, _: &str, _: &str) -> Result<(), WorktreeCreationError> {
+        Err(no_worktrees())
+    }
+
+    fn create(
+        &self,
+        _: &WorktreeCreation,
+        _: &str,
+    ) -> Result<CreatedWorktreeWorkspace, WorktreeCreationError> {
+        Err(no_worktrees())
+    }
+}
+
+fn no_worktrees() -> WorktreeCreationError {
+    WorktreeCreationError {
+        code: "test_unavailable",
+        message: "Worktrees are unavailable in this fixture".to_owned(),
+    }
+}
+
 /// A Bot service for [`WORKSPACE`] plus an Agent registry, both under `root`.
 async fn bots_at(root: &Path) -> (Bots, Arc<dyn AgentRuntimeRegistry>, ConversationId) {
     let cwd = root.to_str().unwrap();
@@ -322,6 +351,7 @@ async fn bots_at(root: &Path) -> (Bots, Arc<dyn AgentRuntimeRegistry>, Conversat
         credentials: Arc::new(Quiet),
         scopes: bot::mcp::Scopes::new(),
         image_directory: None,
+        worktrees: Arc::new(Quiet),
     })
     .unwrap();
     bots.execute(

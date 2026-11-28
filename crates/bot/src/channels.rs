@@ -1,4 +1,5 @@
 pub(crate) mod feishu;
+pub(crate) mod github;
 pub(crate) mod media;
 mod onboarding;
 pub(crate) mod photon;
@@ -11,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use domain::ChannelId;
-use domain::bot::{Channel, ChannelConfig, DeliveryStatus};
+use domain::bot::{Channel, ChannelConfig, DeliveryStatus, TurnContext};
 use model::ErrorCode;
 use secrecy::SecretString;
 use serde_json::json;
@@ -135,6 +136,7 @@ pub(crate) struct Incoming {
     pub(crate) message_id: String,
     pub(crate) text: String,
     pub(crate) reply_to: Option<String>,
+    pub(crate) context: Option<TurnContext>,
 }
 
 /// Return each user-visible assistant message for external delivery.
@@ -197,6 +199,16 @@ async fn attempt(
     client: &reqwest::Client,
     cancel: &CancellationToken,
 ) -> Result<(), ErrorCode> {
+    if matches!(&channel.config, ChannelConfig::Github { .. }) {
+        return github::run(
+            bots.clone(),
+            channel.clone(),
+            credentials.clone(),
+            client.clone(),
+            cancel,
+        )
+        .await;
+    }
     let reference = match &channel.config {
         ChannelConfig::Builtin | ChannelConfig::Webhook { .. } => {
             return Ok(());
@@ -208,6 +220,7 @@ async fn attempt(
         | ChannelConfig::Lark { secret_ref, .. }
         | ChannelConfig::Qq { secret_ref, .. } => secret_ref,
         ChannelConfig::PhotonImessage { key_ref, .. } => key_ref,
+        ChannelConfig::Github { .. } => unreachable!("GitHub handled before credential lookup"),
     };
     let secret = credentials.resolve(reference)?;
     match &channel.config {
@@ -223,6 +236,7 @@ async fn attempt(
         ChannelConfig::PhotonImessage { .. } => {
             photon::run(bots, channel, client, &secret, cancel).await
         }
+        ChannelConfig::Github { .. } => unreachable!("GitHub handled before credential lookup"),
     }
 }
 
