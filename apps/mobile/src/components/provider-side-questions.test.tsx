@@ -423,16 +423,27 @@ it("keeps a readable retryable RPC reason without exposing request metadata", ()
 });
 
 it("keeps an unsupported ask dismissible and its draft intact without exposing RPC metadata", async () => {
-  mocks.ask.mockRejectedValue(
-    rpcError("not_implemented", "agent.side_question.ask.request", "Method is not implemented yet"),
-  );
+  const admission = Promise.withResolvers<never>();
+  mocks.ask.mockReturnValueOnce(admission.promise);
   render(panel({ question: "Side question", key: 1 }));
+  await act(async () => {
+    admission.reject(
+      rpcError(
+        "not_implemented",
+        "agent.side_question.ask.request",
+        "Method is not implemented yet",
+      ),
+    );
+  });
   await screen.findByText("btw.unsupportedHost");
   expect(screen.getByTestId("side-question-input")).toHaveProperty("value", "Side question");
   expect(screen.queryByText(/requestType=|code=/)).toBeNull();
-  expect(screen.getByTestId("side-question-end")).toHaveProperty("disabled", false);
-  fireEvent.click(screen.getByTestId("side-question-end"));
-  expect(onOpenedChange).toHaveBeenCalledWith(false);
+  const close = screen.getByTestId("side-question-end");
+  expect(close).toHaveProperty("disabled", false);
+  await act(async () => {
+    fireEvent.click(close);
+  });
+  await waitFor(() => expect(onOpenedChange).toHaveBeenCalledWith(false));
   expect(mocks.ask).toHaveBeenCalledTimes(1);
 });
 
