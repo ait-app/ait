@@ -305,6 +305,37 @@ fn github_reviews_run_in_their_own_session_beside_the_shared_context() {
 }
 
 #[test]
+fn an_unconfirmed_github_review_still_reaches_its_pull_request() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = github_channel(&mut state);
+    let review = state
+        .accept(review_input(
+            channel,
+            "review",
+            GithubReviewTrigger::Mention,
+            OTHER_WORKSPACE,
+        ))
+        .unwrap();
+    let review: BotTurnId = serde_json::from_value(review["turn"]["id"].clone()).unwrap();
+    state
+        .review_prepared(review, Ok(OTHER_WORKSPACE.to_owned()))
+        .unwrap();
+    assert_eq!(state.ready().unwrap()[0].turn.id, review);
+    state
+        .progress(review, TurnStatus::Uncertain, None, Some("lost".to_owned()))
+        .unwrap();
+    let (pending, _) = state.pending_delivery(channel).unwrap().unwrap();
+    assert_eq!(
+        (pending.id, pending.status),
+        (review, TurnStatus::Uncertain)
+    );
+}
+
+#[test]
 fn catalog_crud_requires_exclusive_ownership_and_retains_deleted_history() {
     let fixture = Fixture::new();
     let mut state = fixture.state();

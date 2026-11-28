@@ -2,33 +2,29 @@
 
 use std::sync::Arc;
 
-use base64::Engine;
-use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use domain::ChannelId;
 use domain::bot::{
     Channel, ChannelConfig, GithubRepositoryBinding, GithubReviewContext, GithubReviewTrigger,
-    TurnContext, TurnStatus,
+    TurnContext,
 };
 use hmac::{Hmac, Mac};
 use model::ErrorCode;
-use ring::rand::SystemRandom;
-use ring::signature::{RSA_PKCS1_SHA256, RsaKeyPair};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
 
-use super::{Incoming, deliver, json_response};
+use super::{Incoming, deliver};
 use crate::ports::Credentials;
 use crate::ports::stored_credential_reference;
 use crate::protocol::ChannelCreate;
 use crate::service::Bots;
 use crate::state::StoredChannel;
+use client::{Failure, GithubClient};
 
-const API: &str = "https://api.github.com";
-const API_VERSION: &str = "2022-11-28";
-const USER_AGENT: &str = "ait-github-review";
+mod client;
+
 const MAX_MANDATE_BYTES: usize = 4096;
 const CREATE_METHOD: &str = "hub.automation.github.create";
 const DELETE_METHOD: &str = "hub.automation.github.delete";
@@ -172,9 +168,11 @@ pub(super) async fn webhook(
         payload["pull_request"].clone()
     } else {
         let key = credentials.resolve_key(private_key_ref)?;
+        // A rate limit answers `resource_exhausted`, which the center retries.
         GithubClient::new(client.clone())
             .pull(app_id, installation_id, &key, repository, pull_number)
-            .await?
+            .await
+            .map_err(Failure::code)?
     };
     let context = review_context(
         binding,
@@ -223,9 +221,11 @@ pub(super) async fn run(
         let installation_id = installation_id.clone();
         async move {
             let workspace = review_workspace(&turn)?;
-            github
-                .submit(&app_id, &installation_id, &private_key, &turn)
-                .await?;
+            let (github, turn) = (&github, &turn);
+            let (app_id, installation_id, key) = (&app_id, &installation_id, &private_key);
+            GithubClient::retrying(|| github.submit(app_id, installation_id, key, turn))
+                .await
+                .map_err(Failure::code)?;
             let _ = bots.archive_review(workspace).await;
             Ok(())
         }
@@ -432,231 +432,6 @@ fn hex_nibble(value: u8) -> Option<u8> {
         b'A'..=b'F' => Some(value - b'A' + 10),
         _ => None,
     }
-}
-
-#[derive(Clone)]
-struct GithubClient {
-    client: reqwest::Client,
-    api: &'static str,
-}
-
-impl GithubClient {
-    fn new(client: reqwest::Client) -> Self {
-        Self { client, api: API }
-    }
-
-    async fn pull(
-        &self,
-        app_id: &str,
-        installation_id: &str,
-        private_key: &SecretString,
-        repository: &str,
-        number: u64,
-    ) -> Result<Value, ErrorCode> {
-        let token = self
-            .installation_token(app_id, installation_id, private_key)
-            .await?;
-        let response = self
-            .request(
-                self.client
-                    .get(format!("{}/repos/{repository}/pulls/{number}", self.api))
-                    .bearer_auth(token.expose_secret()),
-            )
-            .await?;
-        if response.status().is_success() {
-            json_response(response).await
-        } else {
-            Err(ErrorCode::BotIo)
-        }
-    }
-
-    async fn submit(
-        &self,
-        app_id: &str,
-        installation_id: &str,
-        private_key: &SecretString,
-        turn: &domain::bot::Turn,
-    ) -> Result<(), ErrorCode> {
-        let Some(TurnContext::GithubReview(context)) = turn.context.as_ref() else {
-            return Err(ErrorCode::BotIo);
-        };
-        let token = self
-            .installation_token(app_id, installation_id, private_key)
-            .await?;
-        if turn.status == TurnStatus::Failed {
-            let reason = turn
-                .error
-                .as_deref()
-                .unwrap_or("The review could not be completed");
-            return self
-                .post_comment(
-                    &token,
-                    context,
-                    &format!(
-                        "GitHub review could not run for `{}` at `{}`: {reason}",
-                        context.repository,
-                        short_sha(&context.head_sha)
-                    ),
-                )
-                .await;
-        }
-        let report = report(turn)?;
-        let comments = report
-            .findings
-            .iter()
-            .filter_map(review_comment)
-            .collect::<Vec<_>>();
-        let body = format!(
-            "{}\n\nReviewed `{}` at `{}`.",
-            report.summary,
-            context.repository,
-            short_sha(&context.head_sha)
-        );
-        let response = self
-            .request(
-                self.client
-                    .post(format!(
-                        "{}/repos/{}/pulls/{}/reviews",
-                        self.api, context.repository, context.pull_number
-                    ))
-                    .bearer_auth(token.expose_secret())
-                    .json(&json!({
-                        "commit_id":context.head_sha,
-                        "body":body,
-                        "event":"COMMENT",
-                        "comments":comments
-                    })),
-            )
-            .await?;
-        if response.status().is_success() {
-            let _ = json_response(response).await?;
-            return Ok(());
-        }
-        if response.status().as_u16() != 422 {
-            return Err(ErrorCode::BotIo);
-        }
-        let fallback = fallback_body(&report, context);
-        self.post_comment(&token, context, &fallback).await
-    }
-
-    async fn post_comment(
-        &self,
-        token: &SecretString,
-        context: &GithubReviewContext,
-        body: &str,
-    ) -> Result<(), ErrorCode> {
-        let response = self
-            .request(
-                self.client
-                    .post(format!(
-                        "{}/repos/{}/issues/{}/comments",
-                        self.api, context.repository, context.pull_number
-                    ))
-                    .bearer_auth(token.expose_secret())
-                    .json(&json!({"body":body})),
-            )
-            .await?;
-        if response.status().is_success() {
-            let _ = json_response(response).await?;
-            Ok(())
-        } else {
-            Err(ErrorCode::BotIo)
-        }
-    }
-
-    async fn installation_token(
-        &self,
-        app_id: &str,
-        installation_id: &str,
-        private_key: &SecretString,
-    ) -> Result<SecretString, ErrorCode> {
-        let jwt = app_jwt(app_id, private_key)?;
-        let response = self
-            .request(
-                self.client
-                    .post(format!(
-                        "{}/app/installations/{installation_id}/access_tokens",
-                        self.api
-                    ))
-                    .bearer_auth(jwt),
-            )
-            .await?;
-        if !response.status().is_success() {
-            return Err(ErrorCode::BotIo);
-        }
-        let value = json_response(response).await?;
-        value["token"]
-            .as_str()
-            .filter(|token| !token.is_empty() && token.len() <= 4096)
-            .map(|token| SecretString::from(token.to_owned()))
-            .ok_or(ErrorCode::BotIo)
-    }
-
-    async fn request(
-        &self,
-        request: reqwest::RequestBuilder,
-    ) -> Result<reqwest::Response, ErrorCode> {
-        request
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", API_VERSION)
-            .header("User-Agent", USER_AGENT)
-            .send()
-            .await
-            .map_err(|_| ErrorCode::BotIo)
-    }
-}
-
-fn app_jwt(app_id: &str, private_key: &SecretString) -> Result<String, ErrorCode> {
-    let now = chrono::Utc::now().timestamp();
-    let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"RS256","typ":"JWT"}"#);
-    let claims = URL_SAFE_NO_PAD.encode(
-        serde_json::to_vec(&json!({"iat":now - 60,"exp":now + 540,"iss":app_id}))
-            .map_err(|_| ErrorCode::BotIo)?,
-    );
-    let message = format!("{header}.{claims}");
-    let (label, der) = pem(private_key.expose_secret())?;
-    let key = if label == "RSA PRIVATE KEY" {
-        RsaKeyPair::from_der(&der)
-    } else {
-        RsaKeyPair::from_pkcs8(&der)
-    }
-    .map_err(|_| ErrorCode::BotIo)?;
-    let mut signature = vec![0; key.public().modulus_len()];
-    key.sign(
-        &RSA_PKCS1_SHA256,
-        &SystemRandom::new(),
-        message.as_bytes(),
-        &mut signature,
-    )
-    .map_err(|_| ErrorCode::BotIo)?;
-    Ok(format!("{message}.{}", URL_SAFE_NO_PAD.encode(signature)))
-}
-
-fn pem(value: &str) -> Result<(&'static str, Vec<u8>), ErrorCode> {
-    let normalized = value.replace("\\n", "\n");
-    let normalized = normalized.trim();
-    let (label, begin, end) = if normalized.contains("-----BEGIN RSA PRIVATE KEY-----") {
-        (
-            "RSA PRIVATE KEY",
-            "-----BEGIN RSA PRIVATE KEY-----",
-            "-----END RSA PRIVATE KEY-----",
-        )
-    } else {
-        (
-            "PRIVATE KEY",
-            "-----BEGIN PRIVATE KEY-----",
-            "-----END PRIVATE KEY-----",
-        )
-    };
-    let body = normalized
-        .strip_prefix(begin)
-        .and_then(|value| value.strip_suffix(end))
-        .ok_or(ErrorCode::BotIo)?;
-    let encoded = body.lines().map(str::trim).collect::<String>();
-    STANDARD
-        .decode(encoded)
-        .map(|der| (label, der))
-        .map_err(|_| ErrorCode::BotIo)
 }
 
 #[derive(Deserialize)]

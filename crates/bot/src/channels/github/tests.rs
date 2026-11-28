@@ -3,9 +3,8 @@ use domain::bot::{GithubRepositoryBinding, GithubReviewTrigger, TurnContext};
 use secrecy::SecretString;
 use serde_json::json;
 
-use super::{
-    incoming, parse_report, pem, review_command, review_context, trigger, verify_signature,
-};
+use super::client::pem;
+use super::{incoming, parse_report, review_command, review_context, trigger, verify_signature};
 
 #[test]
 fn mention_requires_the_bot_name_followed_by_review() {

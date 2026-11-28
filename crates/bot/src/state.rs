@@ -465,7 +465,8 @@ impl State {
             .ok_or(ErrorCode::BotIo)?
             .channel_id;
         let outbox = self.outbox.entry(channel).or_default();
-        let github_failure = turn.status == TurnStatus::Failed
+        // A review that failed or whose outcome is unknown still tells its pull request.
+        let github_failure = matches!(turn.status, TurnStatus::Failed | TurnStatus::Uncertain)
             && matches!(
                 turn.context,
                 Some(domain::bot::TurnContext::GithubReview(_))

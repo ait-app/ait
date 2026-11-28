@@ -107,6 +107,15 @@ GitHub 若不允许把该 App 的 bot 账号选为 reviewer 或 assignee，请�
 
 Bot 固定事件中的 base/head SHA，创建临时 worktree，返回 summary 与 inline findings，成功投递
 后归档 worktree。同一 `repository + PR + head SHA` 在同一 Channel 只执行一次；push 新提交后
-head SHA 改变，可再次触发。无法创建冻结 checkout 或 Provider 执行失败时，Bot 会在 PR 留下安全
-的失败说明；执行结果无法确认（`uncertain`）时不发布任何内容，需在 Bot 中重置该会话后重新触发。
-Bot 不会 merge、approve、request changes 或 push。
+head SHA 改变，可再次触发。base 分支在接纳后继续前进不影响 review：只要冻结的 base 仍在 base 分支历史中，就按接纳时的
+`base...head` 审阅；head 必须与接纳时完全一致。
+
+无法创建冻结 checkout 或 Provider 执行失败时，Bot 会在 PR 留下安全的失败说明；执行结果无法确认
+（`uncertain`）时也会留言说明，因同一 head 只审阅一次，需推送新提交后再次触发。Bot 不会 merge、
+approve、request changes 或 push。
+
+发布时遇到 GitHub 限流（429，或带 `Retry-After` / `x-ratelimit-remaining: 0` 的 403）、installation
+token 被拒（401）或连接失败，Bot 按 GitHub 给出的等待时间重试，单次最多 5 次、每次最多等待 60 秒；
+这些情况下 GitHub 尚未处理请求，不会重复发布。5xx 等结果不明的失败不重试。review 被 422 拒绝时
+（常见于 inline 位置失效），先把 findings 并入正文重发 review，仍被拒绝才改为普通 PR 评论。
+installation token 缓存 55 分钟。

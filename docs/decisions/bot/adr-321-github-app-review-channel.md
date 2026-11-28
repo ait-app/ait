@@ -75,6 +75,9 @@ JSON prompt 并在无法解析时降级为 summary。Bot 使用 GitHub pull-requ
 - GitHub App 权限至少需要读取 metadata/pull requests，以及写 pull requests/issues；订阅 Issue
   comments 与 Pull request 事件。PR 代码由 Host 已登录的 GitHub CLI 和 Project remote 拉取，
   不使用 installation token，因此 Host 账号需能读取绑定仓库。
+- 冻结的是 head：base 分支在接纳后前进时，只要求接纳时的 base 仍是该分支的祖先，比较基准不变。
+- 发布区分「GitHub 未处理」（限流、401、连接失败，可安全重试）与结果不明的失败（不重试、投递记为
+  uncertain）；结果无法确认的 review 也在 PR 留言。
 - App private key 是多行 PEM：Host 只对该引用接受换行（`Credentials::resolve_key`），其他凭据
   仍拒绝控制字符，避免进入 HTTP 头。
 - GitHub App installation 是 Channel 的账号身份；同一 daemon 不允许两个启用 Channel 同时
