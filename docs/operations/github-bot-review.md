@@ -10,8 +10,7 @@ Project。
 
 - Repository permissions：Metadata read、Pull requests read/write、Issues read/write（发布失败
   说明时使用 issue comment）。
-- Subscribe to events：Issue comment、Pull request。PR 的 reviewer 请求和 assign 都属于 Pull
-  request 事件。
+- Subscribe to events：Issue comment、Pull request。PR 的 assign 属于 Pull request 事件。
 - Webhook URL：创建 GitHub Channel 后由 Ait 界面返回的 center URL。必须配置为 GitHub App 的
   webhook：仓库级 webhook 的事件不带 `installation`，会被忽略。
 - Webhook secret：与 URL 同时一次性显示；复制到 GitHub App 后妥善保存。
@@ -100,10 +99,15 @@ installation 时，在同一个 Bot 下创建另一个 Channel。
 允许列表中的用户可以：
 
 - 在 PR 评论 `@ait-review review`，后续文字会作为附加 review mandate；
-- 把 `ait-review[bot]` request 为 reviewer；
 - 把 PR assign 给 `ait-review[bot]`。
 
-GitHub 若不允许把该 App 的 bot 账号选为 reviewer 或 assignee，请改用评论召唤。
+GitHub 不允许把 App 的 bot 账号请求为 reviewer：`requested_reviewers` 接口会返回成功但不添加
+（2026-11-28 实测）。daemon 仍接受指向该 bot 的 `pull_request.review_requested`，以便 GitHub 日后
+支持时直接生效。
+
+review 会话只读取冻结检出，不提供 Ait MCP 工具，使用独立的 reviewer 指令（Workspace memory
+仍然适用）。Provider 自带的连接器（例如 Codex 的 GitHub app）不受 Ait 管理，取决于该 Provider
+账号的配置。
 
 Bot 固定事件中的 base/head SHA，创建临时 worktree，返回 summary 与 inline findings，成功投递
 后归档 worktree。同一 `repository + PR + head SHA` 在同一 Channel 只执行一次；push 新提交后

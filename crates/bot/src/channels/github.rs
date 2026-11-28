@@ -354,7 +354,7 @@ fn incoming(
         format!("Additional review mandate from the authorized requester: {mandate}")
     };
     let text = format!(
-        "Review GitHub pull request #{number} in {repository}. The admitted comparison is exactly {base}...{head}. Inspect the complete diff and its callers in this checkout. Do not modify files, push, merge, approve, or request changes. Report only actionable defects introduced by this diff. Return JSON only as {{\"summary\":\"...\",\"findings\":[{{\"path\":\"...\",\"line\":1,\"side\":\"RIGHT\",\"severity\":\"high\",\"title\":\"...\",\"body\":\"...\"}}]}}. Severity must be high, medium, or low; use LEFT only for removed lines and RIGHT for added or context lines. {mandate}",
+        "Review GitHub pull request #{number} in {repository}. The admitted comparison is exactly {base}...{head}. The current directory is a read-only checkout of {head}: run `git diff {base}...{head}` there to read the complete diff, then inspect its callers. Do not modify files, push, merge, approve, or request changes. Report only actionable defects introduced by this diff. Return JSON only as {{\"summary\":\"...\",\"findings\":[{{\"path\":\"...\",\"line\":1,\"side\":\"RIGHT\",\"severity\":\"high\",\"title\":\"...\",\"body\":\"...\"}}]}}. Severity must be high, medium, or low; use LEFT only for removed lines and RIGHT for added or context lines. {mandate}",
         number = context.pull_number,
         repository = context.repository,
         base = context.base_sha,

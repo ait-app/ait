@@ -324,7 +324,6 @@ export function GithubChannelForm({
       <View style={styles.subcard}>
         <Text style={styles.subtitle}>{t("bots.githubChannel.triggers")}</Text>
         <Text style={styles.text}>✓ {t("bots.githubChannel.triggerMention")}</Text>
-        <Text style={styles.text}>✓ {t("bots.githubChannel.triggerReviewer")}</Text>
         <Text style={styles.text}>✓ {t("bots.githubChannel.triggerAssignee")}</Text>
       </View>
       <View style={styles.row}>

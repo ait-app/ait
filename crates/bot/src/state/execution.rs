@@ -191,7 +191,7 @@ impl State {
             if !channel.enabled || channel.deleted {
                 continue;
             }
-            let Ok(instructions) = self.instructions(&bot) else {
+            let Ok(instructions) = self.instructions(&bot, isolated) else {
                 failed.push(*id);
                 continue;
             };
@@ -327,12 +327,18 @@ impl State {
             ),
         }
     }
-    fn instructions(&self, bot: &Bot) -> Result<String, ErrorCode> {
+    /// The system instructions of a run: a review in its own checkout (`review`) reads the
+    /// change itself, every other run manages the workspace as the Bot.
+    fn instructions(&self, bot: &Bot, review: bool) -> Result<String, ErrorCode> {
         let memory = self
             .store
             .memory(&bot.workspace_id)
             .map_err(|_| ErrorCode::BotIo)?;
-        Ok(crate::instructions::compose(&memory, &bot.permissions))
+        Ok(if review {
+            crate::instructions::review(&memory)
+        } else {
+            crate::instructions::compose(&memory, &bot.permissions)
+        })
     }
     pub(crate) fn progress(
         &mut self,

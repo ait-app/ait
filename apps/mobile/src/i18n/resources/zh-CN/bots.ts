@@ -103,7 +103,6 @@ export const bots = {
     removeRepository: "移除",
     triggers: "Review 触发方式",
     triggerMention: "在 PR 评论中输入 @bot review",
-    triggerReviewer: "把机器人请求为 PR Reviewer",
     triggerAssignee: "把机器人 Assign 到 PR",
     summary: "@{{mention}} · {{count}} 个仓库绑定",
     validation: {

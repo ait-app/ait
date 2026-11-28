@@ -111,7 +111,6 @@ export const bots = {
     removeRepository: "Remove",
     triggers: "Review triggers",
     triggerMention: "@bot review in a pull request comment",
-    triggerReviewer: "Bot requested as a pull request reviewer",
     triggerAssignee: "Bot assigned to the pull request",
     summary: "@{{mention}} · {{count}} repository binding(s)",
     validation: {

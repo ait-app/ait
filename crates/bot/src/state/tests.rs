@@ -298,6 +298,8 @@ fn github_reviews_run_in_their_own_session_beside_the_shared_context() {
     assert_eq!(ready.len(), 1);
     assert_eq!(ready[0].turn.id, review);
     assert_eq!(ready[0].owner.workspace_id, OTHER_WORKSPACE);
+    assert!(ready[0].instructions.contains("git diff <base>...<head>"));
+    assert!(!shared[0].instructions.contains("git diff <base>...<head>"));
     assert_ne!(
         ready[0].conversation.session_id,
         shared[0].conversation.session_id
