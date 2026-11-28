@@ -182,10 +182,10 @@ impl GithubClient {
         if turn.status != TurnStatus::Completed {
             return Ok(None);
         }
+        let report = report(turn)?;
         let token = self
             .installation_token(app_id, installation_id, private_key)
             .await?;
-        let report = report(turn)?;
         let count = |severity: &str| {
             report
                 .findings

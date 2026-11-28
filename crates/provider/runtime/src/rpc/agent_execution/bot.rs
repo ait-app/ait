@@ -29,9 +29,16 @@ impl ExecutionState {
                 agent_id,
                 config,
                 instructions,
+                isolated_review,
             } => {
-                self.open_bot_session(request.owner, existing, agent_id, config, instructions)
-                    .await
+                self.open_bot_session(
+                    request.owner,
+                    existing,
+                    agent_id,
+                    config,
+                    (instructions, isolated_review),
+                )
+                .await
             }
             Action::Send {
                 agent_id,
@@ -111,7 +118,7 @@ impl ExecutionState {
         existing: Option<PersistedAgentRuntimeRecord>,
         agent: String,
         config: ExecutionConfig,
-        instructions: String,
+        (instructions, isolated_review): (String, bool),
     ) -> Result<Value, ErrorCode> {
         let support = self
             .manager
@@ -121,7 +128,7 @@ impl ExecutionState {
                     .map_or(&config.provider, |record| &record.provider),
             )
             .map_err(|error| map_manager(&error))?;
-        let profile = Profile::new(&support, instructions);
+        let profile = Profile::new(&support, instructions, isolated_review);
         let (created, reset_required) = if let Some(record) = existing {
             if record.archived_at.is_some() {
                 return Err(ErrorCode::InvalidMessage);
@@ -321,13 +328,20 @@ struct Profile {
     mode_id: Option<&'static str>,
     tool_policy: Option<Value>,
     system_prompt: Option<String>,
+    isolated_review: bool,
 }
 
 impl Profile {
-    fn new(support: &BotSessionSupport, instructions: String) -> Self {
+    fn new(support: &BotSessionSupport, instructions: String, isolated_review: bool) -> Self {
+        let tool_policy = if isolated_review {
+            Some(json!({"preapproved":[],"mcp":{"inherited":"none"}}))
+        } else {
+            support.tool_preapproval.then(preapproved_ait_tools)
+        };
         Self {
             mode_id: support.read_only_mode,
-            tool_policy: support.tool_preapproval.then(preapproved_ait_tools),
+            tool_policy,
+            isolated_review,
             system_prompt: (support.instructions == InstructionDelivery::SystemPrompt)
                 .then_some(instructions),
         }
@@ -338,6 +352,9 @@ impl Profile {
     /// A mode cannot be cleared through configuration, and turn-prefix providers may reject
     /// prompt changes after opening, so their stored prompt is never patched.
     fn patch(&self, current: &StoredAgentConfig) -> Option<ConfigPatch> {
+        if self.isolated_review && self.tool_policy != current.tool_policy {
+            return None;
+        }
         let mode_id = if self.mode_id == current.mode_id.as_deref() {
             NullableSetting::Unchanged
         } else {

@@ -223,6 +223,35 @@ fn review_input(
 }
 
 #[test]
+fn github_review_checkouts_are_bounded_across_worker_passes() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = github_channel(&mut state);
+    for number in 1..=5 {
+        let mut incoming = review_input(
+            channel,
+            "review",
+            GithubReviewTrigger::Mention,
+            OTHER_WORKSPACE,
+        );
+        incoming.peer = format!("repo:5:pr:{number}");
+        incoming.message_id = format!("review-{number}");
+        if let Some(TurnContext::GithubReview(context)) = incoming.context.as_mut() {
+            context.pull_number = number;
+        }
+        state.accept(incoming).unwrap();
+    }
+    let started = state.review_preparations();
+    assert_eq!(started.len(), 4);
+    assert!(state.review_preparations().is_empty());
+    state.review_prepared(started[0].turn_id, Err(())).unwrap();
+    assert_eq!(state.review_preparations().len(), 1);
+}
+
+#[test]
 fn github_review_triggers_for_the_same_head_reuse_the_first_turn() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
@@ -348,6 +377,25 @@ fn review_comment_input(channel: ChannelId, message: &str, comment: &str) -> Inc
         context.trigger_comment_id = Some(comment.to_owned());
     }
     incoming
+}
+
+#[test]
+fn an_existing_github_channel_cannot_be_provisioned_again() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let new_id = ChannelId::generate();
+    assert_eq!(
+        state.check_github_channel_admission(WORKSPACE, new_id),
+        Ok(())
+    );
+    let existing = github_channel(&mut state);
+    assert_eq!(
+        state.check_github_channel_admission(WORKSPACE, existing),
+        Err(ErrorCode::BotConflict)
+    );
 }
 
 #[test]

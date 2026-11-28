@@ -38,7 +38,8 @@ pub(crate) async fn create(bots: &Bots, request: ChannelCreate) -> Result<Value,
     if !request.enabled || !matches!(&request.config, ChannelConfig::Github { .. }) {
         return Err(ErrorCode::InvalidMessage);
     }
-    bots.check_channel_admission(request.workspace_id.clone())
+    let _setup = bots.github_setup().await;
+    bots.check_github_channel_admission(request.workspace_id.clone(), request.channel_id)
         .await?;
     let Some(center) = bots.center() else {
         return Ok(json!({"state":"failed","reason":"centerOffline"}));
@@ -54,7 +55,7 @@ pub(crate) async fn create(bots: &Bots, request: ChannelCreate) -> Result<Value,
         Ok(issued) => issued,
         Err(reason) => {
             if reason == super::webhook::FAILED_OFFLINE || reason == super::webhook::FAILED_ERROR {
-                tokio::spawn(release(bots.clone(), request.channel_id));
+                release(bots.clone(), request.channel_id).await;
             }
             return Ok(json!({"state":"failed","reason":reason}));
         }
@@ -98,7 +99,11 @@ pub(crate) async fn create(bots: &Bots, request: ChannelCreate) -> Result<Value,
             "secret":issued.secret,
         })),
         Err(error) => {
-            tokio::spawn(release(bots.clone(), request.channel_id));
+            // A failed write may have committed the channel locally. Preserve its endpoint
+            // so a restart can recover it with the same secret.
+            if error != ErrorCode::BotIo {
+                release(bots.clone(), request.channel_id).await;
+            }
             Err(error)
         }
     }
@@ -500,7 +505,7 @@ fn incoming(
         format!("Additional review mandate from the authorized requester: {mandate}")
     };
     let text = format!(
-        "Review GitHub pull request #{number} in {repository}. The admitted comparison is exactly {base}...{head}. The current directory is a read-only checkout of {head}: run `git diff {base}...{head}` there to read the complete diff, then inspect its callers. Do not modify files, push, merge, approve, or request changes. Report only actionable defects introduced by this diff. Return JSON only as {{\"summary\":\"...\",\"findings\":[{{\"path\":\"...\",\"line\":1,\"side\":\"RIGHT\",\"severity\":\"high\",\"title\":\"...\",\"body\":\"...\"}}]}}. Severity must be high, medium, or low; use LEFT only for removed lines and RIGHT for added or context lines. {mandate}",
+        "Review GitHub pull request #{number} in {repository}. The admitted comparison is exactly {base}...{head}. The current directory is a read-only checkout of {head}: run `git diff {base}...{head}` there to read the complete diff, then inspect its callers. Do not modify files, push, merge, approve, or request changes. Report only actionable defects introduced by this diff. If the exact diff cannot be read, set incomplete to true and return an empty findings array. Return JSON only as {{\"summary\":\"...\",\"incomplete\":false,\"findings\":[{{\"path\":\"...\",\"line\":1,\"side\":\"RIGHT\",\"severity\":\"high\",\"title\":\"...\",\"body\":\"...\"}}]}}. Severity must be high, medium, or low; use LEFT only for removed lines and RIGHT for added or context lines. {mandate}",
         number = context.pull_number,
         repository = context.repository,
         base = context.base_sha,
@@ -583,6 +588,8 @@ fn hex_nibble(value: u8) -> Option<u8> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ReviewReport {
+    #[serde(default)]
+    incomplete: bool,
     summary: String,
     findings: Vec<ReviewFinding>,
 }
@@ -600,11 +607,9 @@ struct ReviewFinding {
 
 fn report(turn: &domain::bot::Turn) -> Result<ReviewReport, ErrorCode> {
     let reply = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
-    let report = parse_report(reply).unwrap_or_else(|| ReviewReport {
-        summary: reply.to_owned(),
-        findings: Vec::new(),
-    });
-    if report.summary.trim().is_empty()
+    let report = parse_report(reply).ok_or(ErrorCode::BotIo)?;
+    if report.incomplete
+        || report.summary.trim().is_empty()
         || report.summary.len() > 60 * 1024
         || report.findings.len() > 100
     {

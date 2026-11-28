@@ -116,7 +116,11 @@ pub(super) fn render(
 
 fn section(head: &ReviewHead, lines: &[usize], text: Text) -> String {
     let mut section = format!("\n**{} `{}`**\n", text.head(), short(&head.head_sha));
-    let last = head.lines.len().saturating_sub(1);
+    let last = head
+        .lines
+        .iter()
+        .rposition(|line| !matches!(line.event, StatusEvent::RequestedAgain { .. }))
+        .unwrap_or_else(|| head.lines.len().saturating_sub(1));
     let mut lines = lines.to_vec();
     lines.sort_unstable();
     for index in lines {
@@ -127,10 +131,10 @@ fn section(head: &ReviewHead, lines: &[usize], text: Text) -> String {
             time(line),
             text.event(line)
         );
-        if index < last {
-            let _ = writeln!(section, "- ~~{content}~~");
-        } else {
+        if index == last {
             let _ = writeln!(section, "- {content}");
+        } else {
+            let _ = writeln!(section, "- ~~{content}~~");
         }
     }
     section

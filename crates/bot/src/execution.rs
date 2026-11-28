@@ -92,9 +92,10 @@ fn review_schema(turn: &Turn, provider: &str) -> Option<serde_json::Value> {
             serde_json::json!({
                 "type":"object",
                 "additionalProperties":false,
-                "required":["summary","findings"],
+                "required":["summary","incomplete","findings"],
                 "properties":{
                     "summary":{"type":"string"},
+                    "incomplete":{"type":"boolean"},
                     "findings":{
                         "type":"array",
                         "maxItems":100,
@@ -333,6 +334,7 @@ async fn open(
             agent_id: run.conversation.session_id.clone(),
             config: run.config.clone(),
             instructions: run.instructions.clone(),
+            isolated_review: run.turn.context.is_some(),
         },
     );
     tokio::select! {

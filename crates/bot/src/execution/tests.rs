@@ -54,7 +54,7 @@ fn github_review_turns_require_structured_findings() {
     let schema = review_schema(&review, "codex").unwrap();
     assert_eq!(
         schema["required"],
-        serde_json::json!(["summary", "findings"])
+        serde_json::json!(["summary", "incomplete", "findings"])
     );
     assert_eq!(
         schema["properties"]["findings"]["items"]["properties"]["severity"]["enum"],

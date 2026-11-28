@@ -120,6 +120,8 @@ struct Worker {
     webhooks: watch::Sender<Vec<WebhookBot>>,
     /// This Host's serve link, through which webhook endpoints are requested.
     center: OnceLock<Arc<dyn Center>>,
+    /// Serializes admission and external provisioning of GitHub Channels.
+    github_setup: tokio::sync::Mutex<()>,
     /// Pull request reads and Agent delivery for tickets that follow pull requests.
     follow: OnceLock<Ports>,
     /// Tickets the follower serves; empty while none follows anything.
@@ -256,6 +258,7 @@ impl Bots {
             imessage: ImessageOnboarding::default(),
             webhooks: hub,
             center: OnceLock::new(),
+            github_setup: tokio::sync::Mutex::new(()),
             follow: OnceLock::new(),
             follows: watch::Sender::new(Vec::new()),
             image_directory,
@@ -908,6 +911,24 @@ impl Bots {
             Admission::Backlogged
         })
     }
+    /// Hold exclusive access to GitHub Channel provisioning.
+    pub(crate) async fn github_setup(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.0.github_setup.lock().await
+    }
+
+    /// Check that a GitHub Channel may be provisioned with this identity.
+    pub(crate) async fn check_github_channel_admission(
+        &self,
+        workspace: String,
+        channel: ChannelId,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::Github(Box::new(
+            GithubOperation::CheckAdmission(workspace, channel),
+        )))
+        .await
+        .map(|_| ())
+    }
+
     /// Whether the Workspace's Bot could keep one more channel right now.
     pub(crate) async fn check_channel_admission(&self, workspace: String) -> Result<(), ErrorCode> {
         self.call(Operation::ChannelAdmission(workspace))
@@ -1244,12 +1265,12 @@ fn spawn_review_preparations(
         tasks.spawn(async move {
             let turn_id = preparation.turn_id;
             let prepared = tokio::task::spawn_blocking(move || {
-                prepare_review(&*worktrees, &*workspaces, &preparation.context)
+                prepare_review(&*worktrees, &*workspaces, &preparation.context).map_err(|error| {
+                    tracing::warn!(%turn_id, code = %error.code, "GitHub review checkout could not be prepared");
+                })
             })
             .await
-            .ok()
-            .and_then(Result::ok)
-            .ok_or(());
+            .unwrap_or(Err(()));
             let _ = worker
                 .send(Operation::ReviewPrepared(turn_id, prepared))
                 .await;
@@ -1416,6 +1437,7 @@ fn review_workspace_error() -> domain::workspace::worktrees::WorktreeCreationErr
 
 /// A GitHub review channel operation (ADR-321).
 enum GithubOperation {
+    CheckAdmission(String, ChannelId),
     Channel(String, ChannelId),
     Event(BotTurnId, domain::bot::review_status::StatusEvent),
     Pending(ChannelId),
@@ -1429,6 +1451,9 @@ enum GithubOperation {
 
 fn apply_github(state: &mut State, operation: GithubOperation) -> Result<Value, ErrorCode> {
     match operation {
+        GithubOperation::CheckAdmission(workspace, channel) => state
+            .check_github_channel_admission(&workspace, channel)
+            .map(|()| Value::Null),
         GithubOperation::Channel(workspace, channel) => {
             serde_json::to_value(state.github_channel(&workspace, channel)?)
                 .map_err(|_| ErrorCode::BotIo)

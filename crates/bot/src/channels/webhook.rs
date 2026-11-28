@@ -77,7 +77,7 @@ async fn call(
     }
 }
 
-/// Ask the center for `channel`'s endpoint; a repeated call replaces the secret.
+/// Ask the center to issue the endpoint for `channel` using `method`.
 pub(crate) async fn issue_at(
     center: &Arc<dyn Center>,
     method: &'static str,

@@ -105,16 +105,20 @@ GitHub 不允许把 App 的 bot 账号请求为 reviewer：`requested_reviewers`
 （2026-11-28 实测）。daemon 仍接受指向该 bot 的 `pull_request.review_requested`，以便 GitHub 日后
 支持时直接生效。
 
-review 会话只读取冻结检出，不提供 Ait MCP 工具，使用独立的 reviewer 指令（Workspace memory
-仍然适用）。Provider 自带的连接器（例如 Codex 的 GitHub app）不受 Ait 管理，取决于该 Provider
-账号的配置。
+review 会话使用独立的 reviewer 指令和 Workspace memory，按固定提交审阅本地检出。
+会话使用严格的工具配置。Codex 的继承 MCP、插件和 ChatGPT Apps 在该会话中禁用。
+Provider 无法接受所需工具配置时，审阅会话无法启动。
+
+对于私有仓库，daemon 运行账号必须同时能调用已登录的 `gh` 和认证 Git remote。
+使用 HTTPS remote 时，可通过 `gh auth setup-git` 为该账号配置 Git 凭据助手。
 
 Bot 固定事件中的 base/head SHA，创建临时 worktree，返回 summary 与 inline findings，成功投递
 后归档 worktree。同一 `repository + PR + head SHA` 在同一 Channel 只执行一次；push 新提交后
 head SHA 改变，可再次触发。base 分支在接纳后继续前进时，只要冻结的 base 仍在 base 分支历史中，
 就按接纳时的 `base...head` 审阅。head 必须与接纳时完全一致。
 
-Bot 以带 inline finding 的 PR review 发布结果。执行或投递结果无法确认时，可推送新提交后再触发。
+Bot 以带 inline finding 的 PR review 发布已确认的结果。无法读取冻结 diff、无法解析审阅结果或投递结果
+无法确认时，状态评论会注明，推送新提交后可再次触发。
 Bot 不会 merge、approve、request changes 或 push。
 
 发布时遇到 GitHub 限流（429，或带 `Retry-After` / `x-ratelimit-remaining: 0` 的 403）、installation

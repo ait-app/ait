@@ -64,6 +64,7 @@ async fn create_permission_bot(
                     thinking: None,
                 },
                 instructions: "Bot test".into(),
+                isolated_review: false,
             },
         )
         .await
@@ -133,6 +134,7 @@ async fn bot_session_is_hidden_from_birth_owner_checked_and_idempotent() {
             thinking: None,
         },
         instructions: "Bot test".into(),
+        isolated_review: false,
     };
     execution.bot(&owner, create.clone()).await.unwrap();
     let record = registry.get(&id).unwrap().unwrap();
@@ -357,6 +359,7 @@ async fn assert_release_and_resume(
                     thinking: None,
                 },
                 instructions: "Updated workspace memory".into(),
+                isolated_review: false,
             },
         )
         .await

@@ -67,7 +67,7 @@ review。
 和 Git fetch 都必须与接纳的 base/head SHA 一致，否则轮次失败，不审阅漂移后的代码。Provider
 隐藏会话在临时 Workspace 中以只读 mandate 执行，并要求返回 summary 与可定位 finding 的
 结构化 JSON；原生支持 output schema 的 Provider 同时使用 schema 约束，其余 Provider 使用同一
-JSON prompt 并在无法解析时降级为 summary。Bot 使用 GitHub pull-request review API 发布总评和 inline comments；行定位失效
+JSON prompt。无法核对冻结 diff 或解析审阅结果时，状态为结果无法确认。Bot 使用 GitHub pull-request review API 发布总评和 inline comments；行定位失效
 导致 422 时降级为普通 PR 评论。投递成功后归档临时 Workspace。执行准备失败也在 PR 留下安全
 的失败说明。
 
@@ -77,7 +77,8 @@ JSON prompt 并在无法解析时降级为 summary。Bot 使用 GitHub pull-requ
   comments 与 Pull request 事件。PR 代码由 Host 已登录的 GitHub CLI 和 Project remote 拉取，
   不使用 installation token，因此 Host 账号需能读取绑定仓库。
 - review 会话不是 Bot 的管理会话：它使用独立的 reviewer 指令（只保留 Workspace memory），自己读取
-  冻结检出，不获得 Ait MCP 凭据；被拒绝 MCP 的会话连同 `ait` 的工具预授权一起移除。
+  冻结检出；新建会话时要求严格 MCP 配置，Codex 同时关闭继承插件和 ChatGPT Apps。环境无法满足该
+  配置时审阅停止。被拒绝 MCP 的会话会移除 `ait` 的工具预授权。
 - 每个 PR 维护一份持久状态记录（`ReviewStatus`，按 channel + 仓库 + PR），新状态追加到记录中，
   渲染时为过期状态加删除线。Channel worker 按隐藏标记查找或创建评论并整体 PATCH，接近长度上限时续写
   新评论。GitHub 的 `pull_request.synchronize` 只更新已有状态。旧 head 的审阅仍能完成。

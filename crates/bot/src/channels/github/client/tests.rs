@@ -218,6 +218,21 @@ async fn an_invalid_review_moves_its_findings_into_the_body_then_into_a_comment(
 }
 
 #[tokio::test]
+async fn an_incomplete_or_unstructured_report_is_never_published() {
+    let github = FakeGithub::default();
+    let client = github.start().await;
+    let mut turn = review_turn(TurnStatus::Completed);
+    for reply in [
+        "Unable to inspect the diff",
+        r#"{"summary":"Unable to inspect the diff","incomplete":true,"findings":[]}"#,
+    ] {
+        turn.reply = Some(reply.to_owned());
+        assert_eq!(submit(&client, &turn).await, Err(Failure::Final));
+    }
+    assert!(github.requests().is_empty());
+}
+
+#[tokio::test]
 async fn a_review_that_did_not_complete_posts_nothing_of_its_own() {
     let github = FakeGithub::default();
     let client = github.start().await;

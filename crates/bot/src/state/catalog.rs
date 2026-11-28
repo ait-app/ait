@@ -543,6 +543,18 @@ impl State {
         self.workspace(bot)?;
         self.under_channel_limit(bot.id)
     }
+    /// Refuse a GitHub Channel whose identity already belongs to a catalog entry.
+    pub(crate) fn check_github_channel_admission(
+        &self,
+        workspace: &str,
+        id: ChannelId,
+    ) -> Result<(), ErrorCode> {
+        if self.catalog.channels.iter().any(|channel| channel.id == id) {
+            return Err(ErrorCode::BotConflict);
+        }
+        self.check_channel_admission(workspace)
+    }
+
     /// Store `secret`, then enable the channel that references it. A retry of an existing
     /// channel never rewrites its secret; a refused new channel leaves no secret behind.
     pub(crate) fn create_stored_channel(

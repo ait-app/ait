@@ -23,6 +23,9 @@ pub enum Action {
         config: ExecutionConfig,
         /// Bot instructions and workspace memory context.
         instructions: String,
+        /// Freeze review inputs to the local checkout by excluding inherited tools.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        isolated_review: bool,
     },
     /// Admit a durable input using Provider's existing idempotency receipts.
     Send {

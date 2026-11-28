@@ -275,9 +275,13 @@ impl State {
 
     pub(crate) fn review_preparations(&mut self) -> Vec<ReviewPreparation> {
         let pending = self.pending.values().copied().collect::<Vec<_>>();
-        let mut preparations = Vec::new();
+        let available = 4_usize.saturating_sub(self.preparing.len());
+        let mut preparations = Vec::with_capacity(available);
         for id in pending {
-            if preparations.len() >= 4 || self.preparing.contains(&id) {
+            if preparations.len() == available {
+                break;
+            }
+            if self.preparing.contains(&id) {
                 continue;
             }
             let Ok(turn) = self.turn(id) else {

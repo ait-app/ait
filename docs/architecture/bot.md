@@ -39,6 +39,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   GitHub Channel worker 在一个状态评论中同步，达到评论长度时接续到新评论。
 - PR head 更新会标记旧审阅过期，已接纳的审阅继续按原先冻结的比较执行。状态评论的写入与
   review 发布分别重试，状态记录和评论 ID 在重启后继续使用。
+- 审阅会话使用严格 MCP 配置；Codex 的继承 MCP、插件和 ChatGPT Apps 均关闭。
   详见 [ADR-321](../decisions/bot/adr-321-github-app-review-channel.md)。
 
 ## 对话与执行

@@ -187,3 +187,21 @@ fn many_heads_fold_and_a_continuation_points_both_ways() {
             .any(|body| body.contains("<details><summary>"))
     );
 }
+
+#[test]
+fn a_repeated_request_preserves_the_published_review_as_the_current_state() {
+    let mut status = board();
+    let head = status.heads[0].head_sha.clone();
+    status.append(
+        &head,
+        StatusEvent::RequestedAgain {
+            user: "oowl".to_owned(),
+            trigger: GithubReviewTrigger::Mention,
+            comment_id: Some(42),
+        },
+        "2026-11-28T08:53:00Z",
+    );
+    let body = view(&status, StatusLanguage::En);
+    assert!(body.contains("\n- ✅ `08:52 UTC` Review published"));
+    assert!(body.contains("- ~~🔁 `08:53 UTC` Requested again"));
+}
