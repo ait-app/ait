@@ -205,9 +205,7 @@ export function GithubChannelForm({
   });
   const disabled = save.isPending || !interactive || !active;
   const languageLabel = (language: GithubStatusLanguage) =>
-    language === "zh-cn"
-      ? t("bots.githubChannel.statusLanguageChinese")
-      : t("bots.githubChannel.statusLanguageEnglish");
+    t(`bots.githubChannel.statusLanguageNames.${language}`);
   const updateRepository = (key: string, repository: GithubRepositoryDraft) =>
     setDraft((current) => ({
       ...current,

@@ -104,8 +104,10 @@ export const bots = {
     triggers: "Review 触发方式",
     statusLanguage: "状态评论语言",
     statusLanguageHint: "Bot 会在每个 PR 上维护一条状态评论，并把 review 的每一步追加进去。",
-    statusLanguageEnglish: "English",
-    statusLanguageChinese: "简体中文",
+    statusLanguageNames: {
+      en: "English",
+      "zh-cn": "简体中文",
+    },
     triggerMention: "在 PR 评论中输入 @bot review",
     triggerAssignee: "把机器人 Assign 到 PR",
     summary: "@{{mention}} · {{count}} 个仓库绑定",

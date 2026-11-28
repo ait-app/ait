@@ -1,13 +1,16 @@
 //! Markdown of a pull request's review status comment (ADR-321).
 //!
-//! Every line except the last of a head is struck through; nothing written earlier is removed.
+//! The current state of each head stays visible while superseded entries are struck through.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::sync::LazyLock;
 
 use domain::bot::GithubReviewTrigger;
 use domain::bot::StatusLanguage;
 use domain::bot::review_status::{ReviewHead, ReviewStatus, StatusEvent, StatusLine};
+use serde::Deserialize;
 
 /// Hidden marker that identifies the board's comment among a pull request's comments.
 pub(super) const MARKER: &str = "<!-- ait-review-status:v1";
@@ -44,10 +47,11 @@ pub(super) fn pages(status: &ReviewStatus) -> Vec<Page> {
     let mut page = Page::new();
     let mut bytes = 0;
     for (head, index, line) in lines {
-        let cost = Text(StatusLanguage::En)
-            .event(line)
-            .len()
-            .max(Text(StatusLanguage::ZhCn).event(line).len())
+        let cost = CATALOGS
+            .iter()
+            .map(|(_, catalog)| catalog.event(&line.event).len())
+            .max()
+            .unwrap_or_default()
             + LINE_OVERHEAD;
         if bytes + cost > PAGE_BUDGET && !page.is_empty() {
             pages.push(std::mem::take(&mut page));
@@ -74,15 +78,16 @@ pub(super) fn render(
     (mention, language): (&str, StatusLanguage),
     (previous, next): (Option<u64>, Option<u64>),
 ) -> String {
-    let text = Text(language);
+    let text = catalog(language);
     let (heads, number) = page;
     let mut body = format!(
         "{}\n### \u{1f916} {mention} {}\n",
         marker(status, number),
-        text.title(),
+        text.title,
     );
     if let Some(previous) = previous {
-        let _ = writeln!(body, "\n{}", text.continued_from(previous));
+        let message = continuation(&text.continued_from, &text.previous_comment, previous);
+        let _ = writeln!(body, "\n\u{2b05}\u{fe0f} {message}");
     }
     let sections: Vec<_> = heads
         .iter()
@@ -98,7 +103,7 @@ pub(super) fn render(
         let _ = write!(
             body,
             "\n<details><summary>{}</summary>\n",
-            text.earlier(folded)
+            format_message(&text.earlier, &[("count", &folded.to_string())])
         );
         for section in &sections[..folded] {
             body.push_str(section);
@@ -109,13 +114,14 @@ pub(super) fn render(
         body.push_str(section);
     }
     if let Some(next) = next {
-        let _ = writeln!(body, "\n{}", text.continued_to(next));
+        let message = continuation(&text.continued_to, &text.next_comment, next);
+        let _ = writeln!(body, "\n\u{27a1}\u{fe0f} {message}");
     }
     body
 }
 
-fn section(head: &ReviewHead, lines: &[usize], text: Text) -> String {
-    let mut section = format!("\n**{} `{}`**\n", text.head(), short(&head.head_sha));
+fn section(head: &ReviewHead, lines: &[usize], text: &Catalog) -> String {
+    let mut section = format!("\n**{} `{}`**\n", text.head, short(&head.head_sha));
     let last = head
         .lines
         .iter()
@@ -129,7 +135,7 @@ fn section(head: &ReviewHead, lines: &[usize], text: Text) -> String {
             "{} `{} UTC` {}",
             emoji(&line.event),
             time(line),
-            text.event(line)
+            text.event(&line.event)
         );
         if index == last {
             let _ = writeln!(section, "- {content}");
@@ -144,7 +150,7 @@ const fn emoji(event: &StatusEvent) -> &'static str {
     match event {
         StatusEvent::Requested { .. } => "\u{1f4e5}",
         StatusEvent::RequestedAgain { .. } => "\u{1f501}",
-        StatusEvent::Queued => "⏳",
+        StatusEvent::Queued => "\u{23f3}",
         StatusEvent::Preparing => "\u{1f4e6}",
         StatusEvent::Reviewing { .. } => "\u{1f50d}",
         StatusEvent::RateLimited { .. } => "\u{23f8}\u{fe0f}",
@@ -190,159 +196,170 @@ fn provider(name: &str) -> String {
     }
 }
 
-#[derive(Clone, Copy)]
-struct Text(StatusLanguage);
+/// Embedded message catalogs share this schema and are parsed once.
+static CATALOGS: LazyLock<[(StatusLanguage, Catalog); 2]> = LazyLock::new(|| {
+    [
+        (
+            StatusLanguage::En,
+            serde_json::from_str(include_str!("status/locales/en.json"))
+                .expect("valid embedded English review status catalog"),
+        ),
+        (
+            StatusLanguage::ZhCn,
+            serde_json::from_str(include_str!("status/locales/zh-cn.json"))
+                .expect("valid embedded Simplified Chinese review status catalog"),
+        ),
+    ]
+});
 
-impl Text {
-    const fn zh(self) -> bool {
-        matches!(self.0, StatusLanguage::ZhCn)
-    }
+fn catalog(language: StatusLanguage) -> &'static Catalog {
+    CATALOGS
+        .iter()
+        .find_map(|(locale, catalog)| (*locale == language).then_some(catalog))
+        .expect("every supported review status language has a catalog")
+}
 
-    const fn title(self) -> &'static str {
-        if self.zh() {
-            "review 状态"
-        } else {
-            "review status"
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Catalog {
+    title: String,
+    head: String,
+    earlier: String,
+    continued_from: String,
+    previous_comment: String,
+    continued_to: String,
+    next_comment: String,
+    mention: String,
+    reviewer_assignment: String,
+    assignee_assignment: String,
+    requested: String,
+    requested_again: String,
+    queued: String,
+    preparing: String,
+    reviewing: String,
+    rate_limited: String,
+    published_empty: String,
+    published: String,
+    finding_count: String,
+    finding_separator: String,
+    view_review: String,
+    failed: String,
+    unknown: String,
+    cancelled: String,
+    outdated: String,
+}
+
+impl Catalog {
+    fn trigger(&self, trigger: GithubReviewTrigger) -> &str {
+        match trigger {
+            GithubReviewTrigger::Mention => &self.mention,
+            GithubReviewTrigger::ReviewerAssignment => &self.reviewer_assignment,
+            GithubReviewTrigger::AssigneeAssignment => &self.assignee_assignment,
         }
     }
 
-    const fn head(self) -> &'static str {
-        if self.zh() { "提交" } else { "Head" }
-    }
-
-    fn earlier(self, count: usize) -> String {
-        if self.zh() {
-            format!("更早的 {count} 个提交")
-        } else {
-            format!("{count} earlier heads")
-        }
-    }
-
-    fn continued_from(self, comment: u64) -> String {
-        if self.zh() {
-            format!("\u{2b05}\u{fe0f} 更早的记录见[上一条状态评论](#issuecomment-{comment})。")
-        } else {
-            format!(
-                "\u{2b05}\u{fe0f} Earlier heads are in [the previous status comment](#issuecomment-{comment})."
+    fn event(&self, event: &StatusEvent) -> Cow<'_, str> {
+        match event {
+            StatusEvent::Requested { user, trigger } => format_message(
+                &self.requested,
+                &[("user", &login(user)), ("trigger", self.trigger(*trigger))],
             )
-        }
-    }
-
-    fn continued_to(self, comment: u64) -> String {
-        if self.zh() {
-            format!("\u{27a1}\u{fe0f} 后续记录见[下一条状态评论](#issuecomment-{comment})。")
-        } else {
-            format!(
-                "\u{27a1}\u{fe0f} Continued in [the next status comment](#issuecomment-{comment})."
+            .into(),
+            StatusEvent::RequestedAgain { user, trigger, .. } => format_message(
+                &self.requested_again,
+                &[("user", &login(user)), ("trigger", self.trigger(*trigger))],
             )
-        }
-    }
-
-    const fn trigger(self, trigger: GithubReviewTrigger) -> &'static str {
-        match (trigger, self.zh()) {
-            (GithubReviewTrigger::Mention, false) => "comment",
-            (GithubReviewTrigger::Mention, true) => "评论召唤",
-            (GithubReviewTrigger::ReviewerAssignment, false) => "reviewer request",
-            (GithubReviewTrigger::ReviewerAssignment, true) => "请求 reviewer",
-            (GithubReviewTrigger::AssigneeAssignment, false) => "assignment",
-            (GithubReviewTrigger::AssigneeAssignment, true) => "指派",
-        }
-    }
-
-    fn event(self, line: &StatusLine) -> String {
-        let zh = self.zh();
-        match &line.event {
-            StatusEvent::Requested { user, trigger } if zh => {
-                format!("{} 请求 review（{}）", login(user), self.trigger(*trigger))
-            }
-            StatusEvent::Requested { user, trigger } => {
-                format!(
-                    "Review requested by {} ({})",
-                    login(user),
-                    self.trigger(*trigger)
-                )
-            }
-            StatusEvent::RequestedAgain { user, trigger, .. } if zh => format!(
-                "{} 再次请求（{}），由本次 review 覆盖",
-                login(user),
-                self.trigger(*trigger)
-            ),
-            StatusEvent::RequestedAgain { user, trigger, .. } => format!(
-                "Requested again by {} ({}); this review covers it",
-                login(user),
-                self.trigger(*trigger)
-            ),
-            StatusEvent::Queued if zh => "已排队".to_owned(),
-            StatusEvent::Queued => "Review queued".to_owned(),
-            StatusEvent::Preparing if zh => "正在准备只读检出".to_owned(),
-            StatusEvent::Preparing => "Preparing a read-only checkout".to_owned(),
-            StatusEvent::Reviewing { provider: name } if zh => {
-                format!("正在用 {} 审阅", provider(name))
-            }
+            .into(),
+            StatusEvent::Queued => self.queued.as_str().into(),
+            StatusEvent::Preparing => self.preparing.as_str().into(),
             StatusEvent::Reviewing { provider: name } => {
-                format!("Reviewing with {}", provider(name))
+                format_message(&self.reviewing, &[("provider", &provider(name))]).into()
             }
-            StatusEvent::RateLimited { wait_seconds } if zh => {
-                format!("发布暂缓，{wait_seconds} 秒后重试")
-            }
-            StatusEvent::RateLimited { wait_seconds } => {
-                format!("Publication delayed; retrying in {wait_seconds} s")
-            }
+            StatusEvent::RateLimited { wait_seconds } => format_message(
+                &self.rate_limited,
+                &[("seconds", &wait_seconds.to_string())],
+            )
+            .into(),
             StatusEvent::Published {
                 high,
                 medium,
                 low,
                 url,
-            } => published(zh, [*high, *medium, *low], url.as_deref()),
-            StatusEvent::Failed { reason } if zh => format!("Review 未能执行：{}", code(reason)),
-            StatusEvent::Failed { reason } => format!("Review could not run: {}", code(reason)),
-            StatusEvent::Unknown if zh => "结果无法确认；推送新提交后可再次请求".to_owned(),
-            StatusEvent::Unknown => {
-                "Outcome could not be confirmed; push a new commit to request another review"
-                    .to_owned()
+            } => self
+                .published([*high, *medium, *low], url.as_deref())
+                .into(),
+            StatusEvent::Failed { reason } => {
+                format_message(&self.failed, &[("reason", &code(reason))]).into()
             }
-            StatusEvent::Cancelled if zh => "Review 已取消".to_owned(),
-            StatusEvent::Cancelled => "Review cancelled".to_owned(),
-            StatusEvent::Outdated { head_sha } if zh => {
-                format!("已过期：有新提交（`{}`）", short(head_sha))
-            }
+            StatusEvent::Unknown => self.unknown.as_str().into(),
+            StatusEvent::Cancelled => self.cancelled.as_str().into(),
             StatusEvent::Outdated { head_sha } => {
-                format!("Outdated: new commits pushed (`{}`)", short(head_sha))
+                format_message(&self.outdated, &[("head", &code(short(head_sha)))]).into()
             }
         }
     }
+
+    fn published(&self, [high, medium, low]: [u64; 3], url: Option<&str>) -> String {
+        let total = high.saturating_add(medium).saturating_add(low);
+        let mut text = if total == 0 {
+            self.published_empty.clone()
+        } else {
+            let counts: Vec<_> = [(high, "high"), (medium, "medium"), (low, "low")]
+                .into_iter()
+                .filter(|(count, _)| *count > 0)
+                .map(|(count, severity)| {
+                    format_message(
+                        &self.finding_count,
+                        &[("count", &count.to_string()), ("severity", severity)],
+                    )
+                })
+                .collect();
+            format_message(
+                &self.published,
+                &[
+                    ("total", &total.to_string()),
+                    ("counts", &counts.join(&self.finding_separator)),
+                ],
+            )
+        };
+        if let Some(url) = url.filter(|url| {
+            url.len() <= 512
+                && url.starts_with("https://github.com/")
+                && !url.contains(|c: char| {
+                    c.is_whitespace() || matches!(c, '(' | ')' | '<' | '>' | '\\' | '`')
+                })
+        }) {
+            let _ = write!(text, " · [{}]({url})", self.view_review);
+        }
+        text
+    }
 }
 
-fn published(zh: bool, [high, medium, low]: [u64; 3], url: Option<&str>) -> String {
-    let total = high.saturating_add(medium).saturating_add(low);
-    let counts: Vec<String> = [(high, "high"), (medium, "medium"), (low, "low")]
-        .into_iter()
-        .filter(|(count, _)| *count > 0)
-        .map(|(count, name)| {
-            if zh {
-                format!("{count} 条 {name}")
-            } else {
-                format!("{count} {name}")
-            }
-        })
-        .collect();
-    let mut text = match (zh, total) {
-        (true, 0) => "Review 已发布：没有发现问题".to_owned(),
-        (false, 0) => "Review published: no findings".to_owned(),
-        (true, _) => format!("Review 已发布：{total} 条发现（{}）", counts.join("，")),
-        (false, _) => format!("Review published: {total} findings ({})", counts.join(", ")),
-    };
-    if let Some(url) = url.filter(|url| {
-        url.len() <= 512
-            && url.starts_with("https://github.com/")
-            && !url.contains(|c: char| {
-                c.is_whitespace() || matches!(c, '(' | ')' | '<' | '>' | '\\' | '`')
-            })
-    }) {
-        let label = if zh { "查看 review" } else { "view review" };
-        let _ = write!(text, " · [{label}]({url})");
+fn continuation(template: &str, label: &str, comment: u64) -> String {
+    format_message(
+        template,
+        &[("link", &format!("[{label}](#issuecomment-{comment})"))],
+    )
+}
+
+/// Substitute named placeholders in an embedded template, treating each value as literal text.
+fn format_message(template: &str, values: &[(&str, &str)]) -> String {
+    let mut message = String::with_capacity(template.len());
+    let mut remaining = template;
+    while let Some((literal, slot)) = remaining.split_once('{') {
+        let (name, tail) = slot
+            .split_once('}')
+            .expect("embedded message placeholder closes");
+        let value = values
+            .iter()
+            .find_map(|(key, value)| (*key == name).then_some(*value))
+            .expect("embedded message placeholder has a supplied value");
+        message.push_str(literal);
+        message.push_str(value);
+        remaining = tail;
     }
-    text
+    message.push_str(remaining);
+    message
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@ use domain::ChannelId;
 use domain::bot::review_status::{ReviewStatus, ReviewStatusKey, StatusEvent};
 use domain::bot::{GithubReviewTrigger, StatusLanguage};
 
-use super::{COMMENT_BYTES, pages, render};
+use super::{COMMENT_BYTES, catalog, pages, render};
 
 fn board() -> ReviewStatus {
     let channel: ChannelId = "d4119547-46ff-4a0c-82e1-5b921ca2d25e".parse().unwrap();
@@ -88,14 +88,22 @@ fn a_newer_head_strikes_the_earlier_result_and_chinese_reads_naturally() {
         },
         "2026-11-28T09:01:00Z",
     );
-    let text = view(&status, StatusLanguage::ZhCn);
-    assert!(text.contains("### 🤖 ait-bot review 状态"));
-    assert!(
-        text.contains("- ~~✅ `08:52 UTC` Review 已发布：7 条发现（7 条 medium） · [查看 review](")
-    );
-    assert!(text.contains("- ⏭️ `09:01 UTC` 已过期：有新提交（`c22db06`）"));
-    assert!(
-        text.ends_with("**提交 `c22db06`**\n- 📥 `09:01 UTC` `@oowl` 请求 review（评论召唤）\n")
+    assert_eq!(
+        view(&status, StatusLanguage::ZhCn),
+        "<!-- ait-review-status:v1 channel=d4119547-46ff-4a0c-82e1-5b921ca2d25e page=0 -->
+### 🤖 ait-bot review 状态
+
+**提交 `74408c9`**
+- ~~📥 `08:45 UTC` `@oowl` 请求 review（评论召唤）~~
+- ~~🔁 `08:46 UTC` `@oowl` 再次请求（指派），由本次 review 覆盖~~
+- ~~📦 `08:47 UTC` 正在准备只读检出~~
+- ~~🔍 `08:48 UTC` 正在用 Codex 审阅~~
+- ~~✅ `08:52 UTC` Review 已发布：7 条发现（7 条 medium） · [查看 review](https://github.com/owner/repository/pull/32#pullrequestreview-1)~~
+- ⏭️ `09:01 UTC` 已过期：有新提交（`c22db06`）
+
+**提交 `c22db06`**
+- 📥 `09:01 UTC` `@oowl` 请求 review（评论召唤）
+"
     );
 }
 
@@ -106,7 +114,7 @@ fn free_text_cannot_mention_or_format_and_foreign_links_are_dropped() {
     status.append(
         &head,
         StatusEvent::Failed {
-            reason: "ping @everyone `now`".to_owned(),
+            reason: "ping @everyone `{provider}`".to_owned(),
         },
         "2026-11-28T09:00:00Z",
     );
@@ -121,7 +129,7 @@ fn free_text_cannot_mention_or_format_and_foreign_links_are_dropped() {
         "2026-11-28T09:01:00Z",
     );
     let text = view(&status, StatusLanguage::En);
-    assert!(text.contains("Review could not run: `ping @everyone 'now'`"));
+    assert!(text.contains("Review could not run: `ping @everyone '{provider}'`"));
     assert!(text.ends_with("- ✅ `09:01 UTC` Review published: no findings\n"));
 }
 
@@ -204,4 +212,44 @@ fn a_repeated_request_preserves_the_published_review_as_the_current_state() {
     let body = view(&status, StatusLanguage::En);
     assert!(body.contains("\n- ✅ `08:52 UTC` Review published"));
     assert!(body.contains("- ~~🔁 `08:53 UTC` Requested again"));
+}
+
+#[test]
+fn both_catalogs_render_queue_retry_unknown_and_severity_counts() {
+    let events = [
+        StatusEvent::Requested {
+            user: "oowl".to_owned(),
+            trigger: GithubReviewTrigger::ReviewerAssignment,
+        },
+        StatusEvent::Queued,
+        StatusEvent::RateLimited { wait_seconds: 12 },
+        StatusEvent::Unknown,
+        StatusEvent::Published {
+            high: 1,
+            medium: 0,
+            low: 2,
+            url: None,
+        },
+    ];
+    let (english, chinese) = (catalog(StatusLanguage::En), catalog(StatusLanguage::ZhCn));
+    assert_eq!(
+        events.each_ref().map(|event| english.event(event)),
+        [
+            "Review requested by `@oowl` (reviewer request)",
+            "Review queued",
+            "Publication delayed; retrying in 12 s",
+            "Outcome could not be confirmed; push a new commit to request another review",
+            "Review published: 3 findings (1 high, 2 low)",
+        ]
+    );
+    assert_eq!(
+        events.each_ref().map(|event| chinese.event(event)),
+        [
+            "`@oowl` 请求 review（请求 reviewer）",
+            "已排队",
+            "发布暂缓，12 秒后重试",
+            "结果无法确认；推送新提交后可再次请求",
+            "Review 已发布：3 条发现（1 条 high，2 条 low）",
+        ]
+    );
 }
