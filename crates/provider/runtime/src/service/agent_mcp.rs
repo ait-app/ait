@@ -197,6 +197,16 @@ impl Binding {
                         effective.mcp_servers = None;
                     }
                 }
+                // Pre-approvals of the removed server would leave adapters a server entry
+                // without a transport, which Codex refuses as invalid configuration.
+                if let Some(entries) = effective
+                    .tool_policy
+                    .as_mut()
+                    .and_then(|policy| policy.get_mut("preapproved"))
+                    .and_then(Value::as_array_mut)
+                {
+                    entries.retain(|entry| entry["server"] != SERVER);
+                }
                 return;
             }
         };

@@ -334,6 +334,24 @@ fn scoped_and_denied_bindings_override_user_ait_entry_by_policy() {
 }
 
 #[test]
+fn strip_also_removes_the_ait_pre_approvals_but_keeps_other_servers() {
+    let mut denied = StoredAgentConfig {
+        mcp_servers: Some(BTreeMap::from([("docs".into(), json!({"type":"stdio"}))])),
+        tool_policy: Some(json!({"preapproved":[
+            {"kind":"mcp","server":"ait","tool":"agent_list"},
+            {"kind":"mcp","server":"docs","tool":"search"}
+        ]})),
+        ..StoredAgentConfig::default()
+    };
+    Binding::Strip.apply(&mut denied);
+    assert_eq!(
+        denied.tool_policy,
+        Some(json!({"preapproved":[{"kind":"mcp","server":"docs","tool":"search"}]}))
+    );
+    assert!(denied.mcp_servers.unwrap().contains_key("docs"));
+}
+
+#[test]
 fn strip_removes_an_only_ait_entry_and_policy_failure_revokes_the_credential() {
     let mut only = StoredAgentConfig {
         mcp_servers: Some(BTreeMap::from([("ait".into(), json!({"type":"stdio"}))])),
