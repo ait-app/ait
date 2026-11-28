@@ -11,6 +11,9 @@ paths:
 
 # ADR-312：Antigravity 主会话统一使用官方 ACP
 
+后续修订：[ADR-320](adr-320-antigravity-agent-mcp-over-acp.md) 经 ACP `mcpServers` 交付 HTTP MCP，
+“配置切换与权限边界”中的“不注入 MCP”不再适用，其余边界不变。
+
 修订 ADR-311 的第 3、4 条：ACP 会话通过 `session/cancel` 请求取消，不再依赖向原生进程发送 SIGINT。
 创建、恢复与配置切换仍使用 ADR-311 的外层 OS 写入隔离；当前进程的终端沙箱覆盖改用 ACP 支持的
 `--sandbox=false`，不传入仅供 headless 使用的 `--settings`，权限边界保持不变。

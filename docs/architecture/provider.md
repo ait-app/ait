@@ -117,6 +117,9 @@ Composer 的“功能”入口使用与模式选择相同的搜索下拉菜单�
   ACP 每轮用量只提交一个账本 segment，累计展示保存于可选 `metadata.acpUsage`，与上下文占用独立；
   结构化摘要（headless `--json-schema`）、账号额度（`--print /usage`）与未接入能力保持原边界
   （[ADR-312](../decisions/providers/adr-312-antigravity-acp-migration.md)）。
+  会话配置中的 MCP 只接受 HTTP 项，随 ACP `session/new` 与 `session/resume` 的 `mcpServers` 交付，
+  不以 AGY 声明 `mcpCapabilities.http` 为前提
+  （[ADR-320](../decisions/providers/adr-320-antigravity-agent-mcp-over-acp.md)）。
 - Claude Code 的 adapter 在 `crates/provider/claude`，生产依赖为 `provider-core`、`provider-native` 与
   `domain`（`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `ClaudeClient`；
   `provider` 与 daemon 都不依赖它。`provider-builtin` 用 `Providers::with` 追加它，可执行文件默认 `claude`，
@@ -367,10 +370,12 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   （[ADR-129](../decisions/providers/adr-129-provider-owned-skills.md)、
   [ADR-199](../decisions/providers/adr-199-bundled-skill-distribution.md)、
   [Skill 手册](../operations/agent-skills.md)）。
-- daemon MCP 只在交互式打开会话时注入，且仅限声明 `supports_agent_mcp` 的 adapter：Codex、Claude、
-  MiniMax Code 与 DSH ACP。注入配置只进入原生运行时设置，不写入 record 或持久句柄；策略在会话
-  打开时读取，用户自定义的 `ait` 项优先于共享令牌
-  （[ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)、[MCP 手册](../operations/mcp.md)）。
+- daemon MCP 只在交互式打开会话时注入，且仅限声明 `supports_agent_mcp` 的 adapter；当前内置 adapter
+  全部声明，各自的交付方式见 [MCP 手册](../operations/mcp.md#provider-自动注入)。注入配置只进入
+  原生运行时设置，不写入 record 或持久句柄；策略在会话打开时读取，用户自定义的 `ait` 项优先于共享令牌
+  （[ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)、
+  [ADR-232](../decisions/providers/adr-232-agent-mcp-session-delivery.md)、
+  [ADR-320](../decisions/providers/adr-320-antigravity-agent-mcp-over-acp.md)）。
 - 注入用的令牌每次 daemon 启动生成，API 只在 `/mcp/agents` 接受它
   （[ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)）。
 - Bot 会话与 Bot 子树改用作用域凭据并覆盖用户的 `ait` 项；Bot 会话不受 `injectIntoAgents` 控制，

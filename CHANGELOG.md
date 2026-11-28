@@ -1,5 +1,11 @@
 # Ait changelog
 
+## Unreleased
+
+- Antigravity agents now receive Ait's orchestration tools automatically, like the other
+  built-in providers. Calls that AGY wants approved are denied outside Full Access. Verified
+  with AGY 1.5.18; turn off agent MCP injection if an older AGY can no longer open sessions.
+
 ## 0.2.29 - 2026-11-27
 
 - Desktop and mobile recommend an official service entry by IP. Choose Mainland China, Global,

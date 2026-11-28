@@ -137,7 +137,8 @@ async fn open_with_selection(
     if handle.is_some() && !capabilities["sessionCapabilities"]["resume"].is_object() {
         return Err(OpenError::Unsupported);
     }
-    let mut params = json!({"cwd":spec.cwd,"mcpServers":[]});
+    // AGY connects HTTP servers on both openings without advertising `mcpCapabilities.http`.
+    let mut params = json!({"cwd":spec.cwd,"mcpServers":acp_config::mcp_servers(&spec.config)});
     let method = if let Some(handle) = handle {
         params["sessionId"] = json!(handle.session_id);
         "session/resume"
@@ -283,7 +284,7 @@ impl Session {
                     );
                 } else {
                     self.input_error = Some(
-                        "AGY could not confirm the requested model, thinking level or mode on the original conversation. The previous configuration is retained; no input was sent.",
+                        "AGY could not confirm the requested model, thinking level, mode or MCP servers on the original conversation. The previous configuration is retained; no input was sent.",
                     );
                 }
                 Err(error.session())

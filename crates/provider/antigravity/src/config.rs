@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 use super::{PROVIDER, discovery::EFFORTS};
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
+/// Accept only settings AGY can receive natively; MCP servers are limited to Streamable HTTP,
+/// the one transport confirmed against `agy acp` (stdio and SSE stay AGY-configured).
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     if config.mode_id.as_deref().is_some_and(|mode| {
         !matches!(
@@ -25,8 +27,9 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .is_some_and(|value| !value.is_null())
         || config
             .mcp_servers
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
+            .iter()
+            .flatten()
+            .any(|(_, server)| server["type"] != "http")
         || config
             .provider_options
             .as_ref()
@@ -38,7 +41,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
     {
         return Err(AgentSessionError::Rejected);
     }
-    Ok(())
+    provider_native::configuration::validate(config, PROVIDER)
 }
 
 pub(super) fn validate_directory(cwd: &str) -> Result<(), AgentSessionError> {

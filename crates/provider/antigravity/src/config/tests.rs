@@ -21,6 +21,30 @@ fn accepts_valid_modes_and_models() {
     assert_eq!(modes().len(), 5);
 }
 
+fn servers(server: Value) -> StoredAgentConfig {
+    StoredAgentConfig {
+        mcp_servers: Some(std::collections::BTreeMap::from([(
+            "server".to_owned(),
+            server,
+        )])),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn accepts_http_mcp_servers() {
+    validate(&servers(
+        json!({"type":"http","url":"http://127.0.0.1:7316/mcp/agents",
+        "headers":{"Authorization":"Bearer private"}}),
+    ))
+    .unwrap();
+    validate(&StoredAgentConfig {
+        mcp_servers: Some(std::collections::BTreeMap::new()),
+        ..Default::default()
+    })
+    .unwrap();
+}
+
 #[test]
 fn rejects_settings_that_cannot_be_delivered_natively() {
     for config in [
@@ -44,13 +68,10 @@ fn rejects_settings_that_cannot_be_delivered_natively() {
             tool_policy: Some(json!({"allow":[]})),
             ..Default::default()
         },
-        StoredAgentConfig {
-            mcp_servers: Some(std::collections::BTreeMap::from([(
-                "server".to_owned(),
-                json!({}),
-            )])),
-            ..Default::default()
-        },
+        servers(json!({})),
+        servers(json!({"type":"stdio","command":"/usr/bin/server"})),
+        servers(json!({"type":"sse","url":"https://legacy.test/sse"})),
+        servers(json!({"type":"http","url":"ftp://docs.test/mcp"})),
         StoredAgentConfig {
             feature_values: Some(std::collections::BTreeMap::from([(
                 "fast".to_owned(),

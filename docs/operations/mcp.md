@@ -12,7 +12,7 @@ daemon 在现有监听地址提供 Streamable HTTP MCP：`http://127.0.0.1:7316/
 
 ## Provider 自动注入
 
-daemon 为 Codex、Claude、DSH（ACP 与原生 Host）、MiniMax Code、OpenCode 和 Pi 自动添加名为 `ait` 的 HTTP MCP 配置，使用本机实际
+daemon 为 Codex、Claude、DSH（ACP 与原生 Host）、MiniMax Code、OpenCode、Pi、OMP 和 Antigravity 自动添加名为 `ait` 的 HTTP MCP 配置，使用本机实际
 监听端口和 MCP 专用 Bearer 令牌。客户端完成协议握手、发现工具并把工具提供给模型；
 调用自动携带 `X-Ait-Agent-Id`，模型无需填写调用者身份或令牌。专用令牌只被 MCP 路由接受，
 不能用于 daemon 信息或 WebSocket 接口；外部客户端仍可使用原有 daemon 凭证。
@@ -22,20 +22,33 @@ daemon 为 Codex、Claude、DSH（ACP 与原生 Host）、MiniMax Code、OpenCod
 地址、身份和令牌。专用令牌每次 daemon 启动都会更换。只读历史会话不注入。
 
 `injectIntoAgents` 控制后续原生会话的打开，不强制重建已有会话。已有用户配置中的 `ait`
-项目优先，其余用户 MCP 项保留。OMP 和 Antigravity 尚未接入这条自动注入路径：两者只从
-用户或项目配置文件读取 MCP，没有已确认的单会话、不写文件的入口，会保持原有启动行为。
+项目优先，其余用户 MCP 项保留。OMP 只接收 `ait` 一项，Antigravity 只接收 HTTP 项；
+Ait 配置中超出这一范围的 MCP 项会被拒绝，两者自身配置文件里的 MCP 仍由原生 CLI 加载。
 
-各 Provider 的交付方式（[ADR-232](../decisions/providers/adr-232-agent-mcp-session-delivery.md)）：
+各 Provider 的交付方式（[ADR-232](../decisions/providers/adr-232-agent-mcp-session-delivery.md)、
+[ADR-308](../decisions/providers/adr-308-omp-host-orchestration.md)、
+[ADR-320](../decisions/providers/adr-320-antigravity-agent-mcp-over-acp.md)）：
 
 | Provider      | 交付方式                                                                                                                                       | 凭据位置                                            |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | OpenCode      | ACP `session/new`、`session/load`、`session/resume` 的 `mcpServers`；每个 `opencode acp` 进程自带私有 server，运行时添加，不写 `opencode.json` | 仅协议消息                                          |
 | Pi            | 每个原生进程以 `--extension` 加载私有扩展，扩展调用 `pi.registerMcpServer`，不写 `mcp.json`                                                    | 属主专用临时目录（0700，文件 0600），进程结束后删除 |
 | DSH 原生 Host | 每个会话的私有 Web Host 以 `--patch` 叠加层插入 `dsh-mcp-client` 插件，不写 profile 的 `cordis.patch.yml`                                      | 属主专用临时文件（0600），Host 结束后删除           |
+| OMP           | adapter 自身连接 `ait`，经 OMP 公开的 `set_host_tools` / `host_tool_call` 把工具作为 `mcp__ait__*` 宿主工具提供，不写 `mcp.json`               | 仅内存                                              |
+| Antigravity   | ACP `session/new`、`session/resume` 的 `mcpServers`，只对该 `agy acp` 进程生效，不写 `mcp_config.json`                                         | 仅协议消息                                          |
 
-这三个 Provider 的会话在打开时连接 MCP；运行中的会话拒绝修改 `mcpServers`，需新建会话。
+OpenCode、Pi 与 DSH 原生 Host 的会话在打开时连接 MCP；运行中的会话拒绝修改 `mcpServers`，需新建会话。
+Antigravity 的 `mcpServers` 变化与其他配置变更一样，在下一轮开始前按同一 conversation 重连后生效。
 原生配置文件中同名的 `ait` 项按原生规则处理：Pi 的 `mcp.json` 同名项优先于注册项；DSH profile 中
-`serverName` 为 `ait` 的插件会与注入项冲突；OpenCode 的运行时添加会替换同名项。
+`serverName` 为 `ait` 的插件会与注入项冲突；OpenCode 的运行时添加会替换同名项；AGY `mcp_config.json`
+中同名项的处理未验证。
+
+AGY 的 ACP `initialize` 没有声明 `mcpCapabilities.http`，Ait 仍然发送 HTTP 项：AGY 1.5.18 在两种打开方式下
+都会带着请求头连接，新建会话时已确认它与 daemon 完成握手并读取工具列表；其他版本未验证。
+旧版 AGY 因此无法打开会话时，关闭 `injectIntoAgents` 即恢复普通会话的原行为；Bot 会话不受该项控制，
+只有关闭 `mcp.enabled`（同时关闭整个 MCP 入口）才不再向它交付。
+AGY 要求交互审批的 `ait` 调用与它的其他工具一样由 adapter 拒绝，只有 Full Access 模式放行
+（[Antigravity 手册](antigravity.md)）。
 
 已有配置为 `false` 时，可调用 RPC 方法 `daemon.config.set.request` 开启，参数如下；
 随后创建 Agent 或重启 daemon 恢复会话：
