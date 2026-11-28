@@ -198,10 +198,14 @@ fn parse_target(
         value["headRefOid"].as_str(),
         source.expected_head_sha.as_deref(),
     )?;
-    let base_sha = checked_object(
-        value["baseRefOid"].as_str(),
-        source.expected_base_sha.as_deref(),
-    )?;
+    // The base branch may move on after admission; the checkout keeps the admitted base and
+    // verifies that it is still part of that branch.
+    let base_sha = source
+        .expected_base_sha
+        .as_deref()
+        .or(value["baseRefOid"].as_str())
+        .filter(|value| valid_object(value))
+        .map(str::to_owned);
     Ok(ChangeRequestCheckout {
         forge: "github".to_owned(),
         number: source.number,

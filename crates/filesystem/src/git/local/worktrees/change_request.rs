@@ -52,10 +52,7 @@ fn fetch_base(
             WRITE_TIMEOUT,
             &[0, 1, 128],
         )?;
-        if output.status.success()
-            && optional_git(repo, &["rev-parse", "--verify", &temporary]).as_deref()
-                == Some(expected)
-        {
+        if output.status.success() && contains(repo, &temporary, expected) {
             matched = true;
             break;
         }
@@ -69,6 +66,19 @@ fn fetch_base(
             "Pull request base revision no longer matches the admitted review".to_owned(),
         ))
     }
+}
+
+/// Whether `expected` is the commit at `tip` or one of its ancestors: the base branch may have
+/// moved on since the review was admitted, and the admitted base must still belong to it.
+fn contains(repo: &Path, tip: &str, expected: &str) -> bool {
+    optional_git(repo, &["rev-parse", "--verify", tip]).as_deref() == Some(expected)
+        || git(
+            repo,
+            &["merge-base", "--is-ancestor", expected, tip],
+            READ_TIMEOUT,
+            &[0, 1, 128],
+        )
+        .is_ok_and(|output| output.status.success())
 }
 
 fn verify_object(

@@ -241,6 +241,65 @@ fn invalid_and_missing_pull_requests_do_not_create_a_worktree() {
 }
 
 #[test]
+fn frozen_review_checkout_keeps_its_base_after_the_base_branch_moves() {
+    let (fixture, adapter, remote) = fixture(false);
+    let head = read_git(&remote, &["rev-parse", "refs/pull/123/head"]);
+    let admitted = read_git(&remote, &["rev-parse", "refs/heads/main"]);
+    // The base branch moves on after admission, and GitHub now reports its new tip.
+    std::fs::write(fixture.repository.join("later.txt"), "merged elsewhere").unwrap();
+    paseo::commit(&fixture.repository, "later main commit");
+    run(&fixture.repository, &["push", "origin", "main"]);
+    let moved = read_git(&remote, &["rev-parse", "refs/heads/main"]);
+    let report = fixture.root.path().join("pull-request.json");
+    let reported = std::fs::read_to_string(&report)
+        .unwrap()
+        .replace(&admitted, &moved);
+    std::fs::write(&report, reported).unwrap();
+    let frozen = |base: &str| {
+        adapter.resolve_change_request(
+            &path(&fixture.repository),
+            &WorktreeChangeRequest {
+                forge: Some("github".into()),
+                number: 123,
+                project_path: None,
+                expected_head_sha: Some(head.clone()),
+                expected_base_sha: Some(base.to_owned()),
+            },
+            None,
+        )
+    };
+    let target = frozen(&admitted).unwrap();
+    assert_eq!(target.base_sha.as_deref(), Some(admitted.as_str()));
+    let created = adapter
+        .create(&ManagedWorktreeCreate {
+            cwd: path(&fixture.repository),
+            slug: "review".into(),
+            mode: WorktreeCreateMode::ChangeRequest(target),
+        })
+        .unwrap();
+    assert_eq!(
+        created.comparison_base_ref.as_deref(),
+        Some(admitted.as_str())
+    );
+    assert_eq!(
+        read_git(Path::new(&created.worktree_path), &["rev-parse", "HEAD"]),
+        head
+    );
+    // A base that is not part of the base branch is still refused.
+    let stray = frozen(&head).unwrap();
+    assert!(
+        adapter
+            .create(&ManagedWorktreeCreate {
+                cwd: path(&fixture.repository),
+                slug: "stray".into(),
+                mode: WorktreeCreateMode::ChangeRequest(stray),
+            })
+            .is_err()
+    );
+    assert!(read_git(&fixture.repository, &["for-each-ref", "refs/ait"]).is_empty());
+}
+
+#[test]
 fn absent_pull_refs_leave_existing_branches_and_temporary_refs_unchanged() {
     let (fixture, adapter, remote) = fixture(false);
     run(&remote, &["update-ref", "-d", "refs/pull/123/head"]);
