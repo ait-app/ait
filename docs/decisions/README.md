@@ -127,7 +127,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
-- [ADR-312：Antigravity 主会话统一使用官方 ACP](providers/adr-312-antigravity-acp-migration.md)
+- [ADR-320：Antigravity 经 ACP 接收会话级 HTTP MCP](providers/adr-320-antigravity-agent-mcp-over-acp.md)
+- [ADR-312：Antigravity 主会话统一使用官方 ACP](providers/adr-312-antigravity-acp-migration.md)（经 [ADR-320](providers/adr-320-antigravity-agent-mcp-over-acp.md) 修订）
 - [ADR-311：Antigravity 沙箱化 Worktree 写入隔离](providers/adr-311-antigravity-worktree-sandbox.md)（经 [ADR-312](providers/adr-312-antigravity-acp-migration.md) 修订）
 - [ADR-310：Host 账号用量按 Provider 活动刷新](providers/adr-310-activity-driven-account-usage.md)
 - [ADR-308：OMP 的宿主编排与配置命令](providers/adr-308-omp-host-orchestration.md)
@@ -152,7 +153,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-240：DSH 非活动历史只读浏览与固定截面预览](providers/adr-240-dsh-inactive-history-preview.md)（提议中）
 - [ADR-239：已保存 Timeline 导出与一次性客户端下载](providers/adr-239-persisted-timeline-export-downloads.md)（提议中）
 - [ADR-237：OpenCode 子会话终态只读核对](providers/adr-237-opencode-child-terminal-readback.md)
-- [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
+- [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)（经 [ADR-320](providers/adr-320-antigravity-agent-mcp-over-acp.md) 修订）
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
 - [ADR-219：Pi 原生 slash-command 发现](providers/adr-219-pi-slash-command-discovery.md)
 - [ADR-219：共享套餐缓存与 Codex 查询进程](providers/adr-219-shared-account-usage-cache.md)（经 [ADR-285](providers/adr-285-account-usage-retry-delay.md)、[ADR-310](providers/adr-310-activity-driven-account-usage.md) 修订）
@@ -209,7 +210,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](providers/adr-090-timeline-entry-and-page-budgets.md)（经 [ADR-140](providers/adr-140-codex-mcp-display-previews.md) 修订）
 - [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)（经 [ADR-099](providers/adr-099-provider-owned-auxiliary-models.md)、[ADR-101](providers/adr-101-provider-summary-generator.md)、[ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-179](providers/adr-179-provider-owned-tests.md)、[ADR-249](providers/adr-249-omp-adapter-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-088：Provider 发现与启动历史同步隔离](providers/adr-088-provider-catalog-startup-isolation.md)（经 [ADR-091](providers/adr-091-independent-session-execution.md) 修订）
-- [ADR-087：Antigravity CLI 原生 Provider](providers/adr-087-antigravity-cli-provider.md)（经 [ADR-311](providers/adr-311-antigravity-worktree-sandbox.md)、[ADR-312](providers/adr-312-antigravity-acp-migration.md) 修订）
+- [ADR-087：Antigravity CLI 原生 Provider](providers/adr-087-antigravity-cli-provider.md)（经 [ADR-311](providers/adr-311-antigravity-worktree-sandbox.md)、[ADR-312](providers/adr-312-antigravity-acp-migration.md)、[ADR-320](providers/adr-320-antigravity-agent-mcp-over-acp.md) 修订）
 - [ADR-082：DeepSeek Harness 原生交互 Host](providers/adr-082-deepseek-harness-native-host.md)（经 [ADR-147](providers/adr-147-dsh-native-plugin-presets.md) 修订）
 - [ADR-074：OpenCode 原生 Provider](providers/adr-074-opencode-native-provider.md)（经 [ADR-110](providers/adr-110-opencode-private-protocol-boundary.md)、[ADR-115](providers/adr-115-opencode-acp-provider.md) 修订）
 - [ADR-067：DeepSeek Harness ACP Provider](providers/adr-067-deepseek-harness-acp.md)（经 [ADR-082](providers/adr-082-deepseek-harness-native-host.md) 修订）

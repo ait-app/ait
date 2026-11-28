@@ -65,6 +65,12 @@ impl AntigravityClient {
 
 #[async_trait::async_trait]
 impl AgentClient for AntigravityClient {
+    /// ACP `session/new` and `session/resume` carry HTTP `mcpServers` for that process only;
+    /// AGY's own `mcp_config.json` is never written.
+    fn supports_agent_mcp(&self) -> bool {
+        true
+    }
+
     fn supports_write_confinement(&self) -> bool {
         true
     }

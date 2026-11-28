@@ -13,6 +13,7 @@ mod image_input;
 mod input_history;
 #[cfg(test)]
 mod installed;
+mod mcp;
 mod quota;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod sandbox;

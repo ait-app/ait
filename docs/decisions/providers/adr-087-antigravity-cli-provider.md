@@ -15,6 +15,7 @@ paths:
 - 上位约束：ADR-027、ADR-031、ADR-039、ADR-072。
 - 适配器现位于 `crates/provider-antigravity`（[ADR-270](adr-270-provider-crate-family.md)）。
 - 后续修订：[ADR-311](adr-311-antigravity-worktree-sandbox.md) 支持沙箱化 Worktree 写入隔离。
+- 后续修订：[ADR-320](adr-320-antigravity-agent-mcp-over-acp.md) 接受 HTTP 的会话级 MCP 设置，决策 7 中的拒绝只保留给 stdio 与 SSE。
 
 ## 背景
 

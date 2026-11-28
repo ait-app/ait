@@ -14,6 +14,8 @@ paths:
 
 - 修订：[ADR-202](adr-202-agent-mcp-injection.md) 的 Provider 范围与“其余 Provider 不经文件”交付规则。
 - 关系：沿用 [ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 的作用域凭据与移除规则。
+- 修订说明（2026-11-28）：OMP 已经宿主工具桥接入 `ait`（[ADR-308](adr-308-omp-host-orchestration.md)），“不接入”一条不再适用于 OMP，现状见 [MCP 手册](../../operations/mcp.md#provider-自动注入)。
+- 后续修订：[ADR-320](adr-320-antigravity-agent-mcp-over-acp.md) 经 ACP `mcpServers` 为 Antigravity 接入，“不接入”一条不再适用于 Antigravity。
 
 ADR-202 首阶段只为 Codex、Claude、DSH ACP 和 MiniMax Code 注入 `ait`。本决定只接入能从原生 CLI
 自身的协议、帮助或文档确认“单会话生效且不写用户配置”的 Provider；无法确认的不注入，也不猜测。

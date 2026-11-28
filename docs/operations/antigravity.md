@@ -148,11 +148,13 @@ Ait 使用同一个 AGY 安装的 `agy --print /usage --output-format json` 读�
 同时将图片保存到 daemon 数据目录的私有 `agents/provider-images`，供历史消息预览和关闭后恢复；
 不把图片写到工作区，也不更改原生权限。实际读图仍受所选模型能力和 AGY 原生权限约束。
 
-单轮 JSON schema、system prompt、Ait 会话级 MCP 配置、
+单轮 JSON schema、system prompt、stdio 与 SSE 的会话级 MCP 配置、
 运行中 steer、完整原生历史导入/列举与 rewind 尚未接入。
 不支持的输入与配置在发送前拒绝，保留具体输入错误原因；图片无法保存时提示检查磁盘空间和目录权限。
-AGY 自身已配置的工具与 MCP 仍由原生 CLI 加载。
+HTTP 的会话级 MCP（包括 daemon 自动注入的 `ait`）经 ACP 交付，范围和版本限制见
+[MCP 手册](mcp.md#provider-自动注入)。AGY 自身已配置的工具与 MCP 仍由原生 CLI 加载。
 
-设计见 [ADR-087](../decisions/providers/adr-087-antigravity-cli-provider.md) 与
-[ACP 迁移决策](../decisions/providers/adr-312-antigravity-acp-migration.md)，
+设计见 [ADR-087](../decisions/providers/adr-087-antigravity-cli-provider.md)、
+[ACP 迁移决策](../decisions/providers/adr-312-antigravity-acp-migration.md) 与
+[MCP 交付决策](../decisions/providers/adr-320-antigravity-agent-mcp-over-acp.md)，
 验证见 [报告](../archive/reports/providers/antigravity-cli.md)。
